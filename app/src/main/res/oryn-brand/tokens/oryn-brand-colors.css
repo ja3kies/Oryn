@@ -1,0 +1,116 @@
+/* Oryn brand colours — static directions. Scope a direction with class="oryn-<key>" */
+.oryn-foret {
+  --oryn-tile: #0B2C25;
+  --oryn-tile-arch: #FFF4DC;
+  --oryn-tile-leafA: #EFE8CC;
+  --oryn-tile-leafB: #7EC2A0;
+  --oryn-tile-star: #FFB933;
+  --oryn-tile-word: #FFF4DC;
+  --oryn-tile-tag: #A9D1BC;
+  --oryn-dark-bg: #0B2C25;
+  --oryn-dark-arch: #FFF4DC;
+  --oryn-dark-leafA: #EFE8CC;
+  --oryn-dark-leafB: #7EC2A0;
+  --oryn-dark-star: #FFB933;
+  --oryn-dark-word: #FFF4DC;
+  --oryn-dark-tag: #A9D1BC;
+  --oryn-light-bg: #FBF6EA;
+  --oryn-light-arch: #0F3D33;
+  --oryn-light-leafA: #1D6A54;
+  --oryn-light-leafB: #3D9670;
+  --oryn-light-star: #C97A00;
+  --oryn-light-word: #0B2C25;
+  --oryn-light-tag: #3F6B5D;
+}
+.oryn-terracotta {
+  --oryn-tile: #A9402A;
+  --oryn-tile-arch: #FFF1E2;
+  --oryn-tile-leafA: #F8DCC6;
+  --oryn-tile-leafB: #F2B592;
+  --oryn-tile-star: #FFD36B;
+  --oryn-tile-word: #FFF1E2;
+  --oryn-tile-tag: #F3C3A8;
+  --oryn-dark-bg: #2A120C;
+  --oryn-dark-arch: #FFF1E2;
+  --oryn-dark-leafA: #F8DCC6;
+  --oryn-dark-leafB: #E58C60;
+  --oryn-dark-star: #FFD36B;
+  --oryn-dark-word: #FFF1E2;
+  --oryn-dark-tag: #E3A98F;
+  --oryn-light-bg: #FFF7EF;
+  --oryn-light-arch: #7B2A18;
+  --oryn-light-leafA: #B4452A;
+  --oryn-light-leafB: #D2693C;
+  --oryn-light-star: #B87500;
+  --oryn-light-word: #3A1710;
+  --oryn-light-tag: #8A4A38;
+}
+.oryn-safran {
+  --oryn-tile: #F4B52E;
+  --oryn-tile-arch: #0E352C;
+  --oryn-tile-leafA: #0E352C;
+  --oryn-tile-leafB: #1F6B54;
+  --oryn-tile-star: #0E352C;
+  --oryn-tile-word: #10281F;
+  --oryn-tile-tag: #7A5E1B;
+  --oryn-dark-bg: #1D1707;
+  --oryn-dark-arch: #FFC445;
+  --oryn-dark-leafA: #FFE39B;
+  --oryn-dark-leafB: #E49A1E;
+  --oryn-dark-star: #FFF6DE;
+  --oryn-dark-word: #FFF1CF;
+  --oryn-dark-tag: #D9B96A;
+  --oryn-light-bg: #FFFAEC;
+  --oryn-light-arch: #0E352C;
+  --oryn-light-leafA: #165A47;
+  --oryn-light-leafB: #C27A00;
+  --oryn-light-star: #B87500;
+  --oryn-light-word: #10281F;
+  --oryn-light-tag: #7A5E1B;
+}
+.oryn-menthe {
+  --oryn-tile: #BFE5CD;
+  --oryn-tile-arch: #0E3B30;
+  --oryn-tile-leafA: #1F6B54;
+  --oryn-tile-leafB: #2A8A64;
+  --oryn-tile-star: #B86400;
+  --oryn-tile-word: #0A2B23;
+  --oryn-tile-tag: #3F6B5D;
+  --oryn-dark-bg: #0E211B;
+  --oryn-dark-arch: #D6F0DF;
+  --oryn-dark-leafA: #BDE3CB;
+  --oryn-dark-leafB: #5FB68B;
+  --oryn-dark-star: #FFC15A;
+  --oryn-dark-word: #E6F6EC;
+  --oryn-dark-tag: #8FBFA4;
+  --oryn-light-bg: #F5FBF6;
+  --oryn-light-arch: #0E3B30;
+  --oryn-light-leafA: #1F6B54;
+  --oryn-light-leafB: #3E9C74;
+  --oryn-light-star: #C06A00;
+  --oryn-light-word: #0A2B23;
+  --oryn-light-tag: #3F6B5D;
+}
+.oryn-charbon {
+  --oryn-tile: #1C1E1C;
+  --oryn-tile-arch: #F5F0E4;
+  --oryn-tile-leafA: #DAD5C6;
+  --oryn-tile-leafB: #8F958B;
+  --oryn-tile-star: #FFB933;
+  --oryn-tile-word: #F5F0E4;
+  --oryn-tile-tag: #A9ADA3;
+  --oryn-dark-bg: #161816;
+  --oryn-dark-arch: #F5F0E4;
+  --oryn-dark-leafA: #DAD5C6;
+  --oryn-dark-leafB: #8F958B;
+  --oryn-dark-star: #FFB933;
+  --oryn-dark-word: #F5F0E4;
+  --oryn-dark-tag: #A9ADA3;
+  --oryn-light-bg: #F6F3EC;
+  --oryn-light-arch: #1C1E1C;
+  --oryn-light-leafA: #4A4E48;
+  --oryn-light-leafB: #7E847A;
+  --oryn-light-star: #B87500;
+  --oryn-light-word: #1C1E1C;
+  --oryn-light-tag: #5E625B;
+}

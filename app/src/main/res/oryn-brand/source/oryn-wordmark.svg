@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 150" role="img" aria-label="Oryn">
+  <title>Oryn — symbole et wordmark maître</title>
+  <g fill="#80432B">
+    <path fill-rule="evenodd" d="M20 73a34 34 0 0 1 68 0l-14 6v-6c0-16-8-25-20-25s-20 9-20 25v6zm34-19 2.2 12.5L67 70l-10.8 3.5L54 86l-2.2-12.5L41 70l10.8-3.5z"/>
+    <path d="M49 120c-19-4-25-13-26-29 18 4 23 15 26 29m10 0c19-4 25-13 26-29-18 4-23 15-26 29"/>
+  </g>
+  <text x="112" y="105" fill="#241D19" font-family="Georgia, 'Times New Roman', serif" font-size="78" letter-spacing="-3">Oryn</text>
+</svg>

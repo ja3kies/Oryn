@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="Oryn — symbole maître">
+  <title>Oryn — arche, étoile et feuilles</title>
+  <rect id="background-preview" width="1000" height="1000" fill="#FAF7F1"/>
+  <g id="oryn-symbol" fill="#80432B">
+    <path fill-rule="evenodd" d="M250 455c0-180 120-300 250-300s250 120 250 300l-130 50v-50c0-130-45-200-120-200s-120 70-120 200v50z"/>
+    <path d="M500 315c15 80 50 120 120 140-70 15-105 50-120 140-15-90-50-125-120-140 70-20 105-60 120-140z"/>
+    <path d="M455 850c-150-35-200-105-210-225 150 30 190 115 210 225m90 0c150-35 200-105 210-225-150 30-190 115-210 225"/>
+  </g>
+</svg>

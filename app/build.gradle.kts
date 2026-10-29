@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -38,6 +39,11 @@ android {
 }
 
 dependencies {
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("io.github.oleksandrbalan:pagecurl:1.5.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -46,4 +52,11 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+    
+    // Room Database
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
 }

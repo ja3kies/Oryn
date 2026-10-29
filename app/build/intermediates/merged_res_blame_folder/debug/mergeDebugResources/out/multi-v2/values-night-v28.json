@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.oryn.reader.app-mergeDebugResources-49:/values-night-v28/values-night-v28.xml",
+            "map": [
+                {
+                    "source": "/data/data/com.termux/files/home/Oryn/app/src/main/res/values-night-v28/themes.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "8",
+                        "endColumns": "12",
+                        "endOffsets": "510"
+                    }
+                }
+            ]
+        }
+    ]
+}

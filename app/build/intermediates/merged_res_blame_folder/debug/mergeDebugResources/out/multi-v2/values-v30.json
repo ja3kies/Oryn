@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.oryn.reader.app-mergeDebugResources-49:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "/data/data/com.termux/files/home/.gradle/caches/9.8.1/transforms/4f11c7c8e4d3fc5729744ff9c4f299da/transformed/material3-release/res/values-v30/values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}
