@@ -425,7 +425,7 @@ private fun ContinueCard(
     var actions by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(28.dp)
     val ink = colors.onAccent
-    val pct = (book.progress * 100).toInt()
+    val pct = (book.progress.coerceIn(0f, 1f) * 100).toInt()
 
     Box(modifier.fillMaxWidth().padding(top = 30.dp)) {
         // Fond d'accent + zone tactile : séparés du contenu pour que le livre puisse dépasser du haut
