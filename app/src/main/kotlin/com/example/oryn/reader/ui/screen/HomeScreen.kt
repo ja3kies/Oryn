@@ -152,7 +152,6 @@ private fun Dashboard(
     val recent = remember(books) { books.sortedByDescending { it.id }.take(12) }
     val done = remember(books) { books.count { it.progress >= 0.98f } }
     val unread = remember(books) { books.count { it.progress < 0.01f } }
-    val favorites = remember(books) { books.count { it.isFavorite } }
 
     var menuOpen by remember { mutableStateOf(false) }
     val justFinished = remember(books) {
