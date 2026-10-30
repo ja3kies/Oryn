@@ -519,7 +519,10 @@ private fun ContinueCard(
                             .heightIn(min = 48.dp)
                             .clip(CircleShape)
                             .background(ink)
-                            .clickable(onClick = onOpen)
+                            .clickable(
+                                onClickLabel = tr("Reprendre la lecture"),
+                                onClick = onOpen
+                            )
                             .padding(horizontal = 22.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
