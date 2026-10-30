@@ -236,7 +236,7 @@ private fun DefinitionContent(result: DictionaryResult) {
                 }
             }
         }
-        Text(trf("Source : %s", result.source), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
+        Text(trf("Source : %s. Le mot sélectionné est envoyé à ce service.", result.source), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
     }
 }
 
@@ -323,7 +323,7 @@ private fun TranslationContent(result: TranslationResult, target: String) {
                     Icon(OrynIcons.Pages, null, tint = colors.onSurface, modifier = Modifier.size(18.dp))
                     Text(tr("Copier"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 }
-                Text(trf("Source : %s", "MyMemory"), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
+                Text(tr("Source : MyMemory. Le texte sélectionné est envoyé à ce service."), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
             }
         }
         if (result.truncated) {

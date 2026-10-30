@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup (API < 31).
+  Inclus : préférences utilisateur (thème, taille texte, position) + Reader datastore.
+  Exclus : bibliothèque (fichiers EPUB copiés), covers, base Room
+           (annotations, historique lecture, favoris, progression).
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="datastore" />
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="covers" />
+    <exclude domain="file" path="books" />
+    <exclude domain="external" path="." />
+</full-backup-content>

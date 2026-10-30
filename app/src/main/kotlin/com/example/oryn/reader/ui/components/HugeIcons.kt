@@ -3,6 +3,7 @@ package com.example.oryn.reader.ui.components
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.StrokeCap
@@ -44,6 +45,26 @@ object HugeIcons {
                 moveTo(16.056f, 5.5f); lineTo(15.373f, 4.092f); curveTo(14.92f, 3.156f, 14.693f, 2.689f, 14.302f, 2.397f); arcTo(2f, 2f, 0f, false, false, 14.027f, 2.225f); curveTo(13.594f, 2f, 13.074f, 2f, 12.035f, 2f); curveTo(10.969f, 2f, 10.436f, 2f, 9.995f, 2.234f); arcTo(2f, 2f, 0f, false, false, 9.717f, 2.414f); curveTo(9.322f, 2.717f, 9.101f, 3.202f, 8.659f, 4.171f); lineTo(8.053f, 5.5f)
                 moveTo(9.5f, 16.5f); lineTo(9.5f, 10.5f); moveTo(14.5f, 16.5f); lineTo(14.5f, 10.5f)
             }
+        }.build()
+    }
+    // --- MESSAGE-SQUARE-TEXT (NOTE) ---
+    val MessageSquareText: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "MessageSquareText",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            addPath(
+                pathData = PathParser().parsePathString(
+                    "M1.996 10.5c0-.77.014-1.523.04-2.25c.083-2.373.125-3.56 1.09-4.533c.966-.972 2.186-1.024 4.626-1.129a100 100 0 0 1 4.244-.088c1.48 0 2.905.03 4.244.088c2.44.105 3.66.157 4.626 1.13c.965.972 1.007 2.159 1.091 4.532a64 64 0 0 1 0 4.5c-.084 2.373-.126 3.56-1.091 4.533c-.965.972-2.186 1.024-4.626 1.129q-1.102.047-2.275.07c-.74.014-1.111.02-1.437.145c-.325.124-.6.358-1.147.828l-2.18 1.87a.73.73 0 0 1-1.205-.555v-2.348l-.244-.01c-2.44-.105-3.66-.157-4.626-1.13c-.965-.972-1.007-2.159-1.09-4.532a64 64 0 0 1-.04-2.25m5.5-2h9m-9 4h5.5"
+                ).toNodes(),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.5f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            )
         }.build()
     }
 }

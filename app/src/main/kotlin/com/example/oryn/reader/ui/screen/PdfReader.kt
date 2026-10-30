@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -87,6 +88,7 @@ import com.example.oryn.reader.data.importer.PdfPages
 import com.example.oryn.reader.data.importer.PdfTextPage
 import com.example.oryn.reader.data.importer.PdfWord
 import com.example.oryn.reader.data.local.entity.AnnotationEntity
+import com.example.oryn.reader.ui.components.HugeIcons
 import com.example.oryn.reader.data.local.preferences.ReaderScrollMode
 import com.example.oryn.reader.data.local.preferences.ReaderSettings
 import kotlin.math.abs
@@ -278,7 +280,7 @@ internal fun PdfReader(
                         }
                         return@at true
                     }
-                    val wi = wordAt(p, 6f)
+                    val wi = wordAt(p, 18f)
                     if (wi >= 0) {
                         val base = page * PDF_STRIDE
                         val note = latestAnnotations.firstOrNull {
@@ -478,6 +480,16 @@ internal fun PdfReader(
                                                 )
                                             }
                                         }
+                                        // Pastille de note : petit disque après le dernier mot
+                                        if (a.note != null) {
+                                            val r = 3.5.dp.toPx()
+                                            span(lo, hi) { rc ->
+                                                val cx = rc.right + r + 2.dp.toPx()
+                                                val cy = rc.top + r
+                                                drawCircle(activeColor, radius = r, center = Offset(cx, cy))
+                                                drawCircle(Color.White, radius = r * 0.45f, center = Offset(cx, cy))
+                                            }
+                                        }
                                     }
                                     val sel = selection
                                     if (sel != null && selPage == page) {
@@ -487,6 +499,30 @@ internal fun PdfReader(
                                     }
                                 }
                             }
+                            // Icône « note » dans la marge droite de la page, alignée sur la ligne du dernier mot de l'annotation
+                            latestAnnotations.forEach { a ->
+                                if (a.note == null) return@forEach
+                                if (a.startOffset / PDF_STRIDE != page) return@forEach
+                                val lastIdx = (a.endOffset - 1 - page * PDF_STRIDE).coerceIn(0, words.size - 1)
+                                if (lastIdx !in words.indices) return@forEach
+                                Icon(
+                                    imageVector = HugeIcons.MessageSquareText,
+                                    contentDescription = tr("Note"),
+                                    tint = activeColor,
+                                    modifier = Modifier
+                                        .offset {
+                                            val r = rectOf(lastIdx)
+                                            val iconPx = 22.dp.toPx()
+                                            IntOffset(
+                                                (boxSize.width.toFloat() - iconPx - 2.dp.toPx()).roundToInt(),
+                                                ((r.top + r.bottom) / 2f - iconPx / 2).roundToInt()
+                                            )
+                                        }
+                                        .size(22.dp)
+                                        .clickable { activeId = a.id }
+                                )
+                            }
+
                             // Poignées : étendre ou réduire la sélection mot par mot
                             val sel = selection
                             if (sel != null && selPage == page && words.isNotEmpty()) {

@@ -14,6 +14,11 @@ data class BookEntity(
     val isFavorite: Boolean = false,
     val lastReadTimestamp: Long = System.currentTimeMillis(),
     /** null = pas encore cherchée ; "" = aucune couverture ; sinon chemin d'une image locale. */
-    val coverPath: String? = null
+    val coverPath: String? = null,
+    /**
+     * SHA-256 des 64 premiers Ko du fichier. Sert à retrouver la couverture
+     * d'un livre supprimé puis réimporté (bibliothèque de covers Oryn).
+     */
+    val contentHash: String? = null
 )
 

@@ -1,0 +1,30 @@
+# Build et caches
+/build/
+/app/build/
+/.gradle/
+/.idea/
+/local.properties
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Sauvegardes et copies de travail (les scripts d'application en créent)
+/.backup/
+*.bak
+*.bak-*
+*.bak[0-9]*
+*.orig
+oryn_complet.txt
+
+# Secrets et signature
+*.jks
+*.keystore
+*.p12
+.env
+google-services.json
+
+# Divers
+*.apk
+*.aab
+.DS_Store

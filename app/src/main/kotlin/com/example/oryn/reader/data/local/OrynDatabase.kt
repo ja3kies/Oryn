@@ -11,7 +11,7 @@ import com.example.oryn.reader.data.local.dao.BookDao
 import com.example.oryn.reader.data.local.entity.AnnotationEntity
 import com.example.oryn.reader.data.local.entity.BookEntity
 
-@Database(entities = [BookEntity::class, AnnotationEntity::class], version = 3, exportSchema = false)
+@Database(entities = [BookEntity::class, AnnotationEntity::class], version = 4, exportSchema = false)
 abstract class OrynDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun annotationDao(): AnnotationDao
@@ -21,6 +21,13 @@ abstract class OrynDatabase : RoomDatabase() {
         private var INSTANCE: OrynDatabase? = null
 
         /** v1 -> v2 : ajout de la couverture, sans perdre la bibliothèque existante. */
+        /** v3 -> v4 : hash de contenu (couvertures stables). */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN contentHash TEXT")
+            }
+        }
+
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE books ADD COLUMN coverPath TEXT")
@@ -47,7 +54,7 @@ abstract class OrynDatabase : RoomDatabase() {
                     OrynDatabase::class.java,
                     "oryn_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                 INSTANCE = instance
                 instance

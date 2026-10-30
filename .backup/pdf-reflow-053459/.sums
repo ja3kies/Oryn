@@ -1,8 +1,0 @@
-3570bd56d04dbddb43001fbd35e32d0659aacfac26014ea5177d6407f18a787c  app/src/main/kotlin/com/example/oryn/reader/MainViewModel.kt
-82a4d1d3aa34c5b372beb22743ddae4eaf20e74e64e482a32c2bf65a6a96ccee  app/src/main/kotlin/com/example/oryn/reader/data/importer/PdfText.kt
-a4ee1e5d79b138abd63b4c7c3f64e07cf1b6cfc9b99664a82573df139ac151b4  app/src/main/kotlin/com/example/oryn/reader/data/local/preferences/ReaderPreferencesRepository.kt
-25dddda39ae115e592637aac645c8e6ca5b97d994fb7f6d95b595691a951d17e  app/src/main/kotlin/com/example/oryn/reader/ui/components/ReaderSheet.kt
-d4bbae14824520ed7873bb4f50795fdc30381f2e2cfc1de3d9040a00fa7e49c3  app/src/main/kotlin/com/example/oryn/reader/ui/screen/PdfReader.kt
-32458ffff1d92baab21bb4460057647866b50401f00b8a3feae87aeeece4206f  app/src/main/kotlin/com/example/oryn/reader/ui/screen/ReaderScreen.kt
-b5af003c05710364b5d1347d9ab890104ef09e7a855e8dbb21495a9d9b349244  app/src/main/kotlin/com/example/oryn/reader/ui/screen/PdfReflow.kt
-3bc8d6cbe97bf3e6d2a3dee96942db2df2ce5067f5a10e30a6a76ec41dba8086  app/src/main/kotlin/com/example/oryn/reader/i18n/I18n.kt

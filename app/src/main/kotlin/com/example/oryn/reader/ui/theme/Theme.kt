@@ -2,6 +2,8 @@ package com.example.oryn.reader.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -110,7 +112,10 @@ fun OrynTheme(darkTheme: Boolean = isSystemInDarkTheme(), accentTheme: AppAccent
         onPrimaryContainer = Color(0xFF141414),
         tertiary = if (darkTheme) accent else base.tertiary
     )
-    MaterialTheme(colorScheme = scheme, typography = OrynTypography, shapes = OrynShapes, content = content)
+    val orynColors = rememberOrynColorScheme(darkTheme, scheme)
+    CompositionLocalProvider(LocalOrynColors provides orynColors) {
+        MaterialTheme(colorScheme = scheme, typography = OrynTypography, shapes = OrynShapes, content = content)
+    }
 }
 
 @Composable

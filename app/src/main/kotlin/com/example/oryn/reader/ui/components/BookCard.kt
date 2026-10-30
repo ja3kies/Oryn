@@ -53,6 +53,19 @@ internal object CoverCache {
     }
     fun get(key: String): Bitmap? = cache.get(key)
     fun put(key: String, bitmap: Bitmap) { cache.put(key, bitmap) }
+    /** Clé de cache stable = chemin + mtime. Une réécriture invalide naturellement. */
+    fun cacheKey(path: String): String {
+        val mtime = java.io.File(path).lastModified()
+        return "$path@$mtime"
+    }
+    /** Invalidation manuelle (après réécriture d'une couverture). */
+    fun invalidate(path: String) {
+        // Évince toutes les entrées dont le préfixe est ce chemin (toutes les mtime possibles)
+        val keys = cache.snapshot().keys
+        for (k in keys) {
+            if (k.startsWith("$path@")) cache.remove(k)
+        }
+    }
     fun decodeFile(path: String): Bitmap? = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
@@ -76,9 +89,10 @@ internal object CoverCache {
 fun BookCover(book: BookEntity, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val path = book.coverPath?.takeIf { it.isNotBlank() }
-    val bitmap by produceState<Bitmap?>(initialValue = path?.let { CoverCache.get(it) }, path) {
-        value = if (path == null) null else CoverCache.get(path)
-            ?: withContext(Dispatchers.IO) { CoverCache.decodeFile(path) }?.also { CoverCache.put(path, it) }
+    val key = path?.let { CoverCache.cacheKey(it) }
+    val bitmap by produceState<Bitmap?>(initialValue = key?.let { CoverCache.get(it) }, key) {
+        value = if (path == null || key == null) null else CoverCache.get(key)
+            ?: withContext(Dispatchers.IO) { CoverCache.decodeFile(path) }?.also { CoverCache.put(key, it) }
     }
 
     Surface(

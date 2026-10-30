@@ -337,13 +337,6 @@ private fun ReaderControlsSheetContent(
                             fontWeight = FontWeight.Bold,
                             color = colors.onSurface
                         )
-                        Text(
-                            currentChapterTitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
                     Row(
                         Modifier

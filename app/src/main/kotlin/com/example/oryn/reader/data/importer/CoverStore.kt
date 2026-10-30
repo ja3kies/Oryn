@@ -11,13 +11,17 @@ import java.io.File
 /**
  * Enregistre les couvertures dans le stockage privé de l'app (redimensionnées, en JPEG),
  * qu'elles viennent d'un EPUB, d'un téléchargement ou d'une image choisie par l'utilisateur.
+ *
+ * Les couvertures sont nommées par un hash de contenu stable (`cover_<hash>.jpg`) :
+ * cela permet de retrouver la couverture d'un livre supprimé puis réimporté, sans
+ * jamais toucher au fichier EPUB source (qui reste immuable).
  */
 class CoverStore(private val context: Context) {
 
     private val dir = File(context.filesDir, "covers").apply { mkdirs() }
 
     /** Renvoie le chemin du fichier créé, ou null si les octets ne sont pas une image. */
-    fun saveBytes(bytes: ByteArray): String? = runCatching {
+    fun saveBytes(bytes: ByteArray, stableHash: String? = null): String? = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
@@ -45,14 +49,38 @@ class CoverStore(private val context: Context) {
             drawBitmap(resized, 0f, 0f, null)
         }
 
-        val file = File(dir, "cover_${System.currentTimeMillis()}_${(0..9999).random()}.jpg")
+        val name = if (stableHash != null) {
+            // Timestamp dans le nom : chaque save crée un chemin unique.
+            // Conséquence : BookEntity.coverPath change → Room émet un
+            // nouveau livre → key(books) recompose → tiles rafraîchies
+            // immédiatement, sans scroll-out.
+            "cover_${stableHash.take(40)}_${System.currentTimeMillis()}.jpg"
+        } else {
+            "cover_${System.currentTimeMillis()}_${(0..9999).random()}.jpg"
+        }
+        val file = File(dir, name)
         file.outputStream().use { flat.compress(Bitmap.CompressFormat.JPEG, 88, it) }
         file.absolutePath
     }.getOrNull()
 
-    fun saveUri(uri: Uri): String? = runCatching {
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }?.let(::saveBytes)
+    fun saveUri(uri: Uri, stableHash: String? = null): String? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }?.let { saveBytes(it, stableHash) }
     }.getOrNull()
+
+    /**
+     * Chemin de la couverture associée à un hash, ou null.
+     * Cherche `cover_<hash>_<timestamp>.jpg` (actuel) et
+     * `cover_<hash>.jpg` (ancien format, compatibilité).
+     */
+    fun findByHash(stableHash: String): String? {
+        val hashPart = stableHash.take(40)
+        File(dir, "cover_$hashPart.jpg").takeIf { it.exists() }?.let { return it.absolutePath }
+        val prefix = "cover_${hashPart}_"
+        return dir.listFiles()
+            ?.filter { it.name.startsWith(prefix) }
+            ?.maxByOrNull { it.lastModified() }
+            ?.absolutePath
+    }
 
     /** Ne supprime que les fichiers créés par ce dossier de couvertures. */
     fun delete(path: String?) {
@@ -65,4 +93,3 @@ class CoverStore(private val context: Context) {
         const val MAX_SIDE = 900
     }
 }
-

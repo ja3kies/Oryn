@@ -18,13 +18,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.oryn.reader.data.importer.BookMetadataReader
 import com.example.oryn.reader.data.importer.CoverStore
-import com.example.oryn.reader.data.importer.EpubCoverWriter
 import com.example.oryn.reader.data.local.OrynDatabase
 import com.example.oryn.reader.data.local.entity.BookEntity
 import com.example.oryn.reader.data.local.preferences.UserPreferencesRepository
 import com.example.oryn.reader.data.remote.GutendexClient
 import com.example.oryn.reader.data.remote.OnlineBook
 import com.example.oryn.reader.data.repository.BookRepository
+import com.example.oryn.reader.ui.components.CoverCache
 import com.example.oryn.reader.ui.theme.AppAccentTheme
 import com.example.oryn.reader.ui.theme.AppThemeMode
 import kotlinx.coroutines.Dispatchers
@@ -91,16 +91,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) { backfillCovers() }
     }
 
-    /** Les EPUB déjà dans la bibliothèque récupèrent leur couverture, une seule fois. */
+    /**
+     * Calcule le hash de contenu des livres existants et migre leurs
+     * couvertures vers le schéma `cover_<hash>.jpg` (bibliothèque Oryn).
+     * Ne s'exécute qu'une fois par livre.
+     */
     private suspend fun backfillCovers() {
-        val pending = repository.allBooks.first().filter { it.format == "EPUB" && it.coverPath == null }
+        val pending = repository.allBooks.first().filter {
+            it.contentHash == null || (it.format == "EPUB" && it.coverPath == null)
+        }
         for (book in pending) {
-            val path = runCatching {
-                metadataReader.extractEpubCover(Uri.parse(book.filePath))?.let(coverStore::saveBytes)
-            }.getOrNull()
-            repository.updateCover(book.id, path ?: "")
+            val uri = Uri.parse(book.filePath)
+            val hash = book.contentHash ?: computeContentHash(uri)
+            var newCoverPath = book.coverPath
+
+            if (newCoverPath == null && book.format == "EPUB") {
+                val existing = hash?.let(coverStore::findByHash)
+                newCoverPath = existing ?: runCatching {
+                    metadataReader.extractEpubCover(uri)?.let { coverStore.saveBytes(it, hash) }
+                }.getOrNull() ?: ""
+            }
+
+            if (hash != null && !newCoverPath.isNullOrBlank()) {
+                // Si le chemin actuel n'est pas hash-nommé, migre-le.
+                if (coverStore.findByHash(hash) == null) {
+                    val bytes = runCatching { File(newCoverPath).readBytes() }.getOrNull()
+                    val migrated = bytes?.let { coverStore.saveBytes(it, hash) }
+                    if (migrated != null) {
+                        coverStore.delete(newCoverPath)
+                        newCoverPath = migrated
+                    }
+                }
+            }
+
+            if (newCoverPath != book.coverPath || hash != book.contentHash) {
+                repository.updateCoverAndHash(book.id, newCoverPath, hash)
+            }
         }
     }
+
+    /**
+     * SHA-256 des 64 premiers Ko du fichier pointé par [uri]. Utilisé comme
+     * identifiant stable d'un livre : si l'utilisateur supprime puis réimporte
+     * le même fichier, on retrouve sa couverture Oryn sans toucher à l'EPUB.
+     */
+    private fun computeContentHash(uri: Uri): String? = runCatching {
+        val buffer = ByteArray(64 * 1024)
+        var total = 0
+        getApplication<Application>().contentResolver.openInputStream(uri)?.use { input ->
+            while (total < buffer.size) {
+                val n = input.read(buffer, total, buffer.size - total)
+                if (n < 0) break
+                total += n
+            }
+        } ?: return@runCatching null
+        val digest = MessageDigest.getInstance("SHA-256")
+        digest.update(buffer, 0, total)
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }.getOrNull()
 
     fun setDarkMode(enabled: Boolean) {
         viewModelScope.launch { prefsRepository.setDarkMode(enabled) }
@@ -223,7 +271,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
                     }
-                    val cover = meta.coverBytes?.let(coverStore::saveBytes)
+                    val hash = computeContentHash(uri)
+                    val existingCover = hash?.let(coverStore::findByHash)
+                    val embeddedCover = if (existingCover == null)
+                        meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
                     repository.addBook(
                         BookEntity(
                             title = meta.title,
@@ -231,7 +282,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             filePath = path,
                             format = meta.format,
                             isFavorite = favorite,
-                            coverPath = cover ?: if (meta.format == "EPUB") "" else null
+                            coverPath = existingCover ?: embeddedCover ?: if (meta.format == "EPUB") "" else null,
+                            contentHash = hash
                         )
                     )
                     added++
@@ -268,10 +320,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 GutendexClient.download(book.epubUrl, file)
 
-                // Couverture : celle de l'EPUB, sinon l'image proposée par le catalogue
-                val coverBytes = metadataReader.extractEpubCover(uri)
-                    ?: book.coverUrl?.let { runCatching { GutendexClient.fetchBytes(it) }.getOrNull() }
-                val cover = coverBytes?.let(coverStore::saveBytes)
+                val hash = computeContentHash(uri)
+                val existingCover = hash?.let(coverStore::findByHash)
+                val coverBytes = if (existingCover == null) {
+                    metadataReader.extractEpubCover(uri)
+                        ?: book.coverUrl?.let { runCatching { GutendexClient.fetchBytes(it) }.getOrNull() }
+                } else null
+                val cover = coverBytes?.let { coverStore.saveBytes(it, hash) }
 
                 repository.addBook(
                     BookEntity(
@@ -279,7 +334,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         author = book.author,
                         filePath = uri.toString(),
                         format = "EPUB",
-                        coverPath = cover ?: ""
+                        coverPath = existingCover ?: cover ?: "",
+                        contentHash = hash
                     )
                 )
                 toast(trf("« %s » ajouté", book.title))
@@ -318,14 +374,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     toast(tr("Format non pris en charge (EPUB, PDF ou TXT)."))
                     return@launch
                 }
-                val cover = meta.coverBytes?.let(coverStore::saveBytes)
+                val hash = computeContentHash(uri)
+                val existingCover = hash?.let(coverStore::findByHash)
+                val embeddedCover = if (existingCover == null)
+                    meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
                 repository.addBook(
                     BookEntity(
                         title = meta.title,
                         author = meta.author,
                         filePath = uri.toString(),
                         format = meta.format,
-                        coverPath = cover ?: if (meta.format == "EPUB") "" else null
+                        coverPath = existingCover ?: embeddedCover ?: if (meta.format == "EPUB") "" else null,
+                        contentHash = hash
                     )
                 )
                 toast(trf("« %s » ajouté à ta bibliothèque", meta.title))
@@ -350,30 +410,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return file
     }
 
-    /** Couverture choisie par l'utilisateur (image de la galerie ou des fichiers). */
+    /**
+     * Couverture choisie par l'utilisateur. Enregistrée dans le stockage privé
+     * d'Oryn sous `cover_<hash>.jpg` : elle survit à la suppression du livre
+     * et sera automatiquement réappliquée si le même fichier est réimporté.
+     * Aucune écriture dans le fichier EPUB source.
+     */
     fun setCover(book: BookEntity, imageUri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
-            val path = coverStore.saveUri(imageUri)
+            val hash = book.contentHash ?: computeContentHash(Uri.parse(book.filePath))
+            val oldPath = book.coverPath
+            // Invalide le cache AVANT d'écraser : même chemin, bitmap potentiellement stale
+            if (!oldPath.isNullOrBlank()) CoverCache.invalidate(oldPath)
+            val path = coverStore.saveUri(imageUri, hash)
             if (path == null) {
                 toast(tr("Image illisible"))
                 return@launch
             }
-            repository.updateCover(book.id, path)
-            coverStore.delete(book.coverPath)
-
-            // La nouvelle couverture est aussi écrite dans le fichier EPUB lui-même
-            if (book.format == "EPUB") {
-                val bytes = runCatching { File(path).readBytes() }.getOrNull()
-                if (bytes != null) {
-                    when (EpubCoverWriter(getApplication()).replaceCover(Uri.parse(book.filePath), bytes)) {
-                        EpubCoverWriter.Result.OK -> toast(tr("Couverture enregistrée aussi dans l’EPUB"))
-                        EpubCoverWriter.Result.READ_ONLY ->
-                            toast(tr("Couverture changée dans Oryn. Cet EPUB est en lecture seule : supprime-le puis réimporte-le pour pouvoir le modifier."))
-                        EpubCoverWriter.Result.FAILED ->
-                            toast(tr("Couverture changée dans Oryn, mais l’EPUB n’a pas pu être modifié."))
-                    }
-                }
+            // Invalide aussi le nouveau chemin (hash-based), au cas où il existe déjà
+            CoverCache.invalidate(path)
+            repository.updateCoverAndHash(book.id, path, hash)
+            if (!oldPath.isNullOrBlank() && oldPath != path) {
+                coverStore.delete(oldPath)
             }
+            toast(tr("Couverture enregistrée"))
         }
     }
 
@@ -406,7 +466,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.deleteBook(book)
             OrynDatabase.getDatabase(getApplication()).annotationDao().deleteForBook(book.id)
             OrynDatabase.getDatabase(getApplication()).annotationDao().deleteForBook(-book.id)
-            coverStore.delete(book.coverPath)
+            // La couverture est conservée sur disque : elle sera réutilisée si
+            // l'utilisateur réimporte le même fichier (bibliothèque de covers Oryn).
             // Fichier téléchargé par l'app : on le supprime aussi (jamais un fichier de l'utilisateur)
             if (book.filePath.startsWith("file:")) {
                 val file = Uri.parse(book.filePath).path?.let(::File)

@@ -24,6 +24,9 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun updateCover(bookId: Long, path: String?) = dao.updateCover(bookId, path)
 
+    suspend fun updateCoverAndHash(bookId: Long, coverPath: String?, hash: String?) =
+        dao.updateCoverAndHash(bookId, coverPath, hash)
+
     suspend fun updateInfo(bookId: Long, title: String, author: String) =
         dao.updateInfo(bookId, title, author)
 

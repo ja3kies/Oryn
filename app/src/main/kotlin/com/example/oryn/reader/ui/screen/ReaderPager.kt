@@ -27,6 +27,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import com.example.oryn.reader.data.local.entity.AnnotationEntity
+import com.example.oryn.reader.ui.components.HugeIcons
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -57,11 +58,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material3.MaterialTheme
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.runtime.Composable
@@ -186,7 +191,8 @@ internal fun BookPager(
             config = curlConfig
         ) { index -> page(index) }
     } else {
-        HorizontalPager(
+        // Mode SCROLL : défilement vertical (cohérent avec le label UI)
+        VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             userScrollEnabled = !lockPaging
@@ -353,7 +359,12 @@ internal fun ReflowReader(
         val footerHeight = 28.dp
         val textHeight = maxHeight - topPad - bottomPad - footerHeight
         val widthPx = with(density) { (maxWidth - horizontalPadding * 2).roundToPx() }
-        val heightPx = with(density) { textHeight.roundToPx() }
+        // Marge de sécurité : le TextMeasurer du thread background et le Text
+        // Compose du thread UI peuvent diverger de quelques pixels (arrondis
+        // lineHeight float). On retire une ligne complète pour garantir que
+        // la dernière ligne paginée tient visuellement dans textHeight.
+        val safetyPx = with(density) { (settings.fontSizePt * settings.lineSpacing).sp.toPx().roundToInt() }
+        val heightPx = (with(density) { textHeight.roundToPx() } - safetyPx).coerceAtLeast(1)
         val padLeftPx = with(density) { horizontalPadding.toPx() }
         val padTopPx = with(density) { topPad.toPx() }
 
@@ -475,7 +486,7 @@ internal fun ReflowReader(
                     val charAt: (Offset) -> Int? = at@{ o ->
                         val lr = textLayout ?: return@at null
                         if (end <= from) return@at null
-                        val local = hitChar(lr, toText(o), end - from, slop = 10f) ?: return@at null
+                        val local = hitChar(lr, toText(o), end - from, slop = 6f) ?: return@at null
                         from + local
                     }
 
@@ -492,7 +503,10 @@ internal fun ReflowReader(
                                 activate(link)
                                 return@at true
                             }
-                            val note = latestAnnotations.firstOrNull { absolute >= it.startOffset && absolute < it.endOffset }
+                            val note = latestAnnotations.firstOrNull {
+                                val (ts, te) = trimAnnotationRange(text, it.startOffset, it.endOffset)
+                                absolute >= ts && absolute < te
+                            }
                             if (note != null) {
                                 activeId = note.id
                                 return@at true
@@ -509,17 +523,13 @@ internal fun ReflowReader(
                     val startSelection: (Offset) -> Unit = start@{ o ->
                         val lr = textLayout ?: return@start
                         if (end <= from) return@start
-                        var local = hitChar(lr, toText(o), end - from) ?: return@start
-                        // doigt sur un espace ou une ponctuation collée à un mot : on prend le mot voisin
-                        if (!text[from + local].isLetterOrDigit()) {
-                            if (local > 0 && text[from + local - 1].isLetterOrDigit()) local--
-                            else if (local + 1 < end - from && text[from + local + 1].isLetterOrDigit()) local++
-                            else return@start
-                        }
-                        val word = lr.getWordBoundary(local)
-                        val a = from + word.start
-                        val b = (from + word.end).coerceAtMost(end)
-                        if (b <= a || !text.substring(a, b).any { it.isLetterOrDigit() }) return@start
+                        val local = hitChar(lr, toText(o), end - from) ?: return@start
+                        val absolute = from + local
+                        val rng = wordRangeAt(text, absolute) ?: return@start
+                        val a = rng.first
+                        val b = rng.second
+                        if (b <= a) return@start
+                        println("ORYN_SEL: abs=$absolute range=$a..$b text='" + text.substring(a, b) + "'")
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         activeId = null
                         val cur = selection
@@ -615,8 +625,9 @@ internal fun ReflowReader(
                                         if (lr != null && len > 0) {
                                             fun local(v: Int) = (v - from).coerceIn(0, len)
                                             for (a in latestAnnotations) {
-                                                val s0 = local(a.startOffset)
-                                                val e0 = local(a.endOffset)
+                                                val (ts, te) = trimAnnotationRange(text, a.startOffset, a.endOffset)
+                                                val s0 = local(ts)
+                                                val e0 = local(te)
                                                 if (e0 <= s0) continue
                                                 if (a.kind == "HIGHLIGHT") {
                                                     drawPath(
@@ -638,8 +649,9 @@ internal fun ReflowReader(
                                         if (lr != null && len > 0) {
                                             for (a in latestAnnotations) {
                                                 if (a.kind != "UNDERLINE") continue
-                                                val s0 = (a.startOffset - from).coerceIn(0, len)
-                                                val e0 = (a.endOffset - from).coerceIn(0, len)
+                                                val (ts, te) = trimAnnotationRange(text, a.startOffset, a.endOffset)
+                                                val s0 = (ts - from).coerceIn(0, len)
+                                                val e0 = (te - from).coerceIn(0, len)
                                                 if (e0 > s0) drawRangeUnderline(lr, s0, e0, foregroundColor.copy(alpha = 0.9f))
                                             }
                                         }
@@ -652,6 +664,32 @@ internal fun ReflowReader(
                                     color = foregroundColor.copy(alpha = 0.5f)
                                 )
                             }
+                        }
+
+                        // Icône « note » dans la marge droite, sur la ligne de chaque annotation qui porte une note
+                        latestAnnotations.forEach { a ->
+                            // DEBUG: if (a.note == null) return@forEach
+                            if (a.endOffset <= from || a.startOffset >= to) return@forEach
+                            val lr = textLayout ?: return@forEach
+                            val (_, iconTe) = trimAnnotationRange(text, a.startOffset, a.endOffset)
+                            val s0 = (iconTe - 1 - from).coerceIn(0, (end - from - 1).coerceAtLeast(0))
+                            val lineIdx = lr.getLineForOffset(s0)
+                            val lineCenter = (lr.getLineTop(lineIdx) + lr.getLineBottom(lineIdx)) / 2f
+                            Icon(
+                                imageVector = com.example.oryn.reader.ui.components.HugeIcons.MessageSquareText,
+                                contentDescription = tr("Note"),
+                                tint = foregroundColor,
+                                modifier = Modifier
+                                    .offset {
+                                        val iconPx = 22.dp.toPx()
+                                        IntOffset(
+                                            (widthPx.toFloat() + 3.dp.toPx()).roundToInt(),
+                                            (lineCenter - iconPx / 2).roundToInt()
+                                        )
+                                    }
+                                    .size(22.dp)
+                                    .clickable { activeId = a.id }
+                            )
                         }
 
                         // Poignées pour étendre la sélection
@@ -670,7 +708,7 @@ internal fun ReflowReader(
                                         // la poignée saute de mot en mot
                                         val wb = lr.getWordBoundary(lr.getOffsetForPosition(p).coerceIn(0, last))
                                         var o = from + wb.start
-                                        while (o < cur.second - 1 && text[o].isWhitespace()) o++
+                                        while (o < cur.second - 1 && !text[o].isLetterOrDigit()) o++
                                         selection = o.coerceIn(from, cur.second - 1) to cur.second
                                     }
                                 },
@@ -684,7 +722,7 @@ internal fun ReflowReader(
                                     if (cur != null) {
                                         val wb = lr.getWordBoundary(lr.getOffsetForPosition(p).coerceIn(0, last))
                                         var o = (from + wb.end).coerceAtMost(end)
-                                        while (o > cur.first + 1 && text[o - 1].isWhitespace()) o--
+                                        while (o > cur.first + 1 && !text[o - 1].isLetterOrDigit()) o--
                                         selection = cur.first to o.coerceIn(cur.first + 1, end)
                                     }
                                 },
@@ -917,6 +955,41 @@ internal fun hitChar(lr: TextLayoutResult, p: Offset, count: Int, slop: Float = 
 }
 
 private fun isSentenceEnd(c: Char) = c == '.' || c == '!' || c == '?' || c == '…' || c == '\n'
+
+/**
+ * Range exacte d'un mot via BreakIterator (Unicode-aware, locale-dépendant).
+ * Exclut nativement espaces et ponctuation. Utilisé pour les nouvelles sélections.
+ */
+private val wordIteratorCache = ThreadLocal.withInitial {
+    java.text.BreakIterator.getWordInstance(java.util.Locale.getDefault())
+}
+
+internal fun wordRangeAt(text: CharSequence, offset: Int): Pair<Int, Int>? {
+    if (text.isEmpty()) return null
+    val it = wordIteratorCache.get()!!
+    it.setText(text)
+    val safe = offset.coerceIn(0, text.length - 1)
+    val start = it.preceding(safe + 1)
+    if (start == java.text.BreakIterator.DONE) return null
+    val end = it.following(safe)
+    if (end == java.text.BreakIterator.DONE) return null
+    if (end <= start) return null
+    if (!text.substring(start, end).any { it.isLetterOrDigit() }) return null
+    return start to end
+}
+
+/**
+ * Trim d'une plage d'annotation pour l'affichage. Utilisé uniquement sur les ranges
+ * stockées en DB (anciennes annotations créées avant le fix BreakIterator).
+ */
+internal fun trimAnnotationRange(text: CharSequence, start: Int, end: Int): Pair<Int, Int> {
+    var a = start.coerceIn(0, text.length)
+    var b = end.coerceIn(a, text.length)
+    while (a < b && !text[a].isLetterOrDigit()) a++
+    while (b > a && !text[b - 1].isLetterOrDigit()) b--
+    return a to b
+}
+
 
 /** Phrase contenant [at], bornée à [lo, hi). */
 internal fun sentenceBounds(text: CharSequence, at: Int, lo: Int, hi: Int): Pair<Int, Int> {

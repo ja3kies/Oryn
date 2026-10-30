@@ -28,6 +28,9 @@ interface BookDao {
     @Query("UPDATE books SET coverPath = :path WHERE id = :id")
     suspend fun updateCover(id: Long, path: String?)
 
+    @Query("UPDATE books SET coverPath = :coverPath, contentHash = :hash WHERE id = :id")
+    suspend fun updateCoverAndHash(id: Long, coverPath: String?, hash: String?)
+
     @Query("UPDATE books SET title = :title, author = :author WHERE id = :id")
     suspend fun updateInfo(id: Long, title: String, author: String)
 

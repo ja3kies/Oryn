@@ -385,7 +385,7 @@ private fun ReadingCarousel(
                 layout(constraints.maxWidth, placeable.height) { placeable.place(-extra / 2, 0) }
             }
         ) {
-            items(reading, key = { it.id }) { book ->
+            items(reading, key = { it.id to it.coverPath }) { book ->
                 ContinueCard(
                     book = book,
                     onOpen = { onBookClick(book) },

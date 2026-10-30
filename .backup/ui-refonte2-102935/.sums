@@ -1,6 +1,0 @@
-c2c506f3d0b47060bc759ef08f58210639b8b03dc0047fc3d92aaaa1456ef81d  app/src/main/kotlin/com/example/oryn/reader/i18n/I18n.kt
-f75e74a04f6b3e4ed8a10f20bd91f95010de9bb6e48e12b23587fe1edc4d8bf7  app/src/main/kotlin/com/example/oryn/reader/ui/components/BookActions.kt
-f50ece4253b41ee24e16dc17fc884a7999d9bf4fd75ef350586a2ce3459cc3f9  app/src/main/kotlin/com/example/oryn/reader/ui/screen/HomeScreen.kt
-80319ff2008a6735534c601b814c8abbc4ac823b0df6d0a5f0d4bb59bd40538b  app/src/main/kotlin/com/example/oryn/reader/ui/screen/LibraryScreen.kt
-d62474758bdbd4e88af57f6c5fd6db537bdb0534fd5b712447595c3300a9b18f  app/src/main/kotlin/com/example/oryn/reader/ui/screen/ReaderAnnotations.kt
-a7b143211169415ed9c95407b93153a3d450ae3726b6258c884f0973ffc4b590  app/src/main/kotlin/com/example/oryn/reader/ui/theme/Theme.kt

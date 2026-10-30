@@ -218,9 +218,9 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             Modifier.width(132.dp).height(198.dp).coverFrame()
                         )
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CoverAction(OrynIcons.Image, tr("Changer")) { pickCover.launch(arrayOf("image/*")) }
+                            CoverAction(OrynIcons.Image, tr("Changer"), modifier = Modifier.weight(1f)) { pickCover.launch(arrayOf("image/*")) }
                             if (hasCover) {
-                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true) { viewModel.removeCover(book) }
+                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { viewModel.removeCover(book) }
                             }
                         }
                         Text(
@@ -360,12 +360,17 @@ private fun EditInfoDialog(book: BookEntity, onDismiss: () -> Unit, onSave: (Str
 }
 
 @Composable
-private fun CoverAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
+private fun CoverAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    danger: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
     val tone = if (danger) colors.error else colors.onSurface
     Row(
-        Modifier
-            .fillMaxWidth()
+        modifier
             .clip(CircleShape)
             .background(tone.copy(alpha = 0.10f))
             .clickable(onClick = onClick)

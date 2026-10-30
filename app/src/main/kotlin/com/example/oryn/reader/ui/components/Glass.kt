@@ -211,10 +211,13 @@ fun GlassSearchField(
 @Composable
 fun rememberCoverTint(book: BookEntity): Color? {
     val path = book.coverPath?.takeIf { it.isNotBlank() }
-    val tint by produceState<Color?>(initialValue = null, path) {
-        value = if (path == null) null else withContext(Dispatchers.IO) {
-            val bitmap = CoverCache.get(path)
-                ?: CoverCache.decodeFile(path)?.also { CoverCache.put(path, it) }
+    // Clé stable = path + mtime. Une réécriture du fichier change la clé →
+    // produceState re-tourne et la nouvelle teinte est recalculée immédiatement.
+    val key = path?.let { CoverCache.cacheKey(it) }
+    val tint by produceState<Color?>(initialValue = null, key) {
+        value = if (path == null || key == null) null else withContext(Dispatchers.IO) {
+            val bitmap = CoverCache.get(key)
+                ?: CoverCache.decodeFile(path)?.also { CoverCache.put(key, it) }
             bitmap?.let {
                 val px = Bitmap.createScaledBitmap(it, 1, 1, true).getPixel(0, 0)
                 Color(px)

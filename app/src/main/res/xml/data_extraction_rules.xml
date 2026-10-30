@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ : cloud backup = même politique que backup_rules.xml.
+  Transfert d'appareil (device-transfer) : tout inclus, c'est un
+  transfert direct entre deux appareils contrôlés par l'utilisateur.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="datastore" />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="covers" />
+        <exclude domain="file" path="books" />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="datastore" />
+        <include domain="database" path="." />
+        <include domain="file" path="covers" />
+        <include domain="file" path="books" />
+    </device-transfer>
+</data-extraction-rules>

@@ -97,7 +97,7 @@ fun BookmarksScreen(
                 verticalArrangement = Arrangement.spacedBy(22.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                itemsIndexed(sorted, key = { _, book -> book.id }) { index, book ->
+                itemsIndexed(sorted, key = { _, book -> book.id to book.coverPath }) { index, book ->
                     GridBook(
                         book,
                         modifier = Modifier.padding(top = if (index % 2 == 1) 26.dp else 0.dp),

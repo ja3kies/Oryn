@@ -67,9 +67,10 @@ fun Book3D(
     val context = LocalContext.current
     val motion = floating && systemAnimationsEnabled(context)
     val path = book.coverPath?.takeIf { it.isNotBlank() }
-    val bitmap by produceState<Bitmap?>(initialValue = path?.let { CoverCache.get(it) }, path) {
-        value = if (path == null) null else CoverCache.get(path)
-            ?: withContext(Dispatchers.IO) { CoverCache.decodeFile(path) }?.also { CoverCache.put(path, it) }
+    val key = path?.let { CoverCache.cacheKey(it) }
+    val bitmap by produceState<Bitmap?>(initialValue = key?.let { CoverCache.get(it) }, key) {
+        value = if (path == null || key == null) null else CoverCache.get(key)
+            ?: withContext(Dispatchers.IO) { CoverCache.decodeFile(path) }?.also { CoverCache.put(key, it) }
     }
     val tint = rememberCoverTint(book) ?: colors.primary
     val spine = remember(tint) { lerp(tint, Color.Black, 0.35f) }

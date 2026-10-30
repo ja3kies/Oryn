@@ -17,7 +17,8 @@ enum class ReaderThemePreset(val label: String) {
     LIGHT("Clair"),
     BEIGE("Beige"),
     MIDNIGHT("Prune"),
-    OLED("Noir OLED")
+    OLED("Noir OLED"),
+    NUIT("Nuit Oryn")
 }
 
 enum class ReaderFontFamily(val label: String) {

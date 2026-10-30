@@ -27,6 +27,19 @@ object AnnasArchiveSource {
         "https://annas-archive.org"
     )
 
+    /** Hosts autorisés pour les liens de download. Bloque les href externes arbitraires. */
+    private val ALLOWED_DOWNLOAD_HOSTS = setOf(
+        "annas-archive.gl", "annas-archive.se", "annas-archive.org",
+        "libgen.li", "libgen.is", "libgen.rs", "libgen.st",
+    )
+
+    private fun isAllowedDownloadHost(url: String): Boolean {
+        val host = try { java.net.URI(url).host?.lowercase() } catch (_: Exception) { null }
+            ?: return false
+        return ALLOWED_DOWNLOAD_HOSTS.any { host == it || host.endsWith(".$it") }
+    }
+
+    private const val MAX_DOWNLOAD_BYTES = 200L * 1024 * 1024
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     suspend fun search(query: String, format: String = "epub"): List<AnnasBook> {
@@ -34,8 +47,9 @@ object AnnasArchiveSource {
         for (mirror in MIRRORS) {
             try {
                 val url = "$mirror/search?index=&q=$encodedQuery&ext=$format&sort="
-                // On utilise la WebView pour contourner DDoS-Guard et exécuter le JS
-                val html = WebViewScraper.fetchHtml(url) ?: continue
+                // OkHttp + DdosGuardInterceptor (cookie bypass). Pas de WebView :
+                // WebViewScraper requiert SYSTEM_ALERT_WINDOW, absent du manifest.
+                val html = fetchHtml(url) ?: continue
                 val result = parseSearchResults(html, format)
                 if (result.isNotEmpty()) return result
             } catch (_: Exception) { }
@@ -96,14 +110,14 @@ object AnnasArchiveSource {
                         val getRegex = Regex("href=[\"']([^\"']*get\\.php\\?md5=[a-fA-F0-9]{32}[^\"']*)[\"']")
                         for (g in getRegex.findAll(adsHtml)) {
                             val getUrl = if (g.groupValues[1].startsWith("http")) g.groupValues[1] else "https://libgen.li/" + g.groupValues[1].removePrefix("/")
-                            links.add(getUrl)
+                            if (isAllowedDownloadHost(getUrl)) links.add(getUrl)
                         }
                     } catch (_: Exception) { }
                 }
                 val slowRegex = Regex("href=[\"']([^\"']*slow_download/[a-fA-F0-9]{32}[^\"']*)[\"']")
                 for (m in slowRegex.findAll(md5Html)) {
                     val slowUrl = if (m.groupValues[1].startsWith("http")) m.groupValues[1] else mirror + m.groupValues[1]
-                    links.add(slowUrl)
+                    if (isAllowedDownloadHost(slowUrl)) links.add(slowUrl)
                 }
             } catch (_: Exception) { }
         }
@@ -112,11 +126,35 @@ object AnnasArchiveSource {
 
     suspend fun downloadFile(url: String, destination: File): Boolean = withContext(Dispatchers.IO) {
         try {
+            val scheme = android.net.Uri.parse(url).scheme?.lowercase()
+            if (scheme != "http" && scheme != "https") return@withContext false
             val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext false
                 val body = response.body ?: return@withContext false
-                destination.outputStream().use { out -> body.byteStream().copyTo(out) }
+                if (body.contentLength() > MAX_DOWNLOAD_BYTES) return@withContext false
+                var written = 0L
+                destination.outputStream().use { out ->
+                    body.byteStream().use { input ->
+                        val buf = ByteArray(8192)
+                        var n: Int
+                        while (input.read(buf).also { n = it } > 0) {
+                            written += n
+                            if (written > MAX_DOWNLOAD_BYTES) return@withContext false
+                            out.write(buf, 0, n)
+                        }
+                    }
+                }
+            }
+            // Magic bytes check (EPUB = PK, PDF = %PDF, TXT = ASCII/UTF-8 probable)
+            val head = ByteArray(8)
+            destination.inputStream().use { it.read(head) }
+            val isEpub = head[0] == 0x50.toByte() && head[1] == 0x4B.toByte()
+            val isPdf = head[0] == 0x25.toByte() && head[1] == 0x50.toByte() &&
+                        head[2] == 0x44.toByte() && head[3] == 0x46.toByte()
+            if (!isEpub && !isPdf) {
+                destination.delete()
+                return@withContext false
             }
             true
         } catch (_: Exception) { false }

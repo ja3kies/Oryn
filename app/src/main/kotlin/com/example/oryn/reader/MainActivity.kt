@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -82,10 +83,15 @@ class MainActivity : ComponentActivity() {
             }
 
             var route by rememberSaveable { mutableStateOf("home") }
-            var selectedBook by remember { mutableStateOf<BookEntity?>(null) }
+            var selectedBookId by rememberSaveable { mutableStateOf<Long?>(null) }
 
             val booksState by viewModel.books.collectAsState()
             val books = booksState.orEmpty()
+            // Re-dérivé à chaque recomposition : si la DB met à jour la cover,
+            // la référence `books` change et ReaderScreen se recompose.
+            val selectedBook: BookEntity? = remember(selectedBookId, books) {
+                selectedBookId?.let { id -> books.find { it.id == id } }
+            }
             val favorites by viewModel.favoriteBooks.collectAsState()
 
             val importLauncher = rememberLauncherForActivityResult(
@@ -101,7 +107,7 @@ class MainActivity : ComponentActivity() {
                 accentTheme = accentTheme
             ) {
                 BackHandler(enabled = selectedBook != null) {
-                    selectedBook = null
+                    selectedBookId = null
                 }
 
                 BackHandler(enabled = selectedBook == null && route != "home") {
@@ -119,7 +125,7 @@ class MainActivity : ComponentActivity() {
                             book = selectedBook!!,
                             currentAccent = accentTheme,
                             onAccentChange = viewModel::setAccentTheme,
-                            onBack = { selectedBook = null },
+                            onBack = { selectedBookId = null },
                             onUpdateProgress = viewModel::updateBookProgress
                         )
                     } else {
@@ -152,27 +158,31 @@ class MainActivity : ComponentActivity() {
                                     label = "screenTransition"
                                 ) { target ->
                                     when (target) {
-                                        "home" -> HomeScreen(
-                                            books = books,
-                                            isLoading = booksState == null,
-                                            onToggleFavorite = viewModel::toggleFavorite,
-                                            onBookClick = { selectedBook = it },
-                                            onImportClick = { importLauncher.launch(importMimeTypes) },
-                                            onDeleteBooks = { books -> viewModel.deleteBooks(books) }
-                                        )
+                                        "home" -> key(books) {
+                                            HomeScreen(
+                                                books = books,
+                                                isLoading = booksState == null,
+                                                onToggleFavorite = viewModel::toggleFavorite,
+                                                onBookClick = { selectedBookId = it.id },
+                                                onImportClick = { importLauncher.launch(importMimeTypes) },
+                                                onDeleteBooks = { books -> viewModel.deleteBooks(books) }
+                                            )
+                                        }
                                         "online_search" -> OnlineSearchScreen(
                                             onBack = { OrynNav.open("home") }
                                         )
                                         "explore" -> ExploreScreen(
                                             onImportClick = { importLauncher.launch(importMimeTypes) }
                                         )
-                                        "bookmarks" -> BookmarksScreen(
-                                            favorites = favorites,
-                                            isLoading = booksState == null,
-                                            onToggleFavorite = viewModel::toggleFavorite,
-                                            onBookClick = { selectedBook = it },
-                                            onImportClick = { importFavoriteLauncher.launch(importMimeTypes) }
-                                        )
+                                        "bookmarks" -> key(favorites) {
+                                            BookmarksScreen(
+                                                favorites = favorites,
+                                                isLoading = booksState == null,
+                                                onToggleFavorite = viewModel::toggleFavorite,
+                                                onBookClick = { selectedBookId = it.id },
+                                                onImportClick = { importFavoriteLauncher.launch(importMimeTypes) }
+                                            )
+                                        }
                                         "settings" -> SettingsScreen(
                                             themeMode = themeMode,
                                             onThemeModeChange = viewModel::setThemeMode,

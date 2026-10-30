@@ -179,6 +179,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Effacer" to "Clear",
         "Retour" to "Back",
         "Fermer" to "Close",
+        "Source : MyMemory. Le texte sélectionné est envoyé à ce service." to "Source: MyMemory. The selected text is sent to this service.",
+        "Source : %s. Le mot sélectionné est envoyé à ce service." to "Source: %s. The selected word is sent to this service.",
         "Fichier trop volumineux (limite : %s Mo)." to "File too large (limit: %s MB).",
         "Archive EPUB invalide (trop de fichiers)." to "Invalid EPUB archive (too many files).",
         "Ce livre est trop volumineux pour être ouvert." to "This book is too large to open.",

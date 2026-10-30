@@ -372,12 +372,19 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                     onClick = {
                                         if (file != null) {
                                             started = true
+                                            // Le referer ne fuit que si le host du fichier
+                                            // est le même que celui de la page (jamais vers un CDN tiers)
+                                            val sameHost = try {
+                                                java.net.URI(currentUrl).host?.equals(
+                                                    java.net.URI(file.url).host, ignoreCase = true
+                                                ) == true
+                                            } catch (_: Exception) { false }
                                             viewModel.addFromWeb(
                                                 url = file.url,
                                                 fileName = file.name,
                                                 userAgent = file.userAgent,
                                                 cookie = CookieManager.getInstance().getCookie(file.url),
-                                                referer = currentUrl
+                                                referer = if (sameHost) currentUrl else null
                                             )
                                         }
                                     }
