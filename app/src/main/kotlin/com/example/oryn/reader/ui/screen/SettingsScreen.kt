@@ -202,7 +202,7 @@ private fun SettingsCard(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                 Text(
-                    title.uppercase(),
+                    title,
                     style = MaterialTheme.typography.labelSmall,
                     color = inkSecondary()
                 )
