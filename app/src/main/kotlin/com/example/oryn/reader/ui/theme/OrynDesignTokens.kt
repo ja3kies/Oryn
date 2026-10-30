@@ -21,5 +21,6 @@ object OrynElevation {
 object OrynMotion {
     const val quick = 140; const val standard = 220; const val enter = 320
     val editorial = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    val spring = Spring.DampingRatioMediumBouncy to Spring.StiffnessMediumLow
+    // Default to critically damped motion; reserve bounce for interactions with real gesture momentum.
+    val spring = Spring.DampingRatioNoBouncy to Spring.StiffnessMediumLow
 }
