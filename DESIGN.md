@@ -152,7 +152,7 @@ Motion should clarify cause and effect, not decorate the screen.
 - **Secondary button:** quiet tonal surface; no bright outline.
 - **Selection:** Lime Cream surface with Deep Teal content unless the selected accent preference changes the accent.
 - **Progress:** Lime Cream fill with a clearly visible track and percentage/status label where useful.
-- **Book cover:** preserve aspect ratio, render crisply, use `coverFrame()` when appropriate.
+- **Book cover:** preserve aspect ratio, render crisply, use the existing `BookCover` component and preserve the source aspect ratio.
 - **Cards:** warm solid surface in light mode, teal surface in dark mode; 20–24 dp radius.
 - **Icons:** continue using the existing rounded Tabler/Lucide-derived `OrynIcons` / `HugeIcons` set. Do not replace the logo or protected navigation icons.
 - **Mascot:** retain as a brand character, but never let it obscure reading actions or content.
