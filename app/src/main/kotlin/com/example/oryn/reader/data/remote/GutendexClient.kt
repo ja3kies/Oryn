@@ -133,6 +133,80 @@ object GutendexClient {
         }
     }
 
+    /**
+     * Téléchargement déclenché depuis le navigateur intégré.
+     * Accepte les sites HTTPS publics, mais contrôle chaque redirection et borne le flux.
+     * Séparé du client Gutenberg afin de ne pas élargir les hôtes autorisés du catalogue.
+     */
+    suspend fun downloadFromWeb(
+        url: String,
+        destination: File,
+        headers: Map<String, String> = emptyMap()
+    ) = withContext(Dispatchers.IO) {
+        var current = URL(url)
+        val temp = File(destination.parentFile, destination.name + ".part")
+        try {
+            repeat(6) { attempt ->
+                if (current.protocol != "https" || current.host.isBlank() ||
+                    current.userInfo != null || current.port !in setOf(-1, 443)
+                ) throw IOException("URL HTTPS non autorisée")
+
+                val connection = current.openConnection() as HttpURLConnection
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 45_000
+                connection.instanceFollowRedirects = false
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                headers.forEach { (name, value) ->
+                    if (name.matches(Regex("[A-Za-z0-9-]{1,64}")) &&
+                        value.length <= 4096 && !value.contains('\\r') && !value.contains('\\n')
+                    ) connection.setRequestProperty(name, value)
+                }
+
+                try {
+                    val code = connection.responseCode
+                    if (code in 300..399) {
+                        val location = connection.getHeaderField("Location")
+                        if (attempt == 5 || location.isNullOrBlank()) {
+                            throw IOException("Redirection invalide")
+                        }
+                        current = URL(current, location)
+                        return@repeat
+                    }
+                    if (code !in 200..299) throw IOException("HTTP $code")
+                    if (connection.contentType?.contains("text/html", true) == true) {
+                        throw IOException("La réponse est une page HTML, pas un livre")
+                    }
+                    if (connection.contentLengthLong > MAX_BOOK_DOWNLOAD_BYTES) {
+                        throw IOException("Livre trop volumineux")
+                    }
+                    temp.outputStream().use { output ->
+                        connection.inputStream.use { input ->
+                            val buffer = ByteArray(8192)
+                            var total = 0L
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                total += count
+                                if (total > MAX_BOOK_DOWNLOAD_BYTES) throw IOException("Livre trop volumineux")
+                                output.write(buffer, 0, count)
+                            }
+                        }
+                    }
+                    if (temp.length() < 1024) throw IOException("Fichier incomplet")
+                    if (!temp.renameTo(destination)) temp.copyTo(destination, overwrite = true)
+                    return@withContext
+                } finally {
+                    connection.disconnect()
+                }
+            }
+            throw IOException("Trop de redirections")
+        } catch (error: Exception) {
+            temp.delete()
+            destination.delete()
+            throw error
+        }
+    }
+
     // ── Repli : catalogue OPDS (Atom) du site officiel Project Gutenberg ──
     private const val OPDS = "https://www.gutenberg.org/ebooks/search.opds/"
     private const val OPDS_PAGE = 25
