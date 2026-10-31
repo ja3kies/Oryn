@@ -143,8 +143,10 @@ object GutendexClient {
         destination: File,
         headers: Map<String, String> = emptyMap()
     ) = withContext(Dispatchers.IO) {
+        val parent = destination.parentFile ?: throw IOException("Dossier de destination invalide")
+        parent.mkdirs()
         var current = URL(url)
-        val temp = File(destination.parentFile, destination.name + ".part")
+        val temp = File(parent, destination.name + ".part")
         try {
             repeat(6) { attempt ->
                 if (current.protocol != "https" || current.host.isBlank() ||
@@ -193,7 +195,10 @@ object GutendexClient {
                         }
                     }
                     if (temp.length() < 1024) throw IOException("Fichier incomplet")
-                    if (!temp.renameTo(destination)) temp.copyTo(destination, overwrite = true)
+                    if (!temp.renameTo(destination)) {
+                        temp.copyTo(destination, overwrite = true)
+                        temp.delete()
+                    }
                     return@withContext
                 } finally {
                     connection.disconnect()
