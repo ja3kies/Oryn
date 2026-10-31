@@ -18,6 +18,7 @@ import com.tom_roush.pdfbox.text.TextPosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.max
@@ -54,6 +55,7 @@ class PdfTextPage(
 
 /** Couche texte d'un PDF (PdfBox-Android) : mots positionnés, liens, sommaire. Ouverte à la demande. */
 class PdfTextEngine(private val context: Context, private val uri: Uri) : AutoCloseable {
+    private companion object { const val MAX_PDF_BYTES = 100L * 1024 * 1024 }
     private val lock = ReentrantLock()
     private val cache = LruCache<Int, PdfTextPage>(8)
     private var document: PDDocument? = null
@@ -66,13 +68,31 @@ class PdfTextEngine(private val context: Context, private val uri: Uri) : AutoCl
         if (closed) return null
         return runCatching {
             PDFBoxResourceLoader.init(context)
-            // copie locale : PdfBox lit le fichier sans tout charger en mémoire
-            val file = File(context.cacheDir, "oryn-text-${uri.toString().hashCode()}.pdf")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { out -> input.copyTo(out) }
-            } ?: return@runCatching null
-            copy = file
-            PDDocument.load(file)
+            // Copie temporaire unique et bornée : évite collisions et copies illimitées.
+            val file = File.createTempFile("oryn-text-", ".pdf", context.cacheDir)
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { out ->
+                        val buffer = ByteArray(16 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > MAX_PDF_BYTES) throw IOException("PDF exceeds 100 MiB limit")
+                            out.write(buffer, 0, count)
+                        }
+                    }
+                } ?: run {
+                    file.delete()
+                    return@runCatching null
+                }
+                copy = file
+                PDDocument.load(file)
+            } catch (error: Exception) {
+                file.delete()
+                throw error
+            }
         }.getOrNull().also { document = it }
     }
 
