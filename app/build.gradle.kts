@@ -28,7 +28,9 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("sharedDebug")
+            if (file("oryn-debug.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("sharedDebug")
+            }
         }
         release {
             isMinifyEnabled = false
