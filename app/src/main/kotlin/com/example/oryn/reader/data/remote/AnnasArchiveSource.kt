@@ -105,7 +105,7 @@ object AnnasArchiveSource {
             val md5 = href.substringAfterLast("/md5/").substringBefore("?").substringBefore("#")
             val coverUrl = cleanDoc.selectFirst("img")?.attr("src")
 
-            if (md5.isNotBlank()) {
+            if (md5.matches(Regex("^[a-fA-F0-9]{32}$"))) {
                 books.add(AnnasBook(md5, title, author, format.uppercase(), coverUrl))
             }
         }
@@ -113,6 +113,7 @@ object AnnasArchiveSource {
     }
 
     suspend fun getDownloadLinks(md5: String): List<String> = withContext(Dispatchers.IO) {
+        if (!md5.matches(Regex("^[a-fA-F0-9]{32}$"))) return@withContext emptyList()
         val links = mutableListOf<String>()
         for (mirror in MIRRORS) {
             try {
@@ -142,6 +143,8 @@ object AnnasArchiveSource {
     suspend fun downloadFile(url: String, destination: File): Boolean = withContext(Dispatchers.IO) {
         val parent = destination.parentFile ?: return@withContext false
         val temp = File(parent, destination.name + ".part")
+        val staged = File(parent, destination.name + ".publish")
+        val backup = File(parent, destination.name + ".backup")
         try {
             if (!isAllowedDownloadHost(url)) return@withContext false
             parent.mkdirs()
@@ -190,14 +193,20 @@ object AnnasArchiveSource {
                 head[2] == 0x44.toByte() && head[3] == 0x46.toByte()
             if (!isEpub && !isPdf) return@withContext false
 
-            destination.delete()
-            if (!temp.renameTo(destination)) {
-                temp.copyTo(destination, overwrite = true)
-                temp.delete()
+            temp.copyTo(staged, overwrite = true)
+            if (backup.exists() && !backup.delete()) return@withContext false
+            val hadDestination = destination.exists()
+            if (hadDestination && !destination.renameTo(backup)) return@withContext false
+            if (!staged.renameTo(destination)) {
+                if (hadDestination) backup.renameTo(destination)
+                return@withContext false
             }
+            if (backup.exists()) backup.delete()
             true
         } catch (_: Exception) {
+            if (!destination.exists() && backup.exists()) backup.renameTo(destination)
             false
+        }
         } finally {
             temp.delete()
         }
