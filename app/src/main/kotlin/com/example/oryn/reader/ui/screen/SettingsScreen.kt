@@ -171,6 +171,7 @@ fun SettingsScreen(
                     )
                 }
                 Switch(
+                    modifier = Modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp).padding(4.dp),
                     checked = readerSettings.hideStatusBar,
                     onCheckedChange = { hidden ->
                         scope.launch { readerPrefs.updateSettings { it.copy(hideStatusBar = hidden) } }
