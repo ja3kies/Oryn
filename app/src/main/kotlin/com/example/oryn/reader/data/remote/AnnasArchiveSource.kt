@@ -207,7 +207,7 @@ object AnnasArchiveSource {
             if (!destination.exists() && backup.exists()) backup.renameTo(destination)
             false
         }
-        } finally {
+        finally {
             temp.delete()
         }
     }
