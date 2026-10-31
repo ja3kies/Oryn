@@ -55,8 +55,8 @@ Use `MaterialTheme.colorScheme` for standard UI and `OrynColors.editorial` for b
 
 | Semantic token | Value |
 |---|---|
-| Background | Light Yellow `#FEFFDE` |
-| Surface | Warm near-white `#FFFFEE` |
+| Background | Neutral pearl `#EFEFEC` |
+| Surface | Near-white `#F8F8F6` |
 | Primary / onPrimary | Deep Teal / Light Yellow |
 | Secondary / onSecondary | Strong Cyan / Deep Teal |
 | Tertiary / onTertiary | Cherry Rose / Light Yellow |
