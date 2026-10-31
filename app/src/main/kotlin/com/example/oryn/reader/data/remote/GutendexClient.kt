@@ -227,18 +227,35 @@ object GutendexClient {
     }
 
     private fun open(url: String, headers: Map<String, String> = emptyMap(), readTimeoutMs: Int = 45_000): HttpURLConnection {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = readTimeoutMs
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("User-Agent", USER_AGENT)
-        headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
-        val code = connection.responseCode
-        if (code !in 200..299) {
-            connection.disconnect()
-            throw IOException("HTTP $code")
+        var current = URL(url)
+        repeat(6) { attempt ->
+            val host = current.host.lowercase()
+            val allowedHost = host == "gutendex.com" || host == "www.gutenberg.org" ||
+                host == "gutenberg.org" || host.endsWith(".gutenberg.org")
+            if (current.protocol != "https" || !allowedHost) {
+                throw IOException("URL catalogue non autorisée")
+            }
+            val connection = current.openConnection() as HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = readTimeoutMs
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            val code = connection.responseCode
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (attempt == 5 || location.isNullOrBlank()) throw IOException("Redirection catalogue invalide")
+                current = URL(current, location)
+                return@repeat
+            }
+            if (code !in 200..299) {
+                connection.disconnect()
+                throw IOException("HTTP $code")
+            }
+            return connection
         }
-        return connection
+        throw IOException("Trop de redirections catalogue")
     }
 
     private fun parse(json: JSONObject): OnlineBook? {
