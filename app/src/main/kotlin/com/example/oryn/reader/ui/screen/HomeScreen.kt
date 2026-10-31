@@ -152,7 +152,6 @@ private fun Dashboard(
     val recent = remember(books) { books.sortedByDescending { it.id }.take(12) }
     val done = remember(books) { books.count { it.progress >= 0.98f } }
     val unread = remember(books) { books.count { it.progress < 0.01f } }
-    val favorites = remember(books) { books.count { it.isFavorite } }
 
     var menuOpen by remember { mutableStateOf(false) }
     val justFinished = remember(books) {
@@ -185,23 +184,23 @@ private fun Dashboard(
     LazyColumn(
         modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = navBarClearance + 16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ── Coin supérieur : mascotte à gauche, menu à droite, puis grande salutation à deux tons
         item(key = "top") {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OrynMascot(
-                    size = 52.dp,
+                    size = 44.dp,
                     mood = if (bubble) MascotMood.WOW else MascotMood.HAPPY,
                     onClick = { tip += 1 }
                 )
                 Spacer(Modifier.weight(1f))
                 Box {
                     Box(
-                        Modifier.size(52.dp).solidSurface(CircleShape).clickable { menuOpen = true },
+                        Modifier.size(48.dp).solidSurface(CircleShape).clickable { menuOpen = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(OrynIcons.Menu, tr("Menu"), tint = inkPrimary(), modifier = Modifier.size(26.dp))
+                        Icon(OrynIcons.Menu, tr("Menu"), tint = inkPrimary(), modifier = Modifier.size(24.dp))
                     }
                     RoundedMenu { DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         MenuItem(OrynIcons.Settings, tr("Réglages")) { menuOpen = false; OrynNav.open("settings") }
@@ -227,7 +226,7 @@ private fun Dashboard(
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 )
             }
-            Column(Modifier.padding(start = 4.dp, top = 20.dp)) {
+            Column(Modifier.padding(start = 4.dp, top = 16.dp)) {
                 Text(
                     greeting() + ",",
                     style = MaterialTheme.typography.headlineSmall,
@@ -271,7 +270,18 @@ private fun Dashboard(
 
         // ── Continuer la lecture (livre 3D)
         if (reading.isNotEmpty()) {
-            item(key = "reading") { ReadingCarousel(reading, onBookClick, onToggleFavorite) }
+            item(key = "reading") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        tr("Ta lecture en cours"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onBackground,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                    ReadingCarousel(reading, onBookClick, onToggleFavorite)
+                }
+            }
         }
 
         // ── Ajoutés récemment
@@ -344,8 +354,8 @@ private fun CollectionCard(title: String, books: List<BookEntity>, onClick: () -
     Box(
         Modifier
             .width(168.dp)
-            .height(214.dp)
-            .solidSurface(RoundedCornerShape(28.dp))
+            .height(196.dp)
+            .solidSurface(RoundedCornerShape(24.dp))
             .clickable(onClickLabel = title, onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = "$title : ${books.size}" }
     ) {
@@ -413,9 +423,9 @@ private fun ContinueCard(
     val colors = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
     var actions by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(34.dp)
+    val shape = RoundedCornerShape(28.dp)
     val ink = colors.onAccent
-    val pct = (book.progress * 100).toInt()
+    val pct = (book.progress.coerceIn(0f, 1f) * 100).toInt()
 
     Box(modifier.fillMaxWidth().padding(top = 30.dp)) {
         // Fond d'accent + zone tactile : séparés du contenu pour que le livre puisse dépasser du haut
@@ -509,7 +519,10 @@ private fun ContinueCard(
                             .heightIn(min = 48.dp)
                             .clip(CircleShape)
                             .background(ink)
-                            .clickable(onClick = onOpen)
+                            .clickable(
+                                onClickLabel = tr("Reprendre la lecture"),
+                                onClick = onOpen
+                            )
                             .padding(horizontal = 22.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

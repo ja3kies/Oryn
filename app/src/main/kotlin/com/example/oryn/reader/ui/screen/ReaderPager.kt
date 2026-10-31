@@ -967,7 +967,7 @@ private val wordIteratorCache = ThreadLocal.withInitial {
 internal fun wordRangeAt(text: CharSequence, offset: Int): Pair<Int, Int>? {
     if (text.isEmpty()) return null
     val it = wordIteratorCache.get()!!
-    it.setText(text)
+    it.setText(text.toString())
     val safe = offset.coerceIn(0, text.length - 1)
     val start = it.preceding(safe + 1)
     if (start == java.text.BreakIterator.DONE) return null

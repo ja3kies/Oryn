@@ -29,10 +29,10 @@ data class EditorialColors(
     val cherry: Color = Color(0xFFB5185F),
     val lime: Color = Color(0xFFD0E86E),
     val cyan: Color = Color(0xFF35C1C2),
-    val parchment: Color = Color(0xFFFEFFDF),
+    val parchment: Color = Color(0xFFFEFFDE),
     val darkSurface: Color = Color(0xFF081C1C),
     val darkCard: Color = Color(0xFF0D2727),
-    val cherryOnDark: Color = Color(0xFFE63D83),
+    val cherryOnDark: Color = Color(0xFFE65B91),
     val tealOnDark: Color = Color(0xFF4FBDBD),
     val cyanDeep: Color = Color(0xFF1A6B6B),
     val limeDeep: Color = Color(0xFF5A6B1E),
@@ -49,10 +49,7 @@ internal val LocalOrynColors = staticCompositionLocalOf<OrynColorScheme> {
     error("OrynTheme was not provided above this composable")
 }
 
-/**
- * Access point for Oryn's hybrid color model.
- * Usage: `OrynColors.chrome.accent`, `OrynColors.editorial.cherry`, etc.
- */
+/** Access point for Oryn's interface and editorial brand colours. */
 object OrynColors {
     val chrome: ChromeColors
         @Composable @ReadOnlyComposable
