@@ -142,7 +142,7 @@ private fun ContextCard(book: BookEntity, onDismiss: () -> Unit, onInfo: () -> U
                         Icon(OrynIcons.Select, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
                     }
                     Box(Modifier.fillMaxWidth().height(1.dp).background(colors.onSurface.copy(alpha = 0.10f)))
-                    ActionRow(label = tr("Supprimer de la bibliothèque"), onClick = onDelete, danger = true) {
+                    ActionRow(label = tr("Supprimer"), onClick = onDelete, danger = true) {
                         Icon(OrynIcons.Trash, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(22.dp))
                     }
                 }
