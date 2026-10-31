@@ -199,25 +199,47 @@ fun ExploreScreen(
             }
         }
 
-        // Deux espaces : catalogues (navigateur intégré) / recherche de classiques
+        // Navigation segmentée entre les annuaires et la recherche de classiques.
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassChip(tr("Catalogues"), tab == 0, { tab = 0 })
-                GlassChip(tr("Rechercher un classique"), tab == 1, { tab = 1 })
+            Row(
+                Modifier.fillMaxWidth().solidSurface(RoundedCornerShape(18.dp)).padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CatalogTab(tr("Catalogues"), tab == 0, { tab = 0 }, Modifier.weight(1f))
+                CatalogTab(tr("Rechercher un classique"), tab == 1, { tab = 1 }, Modifier.weight(1f))
             }
         }
 
         if (tab == 0) {
-            item { SectionTitle(tr("Récents · accès ouvert et licences libres")) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SectionTitle(tr("Récents · accès ouvert et licences libres"))
+                    Text(
+                        tr("Des catalogues pour découvrir des livres accessibles en ligne."),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+            }
             item { SourceRow(recentSources) { openSource = it } }
             item {
                 Text(
                     tr("Les romans récents du commerce sont protégés (DRM) : ils ne peuvent pas être ajoutés à l'app."),
                     style = MaterialTheme.typography.bodySmall,
-                    color = inkSecondary()
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                 )
             }
-            item { SectionTitle(tr("Classiques · domaine public")) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SectionTitle(tr("Classiques · domaine public"))
+                    Text(
+                        tr("Les œuvres libres à télécharger et à lire."),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+            }
             item { SourceRow(classicSources) { openSource = it } }
         }
 
@@ -377,46 +399,89 @@ private fun SectionTitle(text: String) {
     )
 }
 
+@Composable
+private fun CatalogTab(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(44.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) colors.primary else Color.Transparent
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (selected) colors.onPrimary else colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SourceRow(sources: List<LibrarySource>, onOpen: (LibrarySource) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Row(
-        Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         sources.forEach { source ->
             Surface(
                 onClick = { onOpen(source) },
-                modifier = Modifier.width(188.dp).solidSurface(RoundedCornerShape(26.dp)),
-                shape = RoundedCornerShape(26.dp),
-                color = Color.Transparent,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = colors.surfaceContainerLow,
                 tonalElevation = 0.dp
             ) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .background(colors.primaryContainer, RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            OrynIcons.BookOpen,
+                            contentDescription = null,
+                            tint = colors.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
                         Text(
                             source.name,
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.onSurface,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Icon(
-                            OrynIcons.External,
-                            contentDescription = null,
-                            tint = colors.primary,
-                            modifier = Modifier.size(16.dp)
+                        Text(
+                            source.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Text(
-                        source.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = inkSecondary(),
-                        minLines = 3,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        Icons.AutoMirrored.Rounded.OpenInNew,
+                        contentDescription = tr("Ouvrir"),
+                        tint = colors.primary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
