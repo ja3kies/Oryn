@@ -430,31 +430,32 @@ private fun CatalogTab(
 @Composable
 private fun SourceRow(sources: List<LibrarySource>, onOpen: (LibrarySource) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        sources.forEach { source ->
+    Column {
+        sources.forEachIndexed { index, source ->
             Surface(
                 onClick = { onOpen(source) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = colors.surfaceContainerLow,
-                tonalElevation = 0.dp
+                color = Color.Transparent
             ) {
                 Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .height(76.dp)
+                        .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Box(
                         Modifier
-                            .size(44.dp)
-                            .background(colors.primaryContainer, RoundedCornerShape(14.dp)),
+                            .size(40.dp)
+                            .background(colors.surfaceContainer, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             OrynIcons.BookOpen,
                             contentDescription = null,
-                            tint = colors.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
+                            tint = colors.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Column(
@@ -484,6 +485,15 @@ private fun SourceRow(sources: List<LibrarySource>, onOpen: (LibrarySource) -> U
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
+            if (index != sources.lastIndex) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 58.dp)
+                        .height(1.dp)
+                        .background(colors.outlineVariant.copy(alpha = 0.55f))
+                )
             }
         }
     }
