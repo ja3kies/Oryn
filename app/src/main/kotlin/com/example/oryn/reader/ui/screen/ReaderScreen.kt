@@ -409,20 +409,26 @@ fun ReaderScreen(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            // Même fond (légèrement transparent) que la fiche de réglages
-            val chromeText = Color(0xFFF2F2EF)
+            // La barre reprend les couleurs sémantiques de sa surface, en clair comme en sombre.
+            val chromeColors = MaterialTheme.colorScheme
             Surface(
                 color = ReaderChromeColor,
+                contentColor = chromeColors.onSurface,
                 shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
                 shadowElevation = 8.dp
             ) {
                 TopAppBar(
                     title = {
                         Column {
-                            Text(book.title, color = chromeText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                            Text(
+                                book.title,
+                                color = chromeColors.onSurface,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1
+                            )
                             Text(
                                 book.author,
-                                color = Color(0xFFB6B6B0),
+                                color = chromeColors.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1
                             )
@@ -430,7 +436,11 @@ fun ReaderScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Retour"), tint = chromeText)
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = tr("Retour"),
+                                tint = chromeColors.onSurface
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
