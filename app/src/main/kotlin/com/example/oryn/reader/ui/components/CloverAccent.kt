@@ -102,7 +102,7 @@ fun CloverAccentOption(
         }
         Text(
             text = accent.label,
-            fontSize = 10.sp,
+            fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
