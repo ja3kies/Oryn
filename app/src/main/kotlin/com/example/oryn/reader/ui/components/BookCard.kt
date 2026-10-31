@@ -188,7 +188,7 @@ fun BookCard(
             Modifier
                 .fillMaxWidth()
                 .height(116.dp)
-                .glass(RoundedCornerShape(28.dp), tint)
+                .glass(RoundedCornerShape(28.dp))
                 .combinedClickable(
                     onClick = onBookClick,
                     onLongClick = {
