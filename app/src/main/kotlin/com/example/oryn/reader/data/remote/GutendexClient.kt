@@ -30,6 +30,9 @@ object GutendexClient {
 
     private const val BASE = "https://gutendex.com/books"
     private const val USER_AGENT = "OrynReader/1.0 (Android)"
+    private const val MAX_API_RESPONSE_BYTES = 2 * 1024 * 1024
+    private const val MAX_COVER_BYTES = 15 * 1024 * 1024
+    private const val MAX_BOOK_DOWNLOAD_BYTES = 100L * 1024 * 1024
 
     /** Gutendex d'abord ; s'il est injoignable, repli sur le catalogue OPDS officiel de Gutenberg. */
     suspend fun search(query: String, language: String?, page: Int): OnlinePage =
@@ -66,7 +69,19 @@ object GutendexClient {
     suspend fun fetchBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
         val connection = open(url)
         try {
-            connection.inputStream.use { it.readBytes() }
+            connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > MAX_COVER_BYTES) throw IOException("Image trop volumineuse")
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
         } finally {
             connection.disconnect()
         }
@@ -85,7 +100,22 @@ object GutendexClient {
             if (connection.contentType?.contains("text/html", ignoreCase = true) == true) {
                 throw IOException("Réponse inattendue du serveur")
             }
-            connection.inputStream.use { input -> temp.outputStream().use { input.copyTo(it) } }
+            if (connection.contentLengthLong > MAX_BOOK_DOWNLOAD_BYTES) {
+                throw IOException("Livre trop volumineux")
+            }
+            connection.inputStream.use { input ->
+                temp.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > MAX_BOOK_DOWNLOAD_BYTES) throw IOException("Livre trop volumineux")
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
         } finally {
             connection.disconnect()
         }
@@ -175,7 +205,19 @@ object GutendexClient {
     private fun fetchText(url: String, readTimeoutMs: Int = 45_000): String {
         val connection = open(url, readTimeoutMs = readTimeoutMs)
         return try {
-            connection.inputStream.bufferedReader().use { it.readText() }
+            connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > MAX_API_RESPONSE_BYTES) throw IOException("Réponse catalogue trop volumineuse")
+                    output.write(buffer, 0, count)
+                }
+                output.toString(Charsets.UTF_8.name())
+            }
         } finally {
             connection.disconnect()
         }
