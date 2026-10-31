@@ -22,6 +22,7 @@ class CoverStore(private val context: Context) {
 
     /** Renvoie le chemin du fichier créé, ou null si les octets ne sont pas une image. */
     fun saveBytes(bytes: ByteArray, stableHash: String? = null): String? = runCatching {
+        if (bytes.size > MAX_INPUT_BYTES) return@runCatching null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
@@ -64,7 +65,20 @@ class CoverStore(private val context: Context) {
     }.getOrNull()
 
     fun saveUri(uri: Uri, stableHash: String? = null): String? = runCatching {
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }?.let { saveBytes(it, stableHash) }
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                total += count
+                if (total > MAX_INPUT_BYTES) return@use null
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        } ?: return@runCatching null
+        saveBytes(bytes, stableHash)
     }.getOrNull()
 
     /**
@@ -91,5 +105,6 @@ class CoverStore(private val context: Context) {
 
     private companion object {
         const val MAX_SIDE = 900
+        const val MAX_INPUT_BYTES = 15 * 1024 * 1024
     }
 }
