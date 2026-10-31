@@ -126,15 +126,34 @@ object GutendexClient {
             temp.delete()
             throw IOException("Fichier incomplet")
         }
-        destination.delete()
-        if (!temp.renameTo(destination)) {
-            temp.copyTo(destination, overwrite = true)
-            temp.delete()
-        }
+        publishStagedFile(temp, destination)
     }
 
     /**
      * Téléchargement déclenché depuis le navigateur intégré.
+
+    /** Publishes a completed download without deleting a previous valid file on failure. */
+    private fun publishStagedFile(temp: File, destination: File) {
+        val parent = destination.parentFile ?: throw IOException("Dossier invalide")
+        val staged = File(parent, destination.name + ".publish")
+        val backup = File(parent, destination.name + ".backup")
+        try {
+            temp.copyTo(staged, overwrite = true)
+            if (backup.exists() && !backup.delete()) throw IOException("Sauvegarde impossible")
+            val hadDestination = destination.exists()
+            if (hadDestination && !destination.renameTo(backup)) throw IOException("Remplacement impossible")
+            if (!staged.renameTo(destination)) {
+                if (hadDestination) backup.renameTo(destination)
+                throw IOException("Publication impossible")
+            }
+            if (backup.exists()) backup.delete()
+        } catch (error: Exception) {
+            if (!destination.exists() && backup.exists()) backup.renameTo(destination)
+            throw error
+        } finally {
+            staged.delete()
+        }
+    }
      * Accepte les sites HTTPS publics, mais contrôle chaque redirection et borne le flux.
      * Séparé du client Gutenberg afin de ne pas élargir les hôtes autorisés du catalogue.
      */
@@ -195,10 +214,7 @@ object GutendexClient {
                         }
                     }
                     if (temp.length() < 1024) throw IOException("Fichier incomplet")
-                    if (!temp.renameTo(destination)) {
-                        temp.copyTo(destination, overwrite = true)
-                        temp.delete()
-                    }
+                    publishStagedFile(temp, destination)
                     return@withContext
                 } finally {
                     connection.disconnect()
@@ -207,7 +223,6 @@ object GutendexClient {
             throw IOException("Trop de redirections")
         } catch (error: Exception) {
             temp.delete()
-            destination.delete()
             throw error
         }
     }
