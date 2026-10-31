@@ -83,9 +83,9 @@ import com.example.oryn.reader.ui.theme.previewColor
 import com.example.oryn.reader.ui.theme.pageColor
 import com.example.oryn.reader.ui.theme.textColor
 
-/** Fond partagé par la fiche de réglages et la barre du haut (légèrement transparent). */
+/** Surface du panneau de commandes de lecture, liée au thème de l’application. */
 val ReaderChromeColor: Color
-    @Composable get() = Color(0xFF0E0E0E).copy(alpha = 0.97f)
+    @Composable get() = MaterialTheme.colorScheme.surfaceContainerLow
 
 enum class ReaderSettingsTab(val label: String, val icon: ImageVector) {
     ESSENTIALS("Essentiels", OrynIcons.Font),
@@ -171,7 +171,7 @@ private fun ReaderControlsSheetContent(
             .padding(horizontal = 10.dp, vertical = 6.dp)
             .graphicsLayer { translationY = dragOffset.value },
         shape = RoundedCornerShape(34.dp),
-        color = ReaderChromeColor,
+        color = colors.surfaceContainerLow,
         tonalElevation = 0.dp,
         shadowElevation = 24.dp
     ) {
@@ -225,7 +225,7 @@ private fun ReaderControlsSheetContent(
                         .width(40.dp)
                         .height(5.dp)
                         .clip(CircleShape)
-                        .background(colors.onSurfaceVariant.copy(alpha = 0.5f))
+                        .background(colors.outline)
                 )
             }
 
