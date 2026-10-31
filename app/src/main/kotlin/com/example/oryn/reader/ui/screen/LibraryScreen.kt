@@ -257,7 +257,10 @@ internal fun LibraryContent(
         )
 
         if (books.isEmpty() && !isLoading) {
-            Box(Modifier.padding(horizontal = 16.dp)) {
+            Box(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 LibraryEmptyState(
                     title = tr("Aucun livre"),
                     subtitle = tr("Ajoute un EPUB ou un PDF, ou explore les catalogues libres."),
