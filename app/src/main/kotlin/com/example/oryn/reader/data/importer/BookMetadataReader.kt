@@ -59,11 +59,7 @@ class BookMetadataReader(private val context: Context) {
             else -> return null
         }
 
-        val fallbackTitle = fileName.substringBeforeLast('.')
-            .replace('_', ' ')
-            .replace('-', ' ')
-            .trim()
-            .ifBlank { "Livre sans titre" }
+        val fallbackTitle = cleanFallbackTitle(fileName)
 
         val epub = if (format == "EPUB") readEpub(uri) else null
         val html = if (format == "HTML") readHtmlHead(uri) else null
@@ -74,6 +70,23 @@ class BookMetadataReader(private val context: Context) {
             format = format,
             coverBytes = epub?.cover
         )
+    }
+
+    /** Nettoie les noms de fichiers bruts pour éviter d'afficher une URL ou un identifiant comme titre. */
+    private fun cleanFallbackTitle(fileName: String): String {
+        val decoded = runCatching { Uri.decode(fileName) }.getOrDefault(fileName)
+        val withoutExtension = decoded.substringBeforeLast('.')
+        val candidate = withoutExtension
+            .replace(Regex("(?i)^https?://"), "")
+            .substringAfterLast('/')
+            .replace(Regex("[_]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim(' ', '-', '_', '.')
+        if (candidate.isBlank() || candidate.matches(Regex("(?i)(www\\.)?scribd\\.com.*")) ||
+            candidate.matches(Regex("(?i)[a-z0-9-]+\\.(com|net|org|fr)(/.*)?"))) {
+            return "Livre sans titre"
+        }
+        return candidate.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     }
 
     /** Titre (balise title) et auteur (meta author) d'une page HTML, lus dans ses premiers Ko. */
