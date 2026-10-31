@@ -45,4 +45,16 @@ interface BookDao {
 
     @Query("DELETE FROM books WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
+
+    @Query("DELETE FROM annotations WHERE bookId = :bookId")
+    suspend fun deleteAnnotationsForBook(bookId: Long)
+
+    @Transaction
+    suspend fun deleteBooksWithAnnotations(ids: List<Long>) {
+        ids.forEach { id ->
+            deleteAnnotationsForBook(id)
+            deleteAnnotationsForBook(-id)
+        }
+        if (ids.isNotEmpty()) deleteByIds(ids)
+    }
 }
