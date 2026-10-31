@@ -43,6 +43,7 @@ data class TranslationResult(
 object LookupClient {
     /** MyMemory refuse les requêtes de plus de 500 octets : on reste en dessous. */
     private const val MAX_TRANSLATE_CHARS = 420
+    private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
     val targetLanguages: List<Pair<String, String>> = listOf(
         "fr" to "Français", "en" to "English", "es" to "Español", "de" to "Deutsch", "it" to "Italiano", "pt" to "Português"
@@ -188,7 +189,19 @@ object LookupClient {
             val code = c.responseCode
             when {
                 code == 404 -> null
-                code in 200..299 -> c.inputStream.bufferedReader().use { it.readText() }
+                code in 200..299 -> c.inputStream.use { input ->
+                    val out = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_RESPONSE_BYTES) throw IOException("Réponse trop volumineuse")
+                        out.write(buffer, 0, n)
+                    }
+                    out.toString(Charsets.UTF_8.name())
+                }
                 else -> throw IOException("HTTP $code")
             }
         } finally {
