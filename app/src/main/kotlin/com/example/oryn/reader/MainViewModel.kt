@@ -59,16 +59,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val db = OrynDatabase.getDatabase(getApplication<Application>())
             db.bookDao().deleteBooksWithAnnotations(books.map { it.id }.distinct())
-            val booksDir = File(getApplication<Application>().filesDir, "books")
-            books.forEach { book ->
-                if (book.filePath.startsWith("file:")) {
-                    val file = Uri.parse(book.filePath).path?.let(::File)
-                    if (file != null && file.parentFile == booksDir) file.delete()
-                }
-            }
+            books.forEach(::deleteOwnedBookFile)
         }
     }
 
+
+    private fun deleteOwnedBookFile(book: BookEntity) {
+        if (!book.filePath.startsWith("file:")) return
+        val file = Uri.parse(book.filePath).path?.let(::File) ?: return
+        val booksDir = File(getApplication<Application>().filesDir, "books")
+        if (file.parentFile == booksDir) file.delete()
+    }
 
     val books: StateFlow<List<BookEntity>?> = repository.allBooks
         .map { it as List<BookEntity>? }
@@ -480,17 +481,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteBook(book: BookEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteBook(book)
-            OrynDatabase.getDatabase(getApplication()).annotationDao().deleteForBook(book.id)
-            OrynDatabase.getDatabase(getApplication()).annotationDao().deleteForBook(-book.id)
-            // La couverture est conservée sur disque : elle sera réutilisée si
-            // l'utilisateur réimporte le même fichier (bibliothèque de covers Oryn).
-            // Fichier téléchargé par l'app : on le supprime aussi (jamais un fichier de l'utilisateur)
-            if (book.filePath.startsWith("file:")) {
-                val file = Uri.parse(book.filePath).path?.let(::File)
-                val booksDir = File(getApplication<Application>().filesDir, "books")
-                if (file != null && file.parentFile == booksDir) file.delete()
-            }
+            val db = OrynDatabase.getDatabase(getApplication<Application>())
+            db.bookDao().deleteBooksWithAnnotations(listOf(book.id))
+            // La couverture est conservée pour une éventuelle réimportation.
+            deleteOwnedBookFile(book)
         }
     }
 
