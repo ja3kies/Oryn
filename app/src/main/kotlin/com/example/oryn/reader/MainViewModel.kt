@@ -382,7 +382,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     cookie?.let { put("Cookie", it) }
                     referer?.let { put("Referer", it) }
                 }
-                GutendexClient.download(url, target, headers)
+                GutendexClient.downloadFromWeb(url, target, headers)
 
                 val uri = Uri.fromFile(target)
                 val meta = metadataReader.read(uri)
