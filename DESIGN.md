@@ -49,7 +49,7 @@ The five colours below are the approved Oryn palette. Light Yellow is an approxi
 
 ## 3. Semantic theme
 
-Use `MaterialTheme.colorScheme` for standard UI and `OrynColors.editorial` for brand-specific moments. Do not hardcode palette values inside screens.
+Use `MaterialTheme.colorScheme` for standard UI and `OrynColors.editorial` for brand-specific moments. Do not hardcode palette values inside screens. Light-mode secondary text uses `#304D48`; neutral surface containers step from `#F7F8F4` through `#D6E0D5` for clearer separation.
 
 ### Light mode
 
@@ -153,7 +153,9 @@ Motion should clarify cause and effect, not decorate the screen.
 - **Selection:** Lime Cream surface with Deep Teal content unless the selected accent preference changes the accent.
 - **Progress:** Lime Cream fill with a clearly visible track and percentage/status label where useful.
 - **Book cover:** preserve aspect ratio, render crisply, use the existing `BookCover` component and preserve the source aspect ratio.
-- **Cards:** warm solid surface in light mode, teal surface in dark mode; 20–24 dp radius.
+- **Cards:** warm solid surface in light mode, teal surface in dark mode; 20–24 dp radius. Do not use repeated icon-title-description cards as the default page structure.
+- **Catalogue sources:** use a full-width native list with clear title/description hierarchy and a visible open affordance; avoid horizontal-only source carousels. Use a segmented control to switch catalogue browsing and classic search.
+- **Reader controls sheet:** the outer `ReaderControlsSheet` surface and its controls follow app light/dark chrome. The reading page itself remains governed by the selected reader preset.
 - **Icons:** continue using the existing rounded Tabler/Lucide-derived `OrynIcons` / `HugeIcons` set. Do not replace the logo or protected navigation icons.
 - **Mascot:** retain as a brand character, but never let it obscure reading actions or content.
 
