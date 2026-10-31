@@ -181,7 +181,7 @@ object GutendexClient {
                 connection.setRequestProperty("User-Agent", USER_AGENT)
                 headers.forEach { (name, value) ->
                     if (name.matches(Regex("[A-Za-z0-9-]{1,64}")) &&
-                        value.length <= 4096 && !value.contains('\\r') && !value.contains('\\n')
+                        value.length <= 4096 && !value.contains('\r') && !value.contains('\n')
                     ) connection.setRequestProperty(name, value)
                 }
 
