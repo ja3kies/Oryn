@@ -19,24 +19,47 @@ object AnnasArchiveSource {
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .addInterceptor(DdosGuardInterceptor(bootstrapClient))
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 
+    // Domaines actuellement référencés par la FAQ officielle.
     private val MIRRORS = listOf(
         "https://annas-archive.gl",
-        "https://annas-archive.se",
-        "https://annas-archive.org"
+        "https://annas-archive.pk",
+        "https://annas-archive.gd"
     )
 
-    /** Hosts autorisés pour les liens de download. Bloque les href externes arbitraires. */
+    // Autorisation exacte : pas de sous-domaines implicites ni de domaines ressemblants.
     private val ALLOWED_DOWNLOAD_HOSTS = setOf(
-        "annas-archive.gl", "annas-archive.se", "annas-archive.org",
-        "libgen.li", "libgen.is", "libgen.rs", "libgen.st",
+        "annas-archive.gl", "annas-archive.pk", "annas-archive.gd",
+        "libgen.li", "libgen.is", "libgen.rs", "libgen.st"
     )
 
     private fun isAllowedDownloadHost(url: String): Boolean {
-        val host = try { java.net.URI(url).host?.lowercase() } catch (_: Exception) { null }
-            ?: return false
-        return ALLOWED_DOWNLOAD_HOSTS.any { host == it || host.endsWith(".$it") }
+        val parsed = try { java.net.URI(url) } catch (_: Exception) { return false }
+        return parsed.scheme.equals("https", ignoreCase = true) &&
+            parsed.host?.lowercase() in ALLOWED_DOWNLOAD_HOSTS
+    }
+
+    private const val MAX_REDIRECTS = 5
+
+    private fun fetchHtml(url: String): String? {
+        var current = url
+        repeat(MAX_REDIRECTS + 1) { attempt ->
+            if (!isAllowedDownloadHost(current)) return null
+            val request = Request.Builder().url(current).header("User-Agent", USER_AGENT).build()
+            client.newCall(request).execute().use { response ->
+                if (response.isRedirect) {
+                    if (attempt == MAX_REDIRECTS) return null
+                    val location = response.header("Location") ?: return null
+                    current = response.request.url.resolve(location)?.toString() ?: return null
+                } else {
+                    return if (response.isSuccessful) response.body?.string() else null
+                }
+            }
+        }
+        return null
     }
 
     private const val MAX_DOWNLOAD_BYTES = 200L * 1024 * 1024
@@ -55,13 +78,6 @@ object AnnasArchiveSource {
             } catch (_: Exception) { }
         }
         return emptyList()
-    }
-
-    private fun fetchHtml(url: String): String? {
-        val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
-        return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) null else response.body?.string()
-        }
     }
 
     private fun parseSearchResults(html: String, format: String): List<AnnasBook> {
@@ -126,26 +142,39 @@ object AnnasArchiveSource {
 
     suspend fun downloadFile(url: String, destination: File): Boolean = withContext(Dispatchers.IO) {
         try {
-            val scheme = android.net.Uri.parse(url).scheme?.lowercase()
-            if (scheme != "http" && scheme != "https") return@withContext false
-            val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext false
-                val body = response.body ?: return@withContext false
-                if (body.contentLength() > MAX_DOWNLOAD_BYTES) return@withContext false
-                var written = 0L
-                destination.outputStream().use { out ->
-                    body.byteStream().use { input ->
-                        val buf = ByteArray(8192)
-                        var n: Int
-                        while (input.read(buf).also { n = it } > 0) {
-                            written += n
-                            if (written > MAX_DOWNLOAD_BYTES) return@withContext false
-                            out.write(buf, 0, n)
+            if (!isAllowedDownloadHost(url)) return@withContext false
+            var current = url
+            var downloaded = false
+            repeat(MAX_REDIRECTS + 1) { attempt ->
+                if (downloaded) return@repeat
+                if (!isAllowedDownloadHost(current)) return@withContext false
+                val request = Request.Builder().url(current).header("User-Agent", USER_AGENT).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isRedirect) {
+                        if (attempt == MAX_REDIRECTS) return@withContext false
+                        val location = response.header("Location") ?: return@withContext false
+                        current = response.request.url.resolve(location)?.toString() ?: return@withContext false
+                    } else {
+                        if (!response.isSuccessful) return@withContext false
+                        val body = response.body ?: return@withContext false
+                        if (body.contentLength() > MAX_DOWNLOAD_BYTES) return@withContext false
+                        var written = 0L
+                        destination.outputStream().use { out ->
+                            body.byteStream().use { input ->
+                                val buf = ByteArray(8192)
+                                var n: Int
+                                while (input.read(buf).also { n = it } > 0) {
+                                    written += n
+                                    if (written > MAX_DOWNLOAD_BYTES) throw java.io.IOException("Download exceeds size limit")
+                                    out.write(buf, 0, n)
+                                }
+                            }
                         }
+                        downloaded = true
                     }
                 }
             }
+            if (!downloaded) return@withContext false
             // Magic bytes check (EPUB = PK, PDF = %PDF, TXT = ASCII/UTF-8 probable)
             val head = ByteArray(8)
             destination.inputStream().use { it.read(head) }
