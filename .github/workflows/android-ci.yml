@@ -38,9 +38,20 @@ jobs:
           test -n "$ORYN_KEYSTORE_BASE64" || { echo "Missing ORYN_KEYSTORE_BASE64 repository secret"; exit 1; }
           echo "$ORYN_KEYSTORE_BASE64" | base64 --decode > app/oryn-debug.keystore
           chmod 600 app/oryn-debug.keystore
+          ACTUAL="$(keytool -list -v -keystore app/oryn-debug.keystore -alias androiddebugkey -storepass android -keypass android 2>/dev/null | awk -F': ' '/SHA256:/{print $2; exit}')"
+          EXPECTED="4C:34:B8:52:4B:B6:6F:DE:DC:22:C3:EB:A6:9C:A1:4C:93:05:05:DF:14:25:05:08:3A:CC:E0:9D:97:CD:1C:17"
+          echo "Keystore certificate SHA-256: $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED" || { echo "Keystore does not match the Termux certificate"; exit 1; }
 
       - name: Assemble debug
         run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -F "4C:34:B8:52:4B:B6:6F:DE:DC:22:C3:EB:A6:9C:A1:4C:93:05:05:DF:14:25:05:08:3A:CC:E0:9D:97:CD:1C:17"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
