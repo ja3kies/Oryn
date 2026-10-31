@@ -140,8 +140,11 @@ object AnnasArchiveSource {
     }
 
     suspend fun downloadFile(url: String, destination: File): Boolean = withContext(Dispatchers.IO) {
+        val parent = destination.parentFile ?: return@withContext false
+        val temp = File(parent, destination.name + ".part")
         try {
             if (!isAllowedDownloadHost(url)) return@withContext false
+            parent.mkdirs()
             var current = url
             var downloaded = false
             repeat(MAX_REDIRECTS + 1) { attempt ->
@@ -158,33 +161,45 @@ object AnnasArchiveSource {
                         val body = response.body ?: return@withContext false
                         if (body.contentLength() > MAX_DOWNLOAD_BYTES) return@withContext false
                         var written = 0L
-                        destination.outputStream().use { out ->
+                        temp.outputStream().use { out ->
                             body.byteStream().use { input ->
                                 val buf = ByteArray(8192)
-                                var n: Int
-                                while (input.read(buf).also { n = it } > 0) {
-                                    written += n
-                                    if (written > MAX_DOWNLOAD_BYTES) throw java.io.IOException("Download exceeds size limit")
-                                    out.write(buf, 0, n)
+                                while (true) {
+                                    val count = input.read(buf)
+                                    if (count < 0) break
+                                    written += count
+                                    if (written > MAX_DOWNLOAD_BYTES) {
+                                        throw java.io.IOException("Download exceeds size limit")
+                                    }
+                                    out.write(buf, 0, count)
                                 }
                             }
                         }
+                        if (written < 1024) return@withContext false
                         downloaded = true
                     }
                 }
             }
             if (!downloaded) return@withContext false
-            // Magic bytes check (EPUB = PK, PDF = %PDF, TXT = ASCII/UTF-8 probable)
+
+            // Vérification du format avant de publier le fichier dans le cache.
             val head = ByteArray(8)
-            destination.inputStream().use { it.read(head) }
+            temp.inputStream().use { it.read(head) }
             val isEpub = head[0] == 0x50.toByte() && head[1] == 0x4B.toByte()
             val isPdf = head[0] == 0x25.toByte() && head[1] == 0x50.toByte() &&
-                        head[2] == 0x44.toByte() && head[3] == 0x46.toByte()
-            if (!isEpub && !isPdf) {
-                destination.delete()
-                return@withContext false
+                head[2] == 0x44.toByte() && head[3] == 0x46.toByte()
+            if (!isEpub && !isPdf) return@withContext false
+
+            destination.delete()
+            if (!temp.renameTo(destination)) {
+                temp.copyTo(destination, overwrite = true)
+                temp.delete()
             }
             true
-        } catch (_: Exception) { false }
+        } catch (_: Exception) {
+            false
+        } finally {
+            temp.delete()
+        }
     }
 }
