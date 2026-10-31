@@ -3,6 +3,8 @@ package com.example.oryn.reader.ui.components
 import com.example.oryn.reader.i18n.tr
 import com.example.oryn.reader.i18n.trf
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.runtime.rememberCoroutineScope
@@ -202,7 +204,13 @@ private fun ReaderControlsSheetContent(
                                     if (dragOffset.value > dismissDistance) {
                                         if (expanded) {
                                             expanded = false
-                                            dragOffset.animateTo(0f)
+                                            dragOffset.animateTo(
+                                                0f,
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.8f,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )
+                                            )
                                         } else {
                                             onDismiss()
                                             delay(400)
