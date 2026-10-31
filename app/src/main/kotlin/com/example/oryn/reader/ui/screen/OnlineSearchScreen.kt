@@ -90,12 +90,15 @@ internal fun OnlineSearchScreen(
                     Toast.makeText(context, "Aucun lien de téléchargement disponible.", Toast.LENGTH_LONG).show()
                     return@launch
                 }
-                val file = File(context.cacheDir, "${book.title.replace(" ", "_")}.${book.format.lowercase()}")
+                val extension = book.format.lowercase().filter { it.isLetterOrDigit() }.take(5)
+                    .takeIf { it in setOf("epub", "pdf") } ?: "epub"
+                val file = File.createTempFile("oryn-archive-", ".$extension", context.cacheDir)
                 var ok = false
                 for (url in links) {
                     ok = AnnasArchiveSource.downloadFile(url, file)
                     if (ok) break
                 }
+                if (!ok) file.delete()
                 if (ok) {
                     Toast.makeText(context, "Téléchargé : ${file.name}", Toast.LENGTH_LONG).show()
                 } else {
