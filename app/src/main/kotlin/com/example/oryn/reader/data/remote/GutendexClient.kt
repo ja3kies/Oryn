@@ -127,6 +127,7 @@ object GutendexClient {
             throw IOException("Fichier incomplet")
         }
         publishStagedFile(temp, destination)
+        temp.delete()
     }
 
     /** Publishes a completed download without deleting a previous valid file on failure. */
@@ -216,6 +217,7 @@ object GutendexClient {
                     }
                     if (temp.length() < 1024) throw IOException("Fichier incomplet")
                     publishStagedFile(temp, destination)
+                    temp.delete()
                     return@withContext
                 } finally {
                     connection.disconnect()
