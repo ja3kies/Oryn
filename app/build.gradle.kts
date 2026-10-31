@@ -17,7 +17,19 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("sharedDebug") {
+            storeFile = file("oryn-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("sharedDebug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
