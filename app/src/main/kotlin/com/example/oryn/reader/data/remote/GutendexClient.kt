@@ -129,9 +129,6 @@ object GutendexClient {
         publishStagedFile(temp, destination)
     }
 
-    /**
-     * Téléchargement déclenché depuis le navigateur intégré.
-
     /** Publishes a completed download without deleting a previous valid file on failure. */
     private fun publishStagedFile(temp: File, destination: File) {
         val parent = destination.parentFile ?: throw IOException("Dossier invalide")
@@ -154,6 +151,10 @@ object GutendexClient {
             staged.delete()
         }
     }
+
+    /**
+     * Téléchargement déclenché depuis le navigateur intégré.
+
      * Accepte les sites HTTPS publics, mais contrôle chaque redirection et borne le flux.
      * Séparé du client Gutenberg afin de ne pas élargir les hôtes autorisés du catalogue.
      */
