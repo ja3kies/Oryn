@@ -54,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -253,9 +254,14 @@ fun ExploreScreen(
                             placeholder = { Text(tr("Titre ou auteur…")) },
                             leadingIcon = { Icon(OrynIcons.Search, null) },
                             trailingIcon = {
-                                if (query.isNotEmpty()) {
-                                    IconButton(onClick = { query = "" }) {
-                                        Icon(OrynIcons.Close, contentDescription = tr("Effacer"))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (query.isNotEmpty()) {
+                                        IconButton(onClick = { query = "" }) {
+                                            Icon(OrynIcons.Close, contentDescription = tr("Effacer"))
+                                        }
+                                    }
+                                    TextButton(onClick = { focusManager.clearFocus() }) {
+                                        Text(tr("Chercher"))
                                     }
                                 }
                             },
