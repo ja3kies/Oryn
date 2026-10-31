@@ -159,7 +159,11 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
         }
         Surface(Modifier.fillMaxSize(), color = colors.surfaceContainerHighest) {
             Column(Modifier.fillMaxSize()) {
-                Surface(color = colors.surfaceContainerHighest, shadowElevation = 4.dp) {
+                Surface(
+                    color = colors.surfaceContainerHighest,
+                    contentColor = colors.onSurface,
+                    shadowElevation = 4.dp
+                ) {
                     Column(Modifier.statusBarsPadding()) {
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
