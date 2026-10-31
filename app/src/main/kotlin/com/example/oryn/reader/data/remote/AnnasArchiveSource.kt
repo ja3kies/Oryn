@@ -32,8 +32,7 @@ object AnnasArchiveSource {
 
     // Autorisation exacte : pas de sous-domaines implicites ni de domaines ressemblants.
     private val ALLOWED_DOWNLOAD_HOSTS = setOf(
-        "annas-archive.gl", "annas-archive.pk", "annas-archive.gd",
-        "libgen.li", "libgen.is", "libgen.rs", "libgen.st"
+        "annas-archive.gl", "annas-archive.pk", "annas-archive.gd"
     )
 
     private fun isAllowedDownloadHost(url: String): Boolean {
