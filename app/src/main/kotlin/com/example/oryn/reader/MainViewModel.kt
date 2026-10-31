@@ -43,6 +43,10 @@ import java.security.MessageDigest
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
+    private companion object {
+        const val MAX_SHARED_IMPORT_BYTES = 100L * 1024 * 1024
+    }
+
     private val repository = BookRepository(
         OrynDatabase.getDatabase(application).bookDao()
     )
@@ -211,9 +215,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     app.contentResolver.openInputStream(uri)?.use { input ->
                         temp.outputStream().use { output ->
                             val buffer = ByteArray(8192)
+                            var total = 0L
                             while (true) {
                                 val count = input.read(buffer)
                                 if (count < 0) break
+                                total += count
+                                if (total > MAX_SHARED_IMPORT_BYTES) {
+                                    throw java.io.IOException(tr("Fichier trop volumineux"))
+                                }
                                 digest.update(buffer, 0, count)
                                 output.write(buffer, 0, count)
                             }
