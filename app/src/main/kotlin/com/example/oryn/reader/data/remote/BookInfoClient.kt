@@ -29,6 +29,8 @@ data class BookInfo(
  */
 object BookInfoClient {
     private const val CACHE_DAYS = 30L
+    private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+    private const val MAX_CACHE_BYTES = 256 * 1024
 
     suspend fun load(context: Context, book: BookEntity): BookInfo = withContext(Dispatchers.IO) {
         val cacheFile = File(File(context.filesDir, "info").apply { mkdirs() }, "${book.id}.json")
@@ -96,7 +98,19 @@ object BookInfoClient {
         c.readTimeout = 12_000
         c.setRequestProperty("User-Agent", "OrynReader/1.0 (Android)")
         return try {
-            c.inputStream.bufferedReader().use { it.readText() }
+            c.inputStream.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > MAX_RESPONSE_BYTES) throw java.io.IOException("Réponse trop volumineuse")
+                    out.write(buffer, 0, n)
+                }
+                out.toString(Charsets.UTF_8.name())
+            }
         } finally {
             c.disconnect()
         }
@@ -112,6 +126,7 @@ object BookInfoClient {
 
     private fun readCache(file: File): BookInfo? = runCatching {
         if (!file.exists() || System.currentTimeMillis() - file.lastModified() > CACHE_DAYS * 86_400_000L) return null
+        if (file.length() > MAX_CACHE_BYTES) return null
         val j = JSONObject(file.readText())
         BookInfo(
             description = j.optString("d").takeIf { it.isNotBlank() },
