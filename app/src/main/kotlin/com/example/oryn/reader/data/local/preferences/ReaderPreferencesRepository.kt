@@ -16,9 +16,9 @@ private val Context.readerDataStore by preferencesDataStore(name = "reader_setti
 enum class ReaderThemePreset(val label: String) {
     LIGHT("Clair"),
     BEIGE("Beige"),
-    MIDNIGHT("Prune"),
-    OLED("Noir OLED"),
-    NUIT("Nuit Oryn")
+    MIDNIGHT("Ardoise"),
+    NUIT("Minuit"),
+    OLED("Noir OLED")
 }
 
 enum class ReaderFontFamily(val label: String) {
