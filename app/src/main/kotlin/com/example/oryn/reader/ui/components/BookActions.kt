@@ -237,7 +237,6 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             color = inkSecondary(),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-                        RatingRow(info)
                         Row(
                             Modifier.padding(top = 10.dp).fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
