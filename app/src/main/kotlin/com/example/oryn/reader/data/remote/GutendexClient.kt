@@ -116,6 +116,9 @@ object GutendexClient {
                     }
                 }
             }
+        } catch (error: Exception) {
+            temp.delete()
+            throw error
         } finally {
             connection.disconnect()
         }
