@@ -116,9 +116,14 @@ fun ReaderControlsSheet(
     onTogglePdfReflow: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    // Panneau toujours sombre (encre) : les commandes ressortent en accent, en clair comme en sombre
-    val panel = remember(currentAccent) {
-        orynColorScheme(true, currentAccent).copy(primary = currentAccent.accentDark, onPrimary = androidx.compose.ui.graphics.Color(0xFF141414))
+    // Le panneau suit le thème de l'application au lieu d'imposer une surface sombre.
+    val appIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val panel = remember(currentAccent, appIsDark) {
+        val accent = if (appIsDark) currentAccent.accentDark else currentAccent.accentLight
+        orynColorScheme(appIsDark, currentAccent).copy(
+            primary = accent,
+            onPrimary = if (accent.luminance() > 0.55f) Color(0xFF0F3A3A) else Color.White
+        )
     }
     MaterialTheme(colorScheme = panel, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         ReaderControlsSheetContent(
