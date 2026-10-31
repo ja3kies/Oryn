@@ -176,7 +176,7 @@ private fun NavItem(tab: ReaderTab, selected: Boolean, onClick: () -> Unit) {
         label = "navPill"
     )
     val ink by animateColorAsState(
-        if (selected) colors.onPrimaryContainer else colors.onSurface.copy(alpha = 0.66f),
+        if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
         label = "navInk"
     )
     Row(
