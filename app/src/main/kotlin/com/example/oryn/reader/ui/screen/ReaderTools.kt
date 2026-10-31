@@ -90,6 +90,7 @@ internal fun TocDialog(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (current) colors.primary.copy(alpha = 0.12f) else colors.surface)
                                 .clickable { onJump(entry.offset) }
+                                .heightIn(min = 48.dp)
                                 .padding(start = (12 + entry.level.coerceAtMost(4) * 16).dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
                         )
                     }
