@@ -31,6 +31,14 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Restore shared Termux debug keystore
+        env:
+          ORYN_KEYSTORE_BASE64: ${{ secrets.ORYN_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ORYN_KEYSTORE_BASE64" || { echo "Missing ORYN_KEYSTORE_BASE64 repository secret"; exit 1; }
+          echo "$ORYN_KEYSTORE_BASE64" | base64 --decode > app/oryn-debug.keystore
+          chmod 600 app/oryn-debug.keystore
+
       - name: Assemble debug
         run: ./gradlew :app:assembleDebug --stacktrace
 
