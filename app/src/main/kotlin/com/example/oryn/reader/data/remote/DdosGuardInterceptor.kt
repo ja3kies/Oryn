@@ -45,23 +45,25 @@ class DdosGuardInterceptor(
     }
 
     private fun fetchBypassPath(): String {
-        val response = bootstrapClient.newCall(
+        return bootstrapClient.newCall(
             Request.Builder().url("https://check.ddos-guard.net/check.js").build()
-        ).execute()
-        val body = response.body?.string() ?: return ""
-        return Regex("'(.*?)'").find(body)?.groupValues?.get(1) ?: ""
+        ).execute().use { response ->
+            val body = response.body?.string() ?: return@use ""
+            Regex("'(.*?)'").find(body)?.groupValues?.get(1) ?: ""
+        }
     }
 
     private fun fetchCookies(request: Request, path: String): Map<String, String> {
         val url = "${request.url.scheme}://${request.url.host}$path"
-        val response = bootstrapClient.newCall(
+        return bootstrapClient.newCall(
             Request.Builder().url(url)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 .build()
-        ).execute()
-        return response.headers("Set-Cookie").associate { cookie ->
-            val parts = cookie.split(";").first().split("=", limit = 2)
-            parts[0].trim() to (parts.getOrNull(1)?.trim() ?: "")
+        ).execute().use { response ->
+            response.headers("Set-Cookie").associate { cookie ->
+                val parts = cookie.split(";").first().split("=", limit = 2)
+                parts[0].trim() to (parts.getOrNull(1)?.trim() ?: "")
+            }
         }
     }
 }
