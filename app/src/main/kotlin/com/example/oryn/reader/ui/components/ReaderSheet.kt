@@ -218,7 +218,10 @@ private fun ReaderControlsSheetContent(
                                         }
                                     } else {
                                         if (dragOffset.value < 0f) expanded = true
-                                        dragOffset.animateTo(0f)
+                                        dragOffset.animateTo(0f, animationSpec = spring(
+                                        dampingRatio = 0.8f,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    ))
                                     }
                                 }
                             },
