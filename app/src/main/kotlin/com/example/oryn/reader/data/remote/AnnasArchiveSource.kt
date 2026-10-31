@@ -209,6 +209,7 @@ object AnnasArchiveSource {
         }
         finally {
             temp.delete()
+            staged.delete()
         }
     }
 }
