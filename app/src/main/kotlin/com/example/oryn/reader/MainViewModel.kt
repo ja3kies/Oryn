@@ -51,9 +51,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val prefsRepository = UserPreferencesRepository(application)
     
     fun deleteBooks(books: List<BookEntity>) {
-        viewModelScope.launch {
-            val ids = books.map { it.id }
-            OrynDatabase.getDatabase(getApplication<Application>()).bookDao().deleteByIds(ids)
+        if (books.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val db = OrynDatabase.getDatabase(getApplication<Application>())
+            db.bookDao().deleteBooksWithAnnotations(books.map { it.id }.distinct())
+            val booksDir = File(getApplication<Application>().filesDir, "books")
+            books.forEach { book ->
+                if (book.filePath.startsWith("file:")) {
+                    val file = Uri.parse(book.filePath).path?.let(::File)
+                    if (file != null && file.parentFile == booksDir) file.delete()
+                }
+            }
         }
     }
 
