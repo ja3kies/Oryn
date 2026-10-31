@@ -6,6 +6,9 @@ import android.provider.OpenableColumns
 import android.util.Xml
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.ByteArrayInputStream
 import java.util.zip.ZipInputStream
 
 class BookMetadata(
@@ -22,6 +25,25 @@ private class ManifestItem(val id: String, val href: String, val type: String, v
 
 /** Lit titre / auteur / format / couverture d'un fichier (sélecteur Android ou fichier local). */
 class BookMetadataReader(private val context: Context) {
+    private companion object {
+        const val MAX_XML_BYTES = 2 * 1024 * 1024
+        const val MAX_COVER_BYTES = 15 * 1024 * 1024
+        const val MAX_ZIP_ENTRIES = 20_000
+    }
+
+    private fun InputStream.readBounded(limit: Int): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val count = read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > limit) throw IOException("EPUB metadata exceeds size limit")
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
 
     /** Renvoie null si le format n'est pas pris en charge. */
     fun read(uri: Uri): BookMetadata? {
@@ -87,16 +109,18 @@ class BookMetadataReader(private val context: Context) {
 
     // ── EPUB : container.xml -> OPF (titre, auteur, manifeste) -> image de couverture ──
     private fun readEpub(uri: Uri): EpubInfo? = runCatching {
-        val opfPath = openZip(uri) { zip ->
-            if (findEntry(zip, "META-INF/container.xml")) rootfilePath(zip) else null
+        val container = openZip(uri) { zip ->
+            if (findEntry(zip, "META-INF/container.xml")) ByteArrayInputStream(zip.readBounded(MAX_XML_BYTES)) else null
         } ?: return@runCatching null
+        val opfPath = rootfilePath(container) ?: return@runCatching null
 
-        val opf = openZip(uri) { zip ->
-            if (findEntry(zip, opfPath)) parseOpf(zip, opfPath) else null
+        val opfStream = openZip(uri) { zip ->
+            if (findEntry(zip, opfPath)) ByteArrayInputStream(zip.readBounded(MAX_XML_BYTES)) else null
         } ?: return@runCatching null
+        val opf = parseOpf(opfStream, opfPath)
 
         val cover = opf.coverPath?.let { path ->
-            openZip(uri) { zip -> if (findEntry(zip, path)) zip.readBytes() else null }
+            openZip(uri) { zip -> if (findEntry(zip, path)) zip.readBounded(MAX_COVER_BYTES) else null }
         }
         EpubInfo(opf.title, opf.author, cover, opf.description)
     }.getOrNull()
@@ -107,8 +131,10 @@ class BookMetadataReader(private val context: Context) {
         }
 
     private fun findEntry(zip: ZipInputStream, name: String): Boolean {
+        var count = 0
         while (true) {
             val entry = zip.nextEntry ?: return false
+            if (++count > MAX_ZIP_ENTRIES) throw IOException("EPUB contains too many entries")
             if (entry.name.equals(name, ignoreCase = true)) return true
         }
     }
