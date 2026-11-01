@@ -4,7 +4,7 @@ This directory contains versioned database changes and Edge Functions for the op
 
 ## Current state
 
-- The initial schema migration and two Edge Functions are committed on `feature/community-epub-catalog`.
+- The initial schema migration and three Edge Functions are committed on `feature/community-epub-catalog`.
 - No Supabase project is connected to this workspace.
 - No migration or Edge Function has been deployed or executed against a live project.
 - Android is not connected to the catalogue.
@@ -45,6 +45,21 @@ A successful structural validation is **not** a malware scan, rights review or g
 ### Runtime capacity warning
 
 Supabase currently documents a 256 MiB memory ceiling and 2 seconds of CPU time per Edge Function request. The conservative archive limits above reduce exposure but do not prove that full validation will fit the CPU budget for every valid EPUB. Benchmark on a dedicated development project with representative worst-case files before deployment. If the CPU ceiling is exceeded, move decompression/validation to a dedicated worker rather than raising the limits or weakening checks. See [Edge Function limits](https://supabase.com/docs/guides/functions/limits).
+
+## Implemented: `catalog-retract`
+
+Path: `functions/catalog-retract/`
+
+- Accepts only one UUID `bookId`; rejects extra fields such as `owner_id` and `storage_key`.
+- Requires JWT verification and independently verifies the bearer token with Auth `getUser(token)`; anonymous users are rejected.
+- Looks up the book using both its ID and the verified owner ID.
+- Checks that the stored object key still matches the database-generated `owner_id/book_id.epub` format.
+- Changes the row to `removed` and sets `removed_at` **before** deleting the private Storage object, preventing further catalogue visibility first.
+- Retains the removed metadata row as a tombstone; it does not erase the user's account or unrelated data.
+- If object deletion fails, returns HTTP 202 with `cleanupPending`; retrying the same request attempts deletion again.
+- Repeated requests for an already removed book retry object cleanup.
+
+The service-role key is used only server-side. A failed object deletion does not restore publication or visibility.
 
 ## Server secrets
 
