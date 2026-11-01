@@ -2,12 +2,12 @@
 
 Date : 2026-11-01  
 Branche : `feature/community-epub-catalog`  
-Périmètre : migration initiale et deux Edge Functions.  
+Périmètre : migration initiale et trois Edge Functions.  
 Statut : **non déployé, non exécuté sur un projet Supabase**.
 
 ## Décision
 
-Deux opérations serveur sont écrites : création d'une fiche en attente après consentement, puis finalisation technique après validation EPUB et calcul SHA-256. La validation ne publie jamais le livre : il reste `pending` jusqu'à une modération séparée.
+Trois opérations serveur sont écrites : création d'une fiche en attente après consentement, puis finalisation technique après validation EPUB et calcul SHA-256. La validation ne publie jamais le livre : il reste `pending` jusqu'à une modération séparée.
 
 ## `catalog-create-upload`
 
@@ -60,8 +60,7 @@ Le retrait du catalogue est donc prioritaire sur le nettoyage physique : un éch
 
 ## Bloquants restants
 
-1. Cycle de vie Storage : retrait puis suppression idempotente de l'objet.
-2. Téléchargement : vérifier le statut publié et la politique à chaque demande.
+1. Téléchargement : vérifier le statut publié et la politique à chaque demande.
 2. Modération séparée, explicitement autorisée.
 3. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
 4. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
