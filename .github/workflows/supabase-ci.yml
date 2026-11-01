@@ -70,6 +70,16 @@ jobs:
           fi
           psql "$DB_URL" --set ON_ERROR_STOP=1 --file supabase/tests/community_catalog_security.sql
 
+      - name: Run Auth, RLS, Storage and quota integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
+          export SUPABASE_URL="$API_URL"
+          export SUPABASE_ANON_KEY="$ANON_KEY"
+          export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          deno test --allow-env --allow-net supabase/tests/community_catalog_integration_test.ts
+
       - name: Type-check all Edge Functions
         shell: bash
         run: |
