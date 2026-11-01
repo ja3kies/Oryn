@@ -1,9 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
-import { isExpectedDownloadReference, parseDownloadInput } from "./validation.ts";
+import { DownloadInputError, isExpectedDownloadReference, parseDownloadInput } from "./validation.ts";
 
 const BUCKET_ID = "community-epubs";
-const SIGNED_URL_TTL_SECONDS = 60;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_BODY_BYTES = 2048;
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
@@ -64,7 +64,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   } catch (error) {
     return jsonResponse(error instanceof RangeError ? 413 : 400, {
       error: error instanceof RangeError ? "request_too_large" :
-        error instanceof Error ? error.message : "invalid_json",
+        error instanceof DownloadInputError ? error.message : "invalid_json",
     });
   }
 
@@ -112,18 +112,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse(500, { error: "invalid_stored_object_reference" });
   }
 
-  const { data: signed, error: signError } = await admin.storage
+  // Stream the private object through this authenticated endpoint instead of
+  // issuing a bearer signed URL that could outlive a catalogue retraction.
+  const { data: file, error: downloadError } = await admin.storage
     .from(BUCKET_ID)
-    .createSignedUrl(book.storage_key, SIGNED_URL_TTL_SECONDS, { download: "oryn-community-book.epub" });
+    .download(book.storage_key);
 
-  if (signError || !signed?.signedUrl) {
-    console.error("catalog-download could not create a signed Storage URL");
+  if (downloadError || !file) {
+    console.error("catalog-download could not retrieve the stored EPUB");
     return jsonResponse(503, { error: "download_temporarily_unavailable" });
   }
+  if (file.size <= 0 || file.size > MAX_FILE_BYTES) {
+    console.error("catalog-download encountered an object outside the configured size limit");
+    return jsonResponse(422, { error: "stored_file_size_invalid" });
+  }
 
-  return jsonResponse(200, {
-    bookId: book.id,
-    downloadUrl: signed.signedUrl,
-    expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+  return new Response(file.stream(), {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/epub+zip",
+      "Content-Disposition": 'attachment; filename="oryn-community-book.epub"',
+      "Content-Length": String(file.size),
+      "Cache-Control": "private, no-store, max-age=0",
+      "Pragma": "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "sandbox",
+    },
   });
 });
