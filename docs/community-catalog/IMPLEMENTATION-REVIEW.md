@@ -2,7 +2,7 @@
 
 Date : 2026-11-01  
 Branche : `feature/community-epub-catalog`  
-Périmètre : migration initiale et trois Edge Functions.  
+Périmètre : migration initiale et quatre Edge Functions.  
 Statut : **non déployé, non exécuté sur un projet Supabase**.
 
 ## Décision
@@ -58,19 +58,30 @@ La documentation Supabase annonce 256 MiB de mémoire et 2 secondes de CPU par r
 
 Le retrait du catalogue est donc prioritaire sur le nettoyage physique : un échec Storage ne réactive jamais la visibilité du livre.
 
+## `catalog-download`
+
+- JWT vérifié via Auth `getUser(token)` ; comptes anonymes refusés.
+- Corps POST/JSON limité à 2 KiB et strictement réduit à un UUID `bookId`.
+- Chaque demande re-vérifie `status = published`, le hash SHA-256, `published_at` et l'absence de `removed_at`.
+- Les fiches absentes, pending, rejected ou removed produisent le même 404.
+- Le chemin Storage est relu depuis la base et comparé au format généré `owner_id/book_id.epub` ; aucun chemin client n'est accepté.
+- Un lien signé de téléchargement est créé côté serveur pour 60 secondes ; le bucket reste privé.
+- Réponse de l'endpoint en `no-store` ; le lien signé lui-même reste une capacité transmissible pendant sa durée de vie.
+
+Un lien signé ne peut pas être révoqué individuellement. La suppression de l'objet est nécessaire pour couper l'accès, avec un délai de propagation CDN pouvant atteindre une minute selon la documentation Supabase. Une copie déjà téléchargée ne peut pas être rappelée.
+
 ## Bloquants restants
 
-1. Téléchargement : vérifier le statut publié et la politique à chaque demande.
-2. Modération séparée, explicitement autorisée.
-3. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
-4. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
-5. Vérifier les schémas exposés Data API dans un vrai projet.
-6. Audit Cloudflare non exécuté ; aucun environnement isolé disponible ici.
+1. Modération séparée, explicitement autorisée.
+2. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
+3. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
+4. Vérifier les schémas exposés Data API dans un vrai projet.
+5. Audit Cloudflare non exécuté ; aucun environnement isolé disponible ici.
 
 ## Vérifications
 
 - Fichiers relus sur GitHub après commit.
-- Tests Deno écrits pour les métadonnées et les contrôles EPUB ; **non exécutés**.
+- Tests Deno écrits pour les métadonnées, la validation EPUB, le retrait et le téléchargement ; **non exécutés**.
 - Aucun SQL exécuté, aucune migration appliquée, aucune Edge Function déployée.
 - Aucun test RLS/Storage runtime, aucun advisor, aucun build Android.
 
