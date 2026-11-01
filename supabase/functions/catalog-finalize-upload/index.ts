@@ -4,6 +4,7 @@ import { EpubValidationError, validateEpub } from "./validation.ts";
 
 const BUCKET_ID = "community-epubs";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const MAX_BODY_BYTES = 2048;
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -22,6 +23,30 @@ function bearerToken(request: Request): string | null {
   return /^Bearer\s+(.+)$/iu.exec(value.trim())?.[1] ?? null;
 }
 
+async function readSmallJson(request: Request): Promise<unknown> {
+  if (!request.body) throw new Error("missing_body");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new RangeError("body_too_large");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
@@ -34,13 +59,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   let body: unknown;
   try {
-    const raw = await request.text();
-    if (new TextEncoder().encode(raw).byteLength > 2048) {
-      return jsonResponse(413, { error: "request_too_large" });
-    }
-    body = JSON.parse(raw);
-  } catch {
-    return jsonResponse(400, { error: "invalid_json" });
+    body = await readSmallJson(request);
+  } catch (error) {
+    return jsonResponse(error instanceof RangeError ? 413 : 400, {
+      error: error instanceof RangeError ? "request_too_large" : "invalid_json",
+    });
   }
 
   if (!body || typeof body !== "object" || Array.isArray(body) ||
@@ -70,7 +93,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const admin = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
-
   const { data: book, error: lookupError } = await admin
     .from("community_shared_books")
     .select("id, owner_id, storage_key, status, sha256")
@@ -88,14 +110,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse(200, { bookId, status: "pending", validated: true, sha256: book.sha256 });
   }
 
-  // The path comes only from the owner-scoped database row, never from input.
+  // Never accept a Storage path from the caller: use the owner-scoped row.
   const { data: file, error: downloadError } = await admin.storage
     .from(BUCKET_ID)
     .download(book.storage_key);
-
-  if (downloadError || !file) {
-    return jsonResponse(409, { error: "uploaded_file_not_found" });
-  }
+  if (downloadError || !file) return jsonResponse(409, { error: "uploaded_file_not_found" });
 
   try {
     const sha256 = await validateEpub(file);
@@ -113,12 +132,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
       console.error("catalog-finalize-upload hash update failed");
       return jsonResponse(500, { error: "could_not_finalize_upload" });
     }
-    if (!updated) {
-      return jsonResponse(409, { error: "upload_state_changed_retry" });
-    }
+    if (!updated) return jsonResponse(409, { error: "upload_state_changed_retry" });
 
-    // Validation does not publish the book. Moderation remains a separate,
-    // privileged operation; the row deliberately stays pending.
+    // A successful structural check is not publication; moderation is separate.
     return jsonResponse(200, {
       bookId,
       status: "pending",
