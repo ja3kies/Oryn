@@ -100,10 +100,8 @@ A download already in progress or a local copy already saved by a user cannot be
 ## Remaining work (not implemented)
 
 1. Moderation-only publication operation with explicit administrator authorization.
-4. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
-5. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
-6. Android Auth/catalogue integration only after the server workflow is verified.
-
-A signed URL remains usable until expiry unless the object is deleted or cache invalidation is effective. A downloaded local copy cannot be remotely recalled.
+2. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
+3. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
+4. Android Auth/catalogue integration only after the server workflow is verified.
 
 This is a security-oriented implementation baseline, **not a deployed or production-ready service**.
