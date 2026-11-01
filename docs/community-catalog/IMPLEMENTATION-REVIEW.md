@@ -73,7 +73,7 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 
 ## Bloquants restants
 
-1. Modération séparée, explicitement autorisée.
+1. Configurer `CATALOG_MODERATOR_USER_IDS` comme secret dans un projet Supabase réel, puis tester les sessions modérateur et non-modérateur.
 2. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
 3. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
 4. Vérifier les schémas exposés Data API dans un vrai projet.
@@ -82,7 +82,7 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 ## Vérifications
 
 - Fichiers relus sur GitHub après commit.
-- Tests Deno écrits pour les métadonnées, la validation EPUB, le retrait et le téléchargement ; **non exécutés**.
+- Tests Deno écrits pour les métadonnées, la validation EPUB, le retrait, le téléchargement et la modération ; **non exécutés**.
 - Contrainte SQL de publication ajustée pour permettre le retrait d'un livre publié tout en conservant son horodatage de publication.
 - Aucun SQL exécuté, aucune migration appliquée, aucune Edge Function déployée.
 - Aucun test RLS/Storage runtime, aucun advisor, aucun build Android.
