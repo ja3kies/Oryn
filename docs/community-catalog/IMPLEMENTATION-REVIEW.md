@@ -7,7 +7,7 @@ Statut : **non déployé, non exécuté sur un projet Supabase**.
 
 ## Décision
 
-Trois opérations serveur sont écrites : création d'une fiche en attente après consentement, puis finalisation technique après validation EPUB et calcul SHA-256. La validation ne publie jamais le livre : il reste `pending` jusqu'à une modération séparée.
+Quatre Edge Functions serveur couvrent la création après consentement, la validation EPUB, le retrait et le téléchargement authentifié. La validation ne publie jamais le livre : il reste `pending` jusqu'à une modération séparée.
 
 ## `catalog-create-upload`
 
@@ -83,6 +83,7 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 
 - Fichiers relus sur GitHub après commit.
 - Tests Deno écrits pour les métadonnées, la validation EPUB, le retrait et le téléchargement ; **non exécutés**.
+- Contrainte SQL de publication ajustée pour permettre le retrait d'un livre publié tout en conservant son horodatage de publication.
 - Aucun SQL exécuté, aucune migration appliquée, aucune Edge Function déployée.
 - Aucun test RLS/Storage runtime, aucun advisor, aucun build Android.
 
