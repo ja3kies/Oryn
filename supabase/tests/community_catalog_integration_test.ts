@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.95.0";
+import { strToU8, zipSync } from "npm:fflate@0.8.2";
 
 const url = Deno.env.get("SUPABASE_URL") ?? "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -11,6 +12,40 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function assertEqual(actual: unknown, expected: unknown, message: string): void {
   if (actual !== expected) throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
+}
+
+
+function makeValidEpub(): Uint8Array {
+  // Keep mimetype first and uncompressed, as required by EPUB 3.
+  return zipSync({
+    "mimetype": strToU8("application/epub+zip"),
+    "META-INF/container.xml": strToU8(
+      '<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/package.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+    ),
+    "OPS/package.opf": strToU8(
+      '<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="book-id">urn:uuid:oryn-test</dc:identifier><dc:title>Oryn Integration Test</dc:title><dc:creator>Oryn Test</dc:creator><dc:language>en</dc:language></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>',
+    ),
+    "OPS/chapter.xhtml": strToU8(
+      '<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title></head><body><h1>Oryn test</h1><p>A minimal valid EPUB fixture.</p></body></html>',
+    ),
+  }, { level: 0 });
+}
+
+async function callFunction(
+  name: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const functionsUrl = Deno.env.get("FUNCTIONS_URL") ?? "";
+  return await fetch(functionsUrl + "/" + name, {
+    method: "POST",
+    headers: {
+      apikey: anonKey,
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 function makeClient(key: string): SupabaseClient {
@@ -74,7 +109,57 @@ Deno.test({
       const active = await createTestUser(admin, "active");
       const pending = await createTestUser(admin, "pending");
       const cleanup = await createTestUser(admin, "cleanup");
-      users.push(a, b, hourly, active, pending, cleanup);
+      const lifecycle = await createTestUser(admin, "lifecycle");
+      users.push(a, b, hourly, active, pending, cleanup, lifecycle);
+
+      // Complete a real EPUB upload/validation/download/retraction lifecycle.
+      const createResponse = await callFunction("catalog-create-upload", lifecycle.accessToken, {
+        title: "Oryn Integration Test", author: "Oryn Test", language: "en", rightsConfirmed: true,
+      });
+      assertEqual(createResponse.status, 201, "Owner should be able to create a pending upload");
+      const created = await createResponse.json();
+      assert(typeof created.bookId === "string" && typeof created.objectPath === "string",
+        "Create-upload must return a book ID and generated object path");
+      assertEqual(created.status, "pending", "New upload must start pending");
+
+      const epubBytes = makeValidEpub();
+      const { error: epubUploadError } = await lifecycle.client.storage.from(BUCKET)
+        .upload(created.objectPath, new Blob([epubBytes], { type: "application/epub+zip" }), {
+          contentType: "application/epub+zip", upsert: false,
+        });
+      assert(!epubUploadError, "Valid EPUB upload failed: " + epubUploadError?.message);
+
+      const crossOwnerFinalize = await callFunction("catalog-finalize-upload", b.accessToken, { bookId: created.bookId });
+      assertEqual(crossOwnerFinalize.status, 404, "Another user must not finalize an owner upload");
+
+      const finalizeResponse = await callFunction("catalog-finalize-upload", lifecycle.accessToken, { bookId: created.bookId });
+      assertEqual(finalizeResponse.status, 200, "A structurally valid EPUB should pass finalization");
+      const finalized = await finalizeResponse.json();
+      assertEqual(finalized.validated, true, "Finalization must confirm structural validation");
+      assertEqual(finalized.status, "pending", "Validation must not publish without moderation");
+      assert(/^[a-f0-9]{64}$/u.test(finalized.sha256), "Finalization must persist a SHA-256 digest");
+
+      // Use the trusted local service role to prepare the fixture for download tests.
+      const { error: publishFixtureError } = await admin.from("community_shared_books")
+        .update({ status: "published", published_at: new Date().toISOString() })
+        .eq("id", created.bookId).eq("status", "pending").not("sha256", "is", null);
+      assert(!publishFixtureError, "Could not publish lifecycle fixture: " + publishFixtureError?.message);
+
+      const downloadResponse = await callFunction("catalog-download", b.accessToken, { bookId: created.bookId });
+      assertEqual(downloadResponse.status, 200, "Another authenticated user should download a published EPUB");
+      const downloadedBytes = new Uint8Array(await downloadResponse.arrayBuffer());
+      assertEqual(downloadedBytes.length, epubBytes.length, "Downloaded EPUB size must match uploaded bytes");
+      assert(downloadedBytes.every((byte, index) => byte === epubBytes[index]),
+        "Downloaded EPUB bytes must match the original upload");
+
+      const retractResponse = await callFunction("catalog-retract", lifecycle.accessToken, { bookId: created.bookId });
+      assertEqual(retractResponse.status, 200, "Owner should be able to retract a published EPUB");
+      const retracted = await retractResponse.json();
+      assertEqual(retracted.status, "removed", "Retraction must leave a removed tombstone");
+      assertEqual(retracted.objectDeleted, true, "Retraction must remove the private Storage object");
+
+      const afterRetraction = await callFunction("catalog-download", b.accessToken, { bookId: created.bookId });
+      assertEqual(afterRetraction.status, 404, "Retracted EPUB must no longer be downloadable");
 
       // RLS: owner sees own pending/rejected rows; another user sees published rows only.
       const ownPending = await insertBook(admin, a.id, "pending", "owner-pending");
