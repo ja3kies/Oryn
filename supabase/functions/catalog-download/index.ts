@@ -21,7 +21,7 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
 
 function bearerToken(request: Request): string | null {
   const value = request.headers.get("Authorization") ?? "";
-  return /^Bearer\\s+(.+)$/iu.exec(value.trim())?.[1] ?? null;
+  return /^Bearer\s+(.+)$/iu.exec(value.trim())?.[1] ?? null;
 }
 
 async function readSmallJson(request: Request): Promise<unknown> {
@@ -51,7 +51,7 @@ async function readSmallJson(request: Request): Promise<unknown> {
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
-  if (!/^application\\/json(?:\\s*;|$)/iu.test(request.headers.get("Content-Type") ?? "")) {
+  if (!/^application\/json(?:\s*;|$)/iu.test(request.headers.get("Content-Type") ?? "")) {
     return jsonResponse(415, { error: "content_type_must_be_json" });
   }
 
