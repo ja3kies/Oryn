@@ -18,11 +18,9 @@ export class EpubValidationError extends Error {
 export function isSafeArchivePath(path: string): boolean {
   if (!path || path.includes("\\") || path.includes("\0") || path.startsWith("/")) return false;
   if (/^[a-z][a-z0-9+.-]*:/iu.test(path)) return false;
-  const segments = path.split("/");
-  return segments.every((segment, index) =>
-    segment.length > 0 && segment !== "." && segment !== ".." &&
-    !(index === segments.length - 1 && segment === "")
-  );
+  const normalized = path.endsWith("/") ? path.slice(0, -1) : path;
+  if (!normalized) return false;
+  return normalized.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
 }
 
 function assertSafePath(path: string): void {
@@ -52,9 +50,7 @@ function textValue(value: unknown): string {
 }
 
 function parseXml(xml: string): unknown {
-  if (/<!DOCTYPE|<!ENTITY/iu.test(xml)) {
-    throw new EpubValidationError("xml_doctype_not_allowed");
-  }
+  if (/<!DOCTYPE|<!ENTITY/iu.test(xml)) throw new EpubValidationError("xml_doctype_not_allowed");
   const validation = XMLValidator.validate(xml, { allowBooleanAttributes: false });
   if (validation !== true) throw new EpubValidationError("invalid_xml");
   const parser = new XMLParser({
@@ -68,11 +64,9 @@ function parseXml(xml: string): unknown {
   return parser.parse(xml);
 }
 
-async function readEntry(
-  entry: Awaited<ReturnType<InstanceType<typeof ZipReader>["getEntries"]>>[number],
-  maxBytes: number,
-  collect: boolean,
-): Promise<Uint8Array | null> {
+type ZipEntry = Awaited<ReturnType<InstanceType<typeof ZipReader>["getEntries"]>>[number];
+
+async function readEntry(entry: ZipEntry, maxBytes: number, collect: boolean): Promise<Uint8Array | null> {
   let total = 0;
   const chunks: Uint8Array[] = [];
   const sink = new WritableStream<Uint8Array>({
@@ -100,8 +94,7 @@ async function readEntry(
 }
 
 function resolveOpfPath(container: unknown): string {
-  const rootfiles = findLocalName(container, "rootfile");
-  for (const rootfile of rootfiles) {
+  for (const rootfile of findLocalName(container, "rootfile")) {
     if (rootfile && typeof rootfile === "object") {
       const path = (rootfile as Record<string, unknown>)["@_full-path"];
       if (typeof path === "string" && path.trim()) return path.trim();
@@ -111,12 +104,11 @@ function resolveOpfPath(container: unknown): string {
 }
 
 function validateOpf(opf: unknown): void {
-  if (findLocalName(opf, "package").length === 0) {
-    throw new EpubValidationError("opf_package_missing");
-  }
-  const titles = findLocalName(opf, "title").map(textValue).filter(Boolean);
-  const creators = findLocalName(opf, "creator").map(textValue).filter(Boolean);
-  if (titles.length === 0 || creators.length === 0) {
+  if (findLocalName(opf, "package").length === 0) throw new EpubValidationError("opf_package_missing");
+  if (
+    findLocalName(opf, "title").map(textValue).filter(Boolean).length === 0 ||
+    findLocalName(opf, "creator").map(textValue).filter(Boolean).length === 0
+  ) {
     throw new EpubValidationError("opf_required_metadata_missing");
   }
   if (findLocalName(opf, "manifest").length === 0 || findLocalName(opf, "spine").length === 0) {
@@ -143,19 +135,25 @@ export async function validateEpub(blob: Blob): Promise<string> {
 
     const names = new Set<string>();
     let expandedTotal = 0;
-    let containerEntry: typeof entries[number] | undefined;
-    let opfEntry: typeof entries[number] | undefined;
+    let containerEntry: ZipEntry | undefined;
+    let opfEntry: ZipEntry | undefined;
 
     for (const [index, entry] of entries.entries()) {
       const name = entry.filename;
       assertSafePath(name);
-      const collisionKey = name.normalize("NFC").toLocaleLowerCase("en-US");
+      const collisionKey = name.replace(/\/$/u, "").normalize("NFC").toLocaleLowerCase("en-US");
       if (names.has(collisionKey)) throw new EpubValidationError("duplicate_archive_path");
       names.add(collisionKey);
 
-      if (entry.directory || entry.encrypted || entry.symlink || entry.zip64 ||
-          entry.diskNumberStart !== 0 || ![0, 8].includes(entry.compressionMethod)) {
+      if (entry.encrypted || entry.symlink || entry.zip64 || entry.diskNumberStart !== 0 ||
+          ![0, 8].includes(entry.compressionMethod)) {
         throw new EpubValidationError("unsupported_archive_entry");
+      }
+      if (entry.directory) {
+        if (entry.compressedSize !== 0 || entry.uncompressedSize !== 0) {
+          throw new EpubValidationError("invalid_directory_entry");
+        }
+        continue;
       }
       if (!Number.isSafeInteger(entry.compressedSize) ||
           !Number.isSafeInteger(entry.uncompressedSize) ||
@@ -179,10 +177,7 @@ export async function validateEpub(blob: Blob): Promise<string> {
       if (name === "META-INF/container.xml") containerEntry = entry;
     }
 
-    if (entries[0].filename !== "mimetype") {
-      throw new EpubValidationError("epub_mimetype_missing");
-    }
-
+    if (entries[0].filename !== "mimetype") throw new EpubValidationError("epub_mimetype_missing");
     const mimeBytes = await readEntry(entries[0], 64, true);
     if (new TextDecoder("utf-8", { fatal: true }).decode(mimeBytes!) !== "application/epub+zip") {
       throw new EpubValidationError("epub_mimetype_invalid");
@@ -191,20 +186,19 @@ export async function validateEpub(blob: Blob): Promise<string> {
 
     const containerBytes = await readEntry(containerEntry, MAX_XML_BYTES, true);
     const containerText = new TextDecoder("utf-8", { fatal: true }).decode(containerBytes!);
-    const container = parseXml(containerText);
-    const opfPath = resolveOpfPath(container);
+    const opfPath = resolveOpfPath(parseXml(containerText));
     assertSafePath(opfPath);
     opfEntry = entries.find((entry) => entry.filename === opfPath);
-    if (!opfEntry) throw new EpubValidationError("opf_file_missing");
+    if (!opfEntry || opfEntry.directory) throw new EpubValidationError("opf_file_missing");
 
     const opfBytes = await readEntry(opfEntry, MAX_XML_BYTES, true);
     const opfText = new TextDecoder("utf-8", { fatal: true }).decode(opfBytes!);
     validateOpf(parseXml(opfText));
 
-    // Decompress every remaining entry through a bounded sink. This verifies
-    // CRC/local headers and ensures the declared archive sizes are not trusted.
+    // Fully read all remaining files through a bounded sink to verify CRC and
+    // actual decompressed byte counts rather than trusting ZIP declarations.
     for (const entry of entries) {
-      if (entry === entries[0] || entry === containerEntry || entry === opfEntry) continue;
+      if (entry.directory || entry === entries[0] || entry === containerEntry || entry === opfEntry) continue;
       await readEntry(entry, entry.uncompressedSize, false);
     }
   } catch (error) {
