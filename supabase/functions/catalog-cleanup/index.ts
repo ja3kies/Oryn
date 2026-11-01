@@ -52,17 +52,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // First make expired uploads invisible and non-uploadable. The Storage
   // policy permits inserts only while the associated row remains pending.
-  const { data: newlyExpired, error: expireError } = await admin
+  const { data: expiryCandidates, error: candidateError } = await admin
     .from("community_shared_books")
-    .update({ status: "expired", expired_at: now })
+    .select("id")
     .eq("status", "pending")
     .not("expires_at", "is", null)
     .lt("expires_at", expiryCutoff)
-    .select("id");
+    .order("expires_at", { ascending: true })
+    .limit(BATCH_SIZE);
 
-  if (expireError) {
-    console.error("catalog-cleanup could not expire abandoned uploads");
+  if (candidateError) {
+    console.error("catalog-cleanup could not load overdue uploads");
     return jsonResponse(500, { error: "cleanup_failed" });
+  }
+
+  let newlyExpired: Array<{ id: string }> = [];
+  if (expiryCandidates?.length) {
+    const { data, error } = await admin
+      .from("community_shared_books")
+      .update({ status: "expired", expired_at: now })
+      .in("id", expiryCandidates.map((book) => book.id))
+      .eq("status", "pending")
+      .lt("expires_at", expiryCutoff)
+      .select("id");
+
+    if (error) {
+      console.error("catalog-cleanup could not expire abandoned uploads");
+      return jsonResponse(500, { error: "cleanup_failed" });
+    }
+    newlyExpired = data ?? [];
   }
 
   // Also retry earlier expirations whose Storage deletion failed. A bounded
