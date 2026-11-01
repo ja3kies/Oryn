@@ -73,7 +73,8 @@ Deno.test({
       const hourly = await createTestUser(admin, "hourly");
       const active = await createTestUser(admin, "active");
       const pending = await createTestUser(admin, "pending");
-      users.push(a, b, hourly, active, pending);
+      const cleanup = await createTestUser(admin, "cleanup");
+      users.push(a, b, hourly, active, pending, cleanup);
 
       // RLS: owner sees own pending/rejected rows; another user sees published rows only.
       const ownPending = await insertBook(admin, a.id, "pending", "owner-pending");
@@ -118,6 +119,63 @@ Deno.test({
       const { data: retainedObject, error: retainedObjectError } = await admin.storage
         .from(BUCKET).download(ownPending.storage_key);
       assert(!retainedObjectError && retainedObject, "Owner's direct delete request must not remove the Storage object");
+
+
+      // Exercise the real cleanup Edge Function against an expired pending upload.
+      const expiredAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: expiredBook, error: expiredInsertError } = await admin
+        .from("community_shared_books")
+        .insert({
+          owner_id: cleanup.id,
+          created_at: expiredAt,
+          expires_at: expiredAt,
+          title: "Expired integration upload",
+          author: "Oryn Test",
+          language: "en",
+          status: "pending",
+          rights_declaration_version: "oryn-epub-rights-v1",
+        })
+        .select("id, storage_key")
+        .single();
+      assert(!expiredInsertError && expiredBook, `Could not seed expired upload: ${expiredInsertError?.message}`);
+
+      const expiredPayload = new Blob(["expired cleanup integration object"], {
+        type: "application/epub+zip",
+      });
+      const { error: expiredUploadError } = await cleanup.client.storage.from(BUCKET)
+        .upload(expiredBook.storage_key, expiredPayload, {
+          contentType: "application/epub+zip",
+          upsert: false,
+        });
+      assert(!expiredUploadError, `Could not upload expired fixture: ${expiredUploadError?.message}`);
+
+      const functionsUrl = Deno.env.get("FUNCTIONS_URL") ?? "";
+      const cleanupSecret = Deno.env.get("CATALOG_CLEANUP_SECRET") ?? "";
+      assert(functionsUrl && cleanupSecret.length >= 32, "Local Edge Function test configuration is required");
+
+      const deniedCleanup = await fetch(`${functionsUrl}/catalog-cleanup`, {
+        method: "POST",
+      });
+      assertEqual(deniedCleanup.status, 401, "Cleanup must reject requests without its secret");
+
+      const cleanupResponse = await fetch(`${functionsUrl}/catalog-cleanup`, {
+        method: "POST",
+        headers: { "x-catalog-cleanup-secret": cleanupSecret },
+      });
+      assertEqual(cleanupResponse.status, 200, "Cleanup should expire and remove an overdue upload");
+
+      const { data: expiredState, error: expiredStateError } = await admin
+        .from("community_shared_books")
+        .select("status, expired_at, storage_cleanup_at")
+        .eq("id", expiredBook.id)
+        .single();
+      assert(!expiredStateError && expiredState, "Expired upload state must remain readable to the service role");
+      assertEqual(expiredState.status, "expired", "Cleanup must transition pending upload to expired");
+      assert(expiredState.expired_at && expiredState.storage_cleanup_at, "Cleanup must record expiry and successful object deletion");
+
+      const { data: deletedObject, error: deletedObjectError } = await admin.storage
+        .from(BUCKET).download(expiredBook.storage_key);
+      assert(!deletedObject && deletedObjectError, "Cleanup must delete the expired Storage object");
 
       // The hourly limit counts rejected rows too: 10 succeed, the 11th is rejected.
       for (let i = 0; i < 10; i++) await insertBook(admin, hourly.id, "rejected", `hourly-${i}`);
