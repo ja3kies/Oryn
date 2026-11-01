@@ -106,3 +106,20 @@ A download already in progress or a local copy already saved by a user cannot be
 4. Android Auth/catalogue integration only after the server workflow is verified.
 
 This is a security-oriented implementation baseline, **not a deployed or production-ready service**.
+
+
+## Implemented: `catalog-moderate`
+
+Path: `functions/catalog-moderate/`
+
+- Accepts POST/JSON only, with a 2 KiB request-body cap and exactly `bookId` plus `decision` (`publish` or `reject`).
+- Requires a bearer token verified independently with Auth `getUser(token)`; anonymous users are rejected.
+- Authorizes moderators only through the server-side `CATALOG_MODERATOR_USER_IDS` environment variable (comma-separated Auth user UUIDs). No client metadata, request field or self-assigned role grants moderation rights.
+- Uses the service-role client only server-side.
+- Changes only records that are still `pending`, have a non-null SHA-256, and have no `removed_at` timestamp.
+- Uses one conditional database update, so a concurrent retraction or prior moderation cannot be overwritten.
+- Publishing sets `published_at`; rejection leaves it null. Missing, unvalidated, already moderated and retracted records share the same 409 response.
+
+Configure `CATALOG_MODERATOR_USER_IDS` as an Edge Function secret containing only trusted moderator Auth UUIDs. Never commit moderator IDs or service-role credentials. If the allowlist is absent or malformed, moderation fails closed with 503.
+
+Unit tests are committed at `functions/catalog-moderate/validation_test.ts`; they have not been executed.
