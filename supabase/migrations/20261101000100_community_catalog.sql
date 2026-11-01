@@ -1,6 +1,18 @@
--- Oryn community EPUB catalog: initial private-by-default schema.
--- Apply only to a dedicated Supabase project after reviewing the security plan.
--- No public bucket, anonymous read, or client-controlled publication status.
+-- Oryn community EPUB catalog: private-by-default schema.
+-- This migration is intentionally not production-ready until the trusted
+-- Edge Functions and runtime authorization tests described in the docs exist.
+--
+-- IMPORTANT:
+-- - Keep the "private" schema out of Supabase's exposed Data API schemas.
+-- - Creation/retraction/publication/downloads are server-only operations.
+-- - Never put a service_role/secret key in the Android application.
+
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+-- Storage INSERT policies execute as the requesting authenticated role.
+-- Grant schema usage only so that the policy can call the single helper below;
+-- the schema must still remain absent from the Data API exposed-schema list.
+grant usage on schema private to authenticated;
 
 create table if not exists public.community_shared_books (
     id uuid primary key default gen_random_uuid(),
@@ -37,7 +49,7 @@ create index if not exists community_shared_books_owner_idx
 alter table public.community_shared_books enable row level security;
 alter table public.community_shared_books force row level security;
 
-revoke all on table public.community_shared_books from anon, authenticated;
+revoke all on table public.community_shared_books from public, anon, authenticated;
 grant select (id, title, author, language, status, created_at, published_at)
     on table public.community_shared_books to authenticated;
 
@@ -49,91 +61,11 @@ create policy "authenticated read published or own community books"
     to authenticated
     using (status = 'published' or owner_id = (select auth.uid()));
 
--- The client cannot insert/update/delete rows directly. Creation and withdrawal
--- go through narrowly scoped RPCs so owner/status/consent cannot be forged.
-create or replace function public.create_community_shared_book(
-    p_title text,
-    p_author text,
-    p_language text,
-    p_rights_declaration_version text
-)
-returns table (book_id uuid, object_path text)
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-    v_owner uuid := auth.uid();
-    v_book_id uuid;
-    v_path text;
-begin
-    if v_owner is null then
-        raise exception 'Authentication required' using errcode = '28000';
-    end if;
+-- No SECURITY DEFINER function is placed in the exposed public schema.
+-- Edge Functions must validate the caller with auth.getUser(accessToken),
+-- then perform create/retract/moderation through a server-only DB client.
+-- Never trust a user_id supplied in the request body.
 
-    if p_title is null or char_length(btrim(p_title)) not between 1 and 200
-       or p_author is null or char_length(btrim(p_author)) not between 1 and 200
-       or p_language is null or p_language !~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$'
-       or p_rights_declaration_version is null
-       or char_length(btrim(p_rights_declaration_version)) not between 1 and 32 then
-        raise exception 'Invalid book metadata or consent declaration'
-            using errcode = '22023';
-    end if;
-
-    -- The client must explicitly invoke this function after the consent screen.
-    insert into public.community_shared_books (
-        owner_id, title, author, language, rights_declaration_version, consent_at
-    )
-    values (
-        v_owner, btrim(p_title), btrim(p_author), p_language,
-        btrim(p_rights_declaration_version), pg_catalog.now()
-    )
-    returning id, storage_key into v_book_id, v_path;
-
-    return query select v_book_id, v_path;
-end;
-$$;
-
-revoke all on function public.create_community_shared_book(text, text, text, text)
-    from public, anon;
-grant execute on function public.create_community_shared_book(text, text, text, text)
-    to authenticated;
-
-create or replace function public.retract_community_shared_book(p_book_id uuid)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-    v_owner uuid := auth.uid();
-begin
-    if v_owner is null then
-        raise exception 'Authentication required' using errcode = '28000';
-    end if;
-
-    update public.community_shared_books
-       set status = 'removed',
-           removed_at = pg_catalog.now(),
-           published_at = null
-     where id = p_book_id
-       and owner_id = v_owner
-       and status in ('pending', 'published');
-
-    if not found then
-        raise exception 'Book not found or already withdrawn'
-            using errcode = 'P0002';
-    end if;
-end;
-$$;
-
-revoke all on function public.retract_community_shared_book(uuid) from public, anon;
-grant execute on function public.retract_community_shared_book(uuid) to authenticated;
-
--- Storage stays private. A user can upload only to the exact object path
--- generated for one of their pending catalogue records. No read/delete policy
--- is granted to mobile clients; a trusted server function handles downloads
--- and physical cleanup after checking publication/ownership.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
     'community-epubs',
@@ -147,7 +79,10 @@ set public = false,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
 
-create or replace function public.can_upload_community_epub(p_object_name text)
+-- This helper is only used by the Storage INSERT policy. It deliberately
+-- exposes no metadata and can only answer whether this exact pending object
+-- belongs to the authenticated caller.
+create or replace function private.can_upload_community_epub(p_object_name text)
 returns boolean
 language sql
 stable
@@ -157,14 +92,14 @@ as $$
     select exists (
         select 1
           from public.community_shared_books b
-         where b.owner_id = auth.uid()
+         where b.owner_id = (select auth.uid())
            and b.status = 'pending'
            and b.storage_key = p_object_name
     );
 $$;
 
-revoke all on function public.can_upload_community_epub(text) from public, anon;
-grant execute on function public.can_upload_community_epub(text) to authenticated;
+revoke all on function private.can_upload_community_epub(text) from public, anon;
+grant execute on function private.can_upload_community_epub(text) to authenticated;
 
 drop policy if exists "owner uploads only pending community EPUB"
     on storage.objects;
@@ -174,8 +109,10 @@ create policy "owner uploads only pending community EPUB"
     to authenticated
     with check (
         bucket_id = 'community-epubs'
-        and public.can_upload_community_epub(name)
+        and private.can_upload_community_epub(name)
     );
 
 comment on table public.community_shared_books is
-    'Opt-in community EPUB metadata. Publication status is server-controlled; file objects are private.';
+    'Opt-in community EPUB metadata. Publication is server-controlled; file objects are private.';
+comment on schema private is
+    'Internal Oryn catalogue helpers. Never add this schema to Supabase Data API exposed schemas.';
