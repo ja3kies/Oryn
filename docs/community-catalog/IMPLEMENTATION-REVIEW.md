@@ -65,10 +65,11 @@ Le retrait du catalogue est donc prioritaire sur le nettoyage physique : un éch
 - Chaque demande re-vérifie `status = published`, le hash SHA-256, `published_at` et l'absence de `removed_at`.
 - Les fiches absentes, pending, rejected ou removed produisent le même 404.
 - Le chemin Storage est relu depuis la base et comparé au format généré `owner_id/book_id.epub` ; aucun chemin client n'est accepté.
-- Un lien signé de téléchargement est créé côté serveur pour 60 secondes ; le bucket reste privé.
-- Réponse de l'endpoint en `no-store` ; le lien signé lui-même reste une capacité transmissible pendant sa durée de vie.
+- Le fichier privé est récupéré côté serveur depuis le chemin généré en base puis transmis en flux par l'Edge Function authentifiée.
+- Taille recontrôlée à 8 MiB maximum ; réponse `application/epub+zip`, disposition attachment et en-têtes `private, no-store`.
+- Aucun lien Storage signé ni jeton de téléchargement n'est exposé au client.
 
-Un lien signé ne peut pas être révoqué individuellement. La suppression de l'objet est nécessaire pour couper l'accès, avec un délai de propagation CDN pouvant atteindre une minute selon la documentation Supabase. Une copie déjà téléchargée ne peut pas être rappelée.
+Un téléchargement déjà commencé et une copie locale déjà enregistrée ne peuvent pas être rappelés. Le retrait empêche les nouvelles autorisations avant le début du nettoyage Storage.
 
 ## Bloquants restants
 
