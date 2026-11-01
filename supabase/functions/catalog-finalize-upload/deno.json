@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.95.0",
+    "@zip.js/zip.js": "npm:@zip.js/zip.js@2.24.0",
+    "fast-xml-parser": "npm:fast-xml-parser@5.11.2"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true
+  }
+}
