@@ -1,0 +1,4 @@
+project_id = "oryn-reader"
+
+[functions.catalog-create-upload]
+verify_jwt = true
