@@ -1,16 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
+import { cleanupRetryDelayMs } from "./retry.ts";
 
 const BUCKET_ID = "community-epubs";
 const BATCH_SIZE = 50;
 const EXPIRY_GRACE_MS = 15 * 60 * 1000;
-const RETRY_BASE_MS = 5 * 60 * 1000;
-const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
-
-export function cleanupRetryDelayMs(attempt: number): number {
-  const safeAttempt = Math.max(1, Math.floor(attempt));
-  return Math.min(RETRY_BASE_MS * (2 ** Math.min(safeAttempt - 1, 16)), RETRY_MAX_MS);
-}
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
