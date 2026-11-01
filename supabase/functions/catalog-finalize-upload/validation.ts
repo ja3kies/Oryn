@@ -67,6 +67,7 @@ function parseXml(xml: string): unknown {
 type ZipEntry = Awaited<ReturnType<InstanceType<typeof ZipReader>["getEntries"]>>[number];
 
 async function readEntry(entry: ZipEntry, maxBytes: number, collect: boolean): Promise<Uint8Array | null> {
+  if (entry.directory) throw new EpubValidationError("cannot_read_directory_entry");
   let total = 0;
   const chunks: Uint8Array[] = [];
   const sink = new WritableStream<Uint8Array>({
