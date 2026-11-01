@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           cleanup_secret="$(openssl rand -hex 32)"
           printf 'CATALOG_CLEANUP_SECRET=%s\\n' "$cleanup_secret" > /tmp/oryn-functions.env
-          echo "$cleanup_secret" >> "$GITHUB_ENV"
+          echo "CATALOG_CLEANUP_SECRET=$cleanup_secret" >> "$GITHUB_ENV"
           supabase functions serve --env-file /tmp/oryn-functions.env > /tmp/oryn-functions.log 2>&1 &
           echo $! > /tmp/oryn-functions.pid
           for attempt in $(seq 1 60); do
