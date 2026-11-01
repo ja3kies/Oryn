@@ -76,6 +76,9 @@ jobs:
           set -euo pipefail
           cleanup_secret="$(openssl rand -hex 32)"
           echo "CATALOG_CLEANUP_SECRET=$cleanup_secret" > /tmp/oryn-functions.env
+          # A fixed non-test UUID keeps the local moderator allowlist non-empty;
+          # integration users are deliberately not moderators.
+          echo "CATALOG_MODERATOR_USER_IDS=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" >> /tmp/oryn-functions.env
           echo "CATALOG_CLEANUP_SECRET=$cleanup_secret" >> "$GITHUB_ENV"
           eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY)=')"
           supabase functions serve --env-file /tmp/oryn-functions.env > /tmp/oryn-functions.log 2>&1 &
