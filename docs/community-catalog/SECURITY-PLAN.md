@@ -14,7 +14,7 @@ Compagnons prioritaires : `WEB-PROTOCOL-AND-AUTH.md`, `CLOUD-AND-DEPLOYMENT.md`,
 4. Storage privé : chemins objet, upload, lecture, suppression, URL signées, politiques `storage.objects`.
 5. Cycle de vie : consentement, publication, retrait, suppression, copies, restauration et cache.
 6. Import EPUB : archive ZIP, chemins, entrées malformées, taille décompressée, compression extrême, XML/OPF, images et métadonnées non fiables.
-7. Quotas et disponibilité : taille, débit, pagination, coût Storage, abus d'upload et de téléchargement. Des limites DB existent désormais pour les créations par propriétaire (5/h, 10 livres actifs, 3 pending) ; le throttling global/IP et les limites de téléchargement restent à valider/implémenter. Les uploads pending expirent après 24 h et sont nettoyés par une Edge Function planifiée, dont le Cron reste à configurer.
+7. Quotas et disponibilité : taille, débit, pagination, coût Storage, abus d'upload et de téléchargement. Des limites DB existent désormais pour les créations par propriétaire (10/h, 30 livres actifs, 3 pending) ; le throttling global/IP et les limites de téléchargement restent à valider/implémenter. Les uploads pending expirent après 4 h et sont nettoyés par une Edge Function planifiée, dont le Cron reste à configurer.
 8. Données privées : PII, e-mail, identifiants, journaux, analytics et erreurs.
 9. Edge Functions / secrets / configuration : aucune clé privilégiée dans l'APK, les logs ou les artefacts.
 10. Dépendances, CI, signature et chaîne de publication Android.
