@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.catalog-finalize-upload]
 verify_jwt = true
+
+[functions.catalog-retract]
+verify_jwt = true
