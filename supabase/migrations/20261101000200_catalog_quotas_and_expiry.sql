@@ -9,7 +9,7 @@ alter table public.community_shared_books
     check (status in ('pending', 'published', 'rejected', 'removed', 'expired'));
 
 alter table public.community_shared_books
-    add column if not exists expires_at timestamptz default (now() + interval '24 hours'),
+    add column if not exists expires_at timestamptz default (now() + interval '4 hours'),
     add column if not exists expired_at timestamptz,
     add column if not exists storage_cleanup_at timestamptz;
 
@@ -63,7 +63,7 @@ begin
      where b.owner_id = new.owner_id
        and b.created_at >= now() - interval '1 hour';
 
-    if v_recent_creations >= 5 then
+    if v_recent_creations >= 10 then
         raise exception using
             errcode = 'P0001',
             message = 'catalog_limit:hourly_creation';
@@ -76,7 +76,7 @@ begin
       from public.community_shared_books b
      where b.owner_id = new.owner_id;
 
-    if v_active_books >= 10 then
+    if v_active_books >= 30 then
         raise exception using
             errcode = 'P0001',
             message = 'catalog_limit:active_books';
