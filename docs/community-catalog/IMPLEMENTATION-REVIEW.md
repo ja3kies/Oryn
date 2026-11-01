@@ -2,12 +2,12 @@
 
 Date : 2026-11-01  
 Branche : `feature/community-epub-catalog`  
-Périmètre : migration initiale et quatre Edge Functions.  
+Périmètre : deux migrations et six Edge Functions.  
 Statut : **non déployé, non exécuté sur un projet Supabase**.
 
 ## Décision
 
-Quatre Edge Functions serveur couvrent la création après consentement, la validation EPUB, le retrait et le téléchargement authentifié. La validation ne publie jamais le livre : il reste `pending` jusqu'à une modération séparée.
+Six Edge Functions serveur couvrent la création après consentement, la validation EPUB, le retrait, le téléchargement authentifié, la modération et le nettoyage des uploads expirés. La validation ne publie jamais le livre : il reste `pending` jusqu'à une modération séparée.
 
 ## `catalog-create-upload`
 
