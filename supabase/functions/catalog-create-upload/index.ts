@@ -158,6 +158,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
     .single();
 
   if (insertError || !row) {
+    // The database trigger enforces per-owner limits atomically.
+    if (insertError?.code === "P0001" && insertError.message?.startsWith("catalog_limit:")) {
+      const limit = insertError.message.slice("catalog_limit:".length);
+      return jsonResponse(429, {
+        error: "catalog_upload_limit_reached",
+        limit,
+        retryable: limit === "hourly_creation",
+      });
+    }
     // Avoid returning database details or user data to the caller.
     console.error("catalog-create-upload could not create pending record");
     return jsonResponse(500, { error: "could_not_create_upload" });
