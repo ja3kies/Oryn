@@ -120,7 +120,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const sha256 = await validateEpub(file);
     const { data: updated, error: updateError } = await admin
       .from("community_shared_books")
-      .update({ sha256 })
+      .update({ sha256, expires_at: null })
       .eq("id", book.id)
       .eq("owner_id", authData.user.id)
       .eq("status", "pending")
