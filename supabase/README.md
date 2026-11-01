@@ -70,6 +70,7 @@ Required server environment variables are `SUPABASE_URL`, `SUPABASE_ANON_KEY` an
 - Metadata tests: `deno test supabase/functions/catalog-create-upload/validation_test.ts`
 - EPUB validation tests: `deno test supabase/functions/catalog-finalize-upload/validation_test.ts`
 - Retraction input tests: `deno test supabase/functions/catalog-retract/validation_test.ts`
+- Moderation input tests: `deno test supabase/functions/catalog-moderate/validation_test.ts`
 
 Tests are committed but have **not** been executed in this workspace.
 
@@ -100,9 +101,9 @@ A download already in progress or a local copy already saved by a user cannot be
 
 ## Remaining work (not implemented)
 
-1. Moderation-only publication operation with explicit administrator authorization.
-2. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
-3. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
+1. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
+2. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
+3. Configure the moderator allowlist secret in a real Supabase project, then test moderator and non-moderator sessions.
 4. Android Auth/catalogue integration only after the server workflow is verified.
 
 This is a security-oriented implementation baseline, **not a deployed or production-ready service**.
