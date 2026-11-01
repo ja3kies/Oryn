@@ -23,7 +23,7 @@ Path: `functions/catalog-create-upload/`
 - Returns the database-generated object path for a separate authenticated upload.
 - The private bucket's object-size cap is 8 MiB. MIME declarations are not content validation.
 
-The function does not upload a file, validate EPUB contents, publish a book or issue a download URL. The service-role key is read only from server environment variables.
+The function does not upload a file, validate EPUB contents or publish a book. The file is downloadable only through `catalog-download` after publication. The service-role key is read only from server environment variables.
 
 ## Implemented: `catalog-finalize-upload`
 
@@ -78,6 +78,7 @@ Tests are committed but have **not** been executed in this workspace.
 - Keep Postgres schema `private` out of exposed Data API schemas.
 - Its only `SECURITY DEFINER` helper checks the exact pending Storage path and has a pinned empty search path.
 - RLS is enabled and forced on `community_shared_books`; direct client writes are revoked.
+- The publication-state constraint permits a retracted book to retain its original `published_at` timestamp.
 - Storage is private. The upload policy permits only the exact generated path for the authenticated owner.
 - Never trust an owner ID or Storage path supplied by the client.
 - Creation, finalization, retraction, publication, downloads and object deletion remain server-only.
