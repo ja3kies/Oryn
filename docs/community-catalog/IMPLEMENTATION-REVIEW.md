@@ -45,15 +45,28 @@ La documentation Supabase annonce 256 MiB de mémoire et 2 secondes de CPU par r
 - Bucket privé et upload limité au chemin généré de la fiche pending du propriétaire.
 - Clé service-role exclusivement côté serveur.
 
+## `catalog-retract`
+
+- Authentifie l'utilisateur et refuse les comptes anonymes.
+- Accepte uniquement un UUID ; refuse les champs `owner_id` et `storage_key`.
+- Recherche la fiche par ID et propriétaire vérifié.
+- Contrôle le format de la clé Storage générée par la base.
+- Passe la fiche à `removed` et renseigne `removed_at` avant toute suppression de fichier.
+- Conserve la ligne comme tombstone ; aucun effacement de compte ou d'autres données.
+- En cas d'échec Storage, retourne HTTP 202 avec nettoyage à reprendre ; une nouvelle requête retente la suppression.
+- Une fiche déjà retirée peut être rappelée pour terminer le nettoyage.
+
+Le retrait du catalogue est donc prioritaire sur le nettoyage physique : un échec Storage ne réactive jamais la visibilité du livre.
+
 ## Bloquants restants
 
 1. Cycle de vie Storage : retrait puis suppression idempotente de l'objet.
 2. Téléchargement : vérifier le statut publié et la politique à chaque demande.
-3. Modération séparée, explicitement autorisée.
-4. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
-5. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
-6. Vérifier les schémas exposés Data API dans un vrai projet.
-7. Audit Cloudflare non exécuté ; aucun environnement isolé disponible ici.
+2. Modération séparée, explicitement autorisée.
+3. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
+4. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
+5. Vérifier les schémas exposés Data API dans un vrai projet.
+6. Audit Cloudflare non exécuté ; aucun environnement isolé disponible ici.
 
 ## Vérifications
 
