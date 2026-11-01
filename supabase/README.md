@@ -99,9 +99,22 @@ Path: `functions/catalog-download/`
 
 A download already in progress or a local copy already saved by a user cannot be remotely recalled. Retraction prevents new requests from being authorized before object cleanup starts.
 
+## Upload quotas and abandoned-upload cleanup
+
+Migration: `migrations/20261101000200_catalog_quotas_and_expiry.sql`.
+
+- Per-owner database limits are enforced atomically under an advisory transaction lock: at most 5 catalogue creation attempts per rolling hour, 10 active books (`pending` + `published`) and 3 pending uploads.
+- Limit violations return HTTP 429 from `catalog-create-upload`; the database remains the authority, so concurrent requests cannot bypass the quota by racing.
+- New pending uploads expire after 24 hours. Successful EPUB validation clears the upload deadline so a validated book can wait for moderation.
+- `catalog-cleanup` changes overdue pending records to `expired` before deleting the private Storage object. Expired rows are retained as tombstones. Failed object deletion remains queued for a later run.
+- `catalog-cleanup` has `verify_jwt = false` because it is intended for a scheduler, and therefore requires the high-entropy `CATALOG_CLEANUP_SECRET` header. Configure a random secret of at least 32 characters in Edge Function secrets and send it as `x-catalog-cleanup-secret`. Never commit the secret.
+- Schedule `catalog-cleanup` periodically (for example hourly) using Supabase Cron/HTTP with the secret stored in Vault. The schedule is **not configured by this repository change**.
+
+These controls do not yet provide global/IP request throttling or download-abuse protection. Keep platform-level rate limits enabled and add download/report abuse controls before public launch.
+
 ## Remaining work (not implemented)
 
-1. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
+1. Global/IP rate limits, download-abuse protection, abuse reporting, copyright takedown and retention policy.
 2. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
 3. Configure the moderator allowlist secret in a real Supabase project, then test moderator and non-moderator sessions.
 4. Android Auth/catalogue integration only after the server workflow is verified.
