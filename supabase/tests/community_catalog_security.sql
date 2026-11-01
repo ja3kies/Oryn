@@ -150,8 +150,20 @@ begin
          where table_schema = 'public'
            and table_name = 'community_shared_books'
            and column_name = 'storage_cleanup_at'
+    ) or not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'community_shared_books'
+           and column_name = 'storage_cleanup_attempts'
+    ) or not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'community_shared_books'
+           and column_name = 'storage_cleanup_retry_at'
     ) then
-        raise exception 'Missing abandoned-upload lifecycle columns';
+        raise exception 'Missing abandoned-upload lifecycle or cleanup retry columns';
     end if;
 
     if not exists (
