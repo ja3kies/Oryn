@@ -155,12 +155,13 @@ Deno.test({
 
       const deniedCleanup = await fetch(`${functionsUrl}/catalog-cleanup`, {
         method: "POST",
+        headers: { apikey: anonKey },
       });
       assertEqual(deniedCleanup.status, 401, "Cleanup must reject requests without its secret");
 
       const cleanupResponse = await fetch(`${functionsUrl}/catalog-cleanup`, {
         method: "POST",
-        headers: { "x-catalog-cleanup-secret": cleanupSecret },
+        headers: { apikey: anonKey, "x-catalog-cleanup-secret": cleanupSecret },
       });
       assertEqual(cleanupResponse.status, 200, "Cleanup should expire and remove an overdue upload");
 
