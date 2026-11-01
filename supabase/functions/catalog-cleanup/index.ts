@@ -67,7 +67,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // batch prevents a single scheduled invocation from monopolizing resources.
   const { data: pendingCleanup, error: lookupError } = await admin
     .from("community_shared_books")
-    .select("id, storage_key")
+    .select("id, owner_id, storage_key")
     .eq("status", "expired")
     .is("storage_cleanup_at", null)
     .order("expired_at", { ascending: true })
@@ -82,7 +82,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   let failed = 0;
   for (const book of pendingCleanup ?? []) {
     if (typeof book.storage_key !== "string" ||
-        !book.storage_key.endsWith(`${book.id}.epub`)) {
+        book.storage_key !== `${book.owner_id}/${book.id}.epub`) {
       failed++;
       console.error("catalog-cleanup encountered an invalid stored object key");
       continue;
