@@ -88,7 +88,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
 
-  // Public catalogue eligibility is checked afresh for every URL issuance.
+  // Public catalogue eligibility is checked afresh for every download request.
   // The owner and object path are read only from the trusted database row.
   const { data: book, error: lookupError } = await admin
     .from("community_shared_books")
