@@ -79,6 +79,19 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 4. Vérifier les schémas exposés Data API dans un vrai projet.
 5. Audit Cloudflare non exécuté ; aucun environnement isolé disponible ici.
 
+
+## Quotas et nettoyage des uploads abandonnés
+
+- Migration dédiée : `20261101000200_catalog_quotas_and_expiry.sql`.
+- Limites atomiques par propriétaire : 5 créations par heure glissante, 10 livres actifs (pending + published), 3 uploads pending.
+- Verrou transactionnel par propriétaire pour empêcher le contournement par requêtes concurrentes.
+- Réponse HTTP 429 pour les limites atteintes.
+- Expiration des uploads pending après 24 h ; la validation EPUB supprime l'échéance.
+- `catalog-cleanup` passe d'abord les fiches expirées à `expired`, puis supprime l'objet privé. La ligne est conservée comme tombstone ; les échecs Storage sont retentés lors des exécutions suivantes.
+- Fonction planifiée protégée par `CATALOG_CLEANUP_SECRET` (au moins 32 caractères), envoyé dans `x-catalog-cleanup-secret`. `verify_jwt = false` est compensé par ce secret serveur ; la planification Supabase Cron reste à configurer.
+
+Les limites globales/IP et la protection contre les abus de téléchargement ne sont pas encore implémentées.
+
 ## Vérifications
 
 - Fichiers relus sur GitHub après commit.
