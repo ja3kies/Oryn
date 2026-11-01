@@ -110,8 +110,12 @@ Deno.test({
         .from(BUCKET).download(ownPending.storage_key);
       assert(!forbiddenDownload && crossUserDownloadError, "Another user must not download a private EPUB object");
 
-      const { error: directDeleteError } = await a.client.storage.from(BUCKET).remove([ownPending.storage_key]);
-      assert(directDeleteError, "Owner must not delete Storage objects directly");
+      // Storage may return HTTP 200 for an RLS-filtered DELETE that affects zero rows.
+      // Verify the object still exists instead of relying on the response error shape.
+      await a.client.storage.from(BUCKET).remove([ownPending.storage_key]);
+      const { data: retainedObject, error: retainedObjectError } = await admin.storage
+        .from(BUCKET).download(ownPending.storage_key);
+      assert(!retainedObjectError && retainedObject, "Owner's direct delete request must not remove the Storage object");
 
       // The hourly limit counts rejected rows too: 10 succeed, the 11th is rejected.
       for (let i = 0; i < 10; i++) await insertBook(admin, hourly.id, "rejected", `hourly-${i}`);
