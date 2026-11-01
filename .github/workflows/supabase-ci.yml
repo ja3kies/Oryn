@@ -54,8 +54,21 @@ jobs:
       - name: Rebuild local database from migrations
         run: supabase db reset
 
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
       - name: Run database security assertions
-        run: supabase test db supabase/tests/community_catalog_security.sql
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL="$(supabase status -o env | sed -n 's/^DB_URL="\\(.*\\)"$/\\1/p')"
+          if [[ -z "$DB_URL" ]]; then
+            echo "Could not obtain the local Supabase DB_URL." >&2
+            exit 1
+          fi
+          psql "$DB_URL" --set ON_ERROR_STOP=1 --file supabase/tests/community_catalog_security.sql
 
       - name: Type-check all Edge Functions
         shell: bash
