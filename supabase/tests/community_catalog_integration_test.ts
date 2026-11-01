@@ -139,6 +139,18 @@ Deno.test({
       assertEqual(finalized.status, "pending", "Validation must not publish without moderation");
       assert(/^[a-f0-9]{64}$/u.test(finalized.sha256), "Finalization must persist a SHA-256 digest");
 
+      // A normal authenticated owner must never be able to moderate their own
+      // upload. The Edge Function must deny this before changing its state.
+      const ownerModeration = await callFunction("catalog-moderate", lifecycle.accessToken, {
+        bookId: created.bookId,
+        decision: "publish",
+      });
+      assertEqual(ownerModeration.status, 403, "A non-moderator must not publish a community EPUB");
+      const { data: stillPending, error: moderationReadError } = await admin
+        .from("community_shared_books").select("status").eq("id", created.bookId).single();
+      assert(!moderationReadError && stillPending, "Moderation state must remain readable");
+      assertEqual(stillPending.status, "pending", "Denied moderation must not change the book state");
+
       // Use the trusted local service role to prepare the fixture for download tests.
       const { error: publishFixtureError } = await admin.from("community_shared_books")
         .update({ status: "published", published_at: new Date().toISOString() })
