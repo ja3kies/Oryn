@@ -4,7 +4,7 @@ This directory contains versioned database changes and Edge Functions for the op
 
 ## Current state
 
-- The initial schema migration and three Edge Functions are committed on `feature/community-epub-catalog`.
+- The initial schema migration and four Edge Functions are committed on `feature/community-epub-catalog`.
 - No Supabase project is connected to this workspace.
 - No migration or Edge Function has been deployed or executed against a live project.
 - Android is not connected to the catalogue.
@@ -82,10 +82,23 @@ Tests are committed but have **not** been executed in this workspace.
 - Never trust an owner ID or Storage path supplied by the client.
 - Creation, finalization, retraction, publication, downloads and object deletion remain server-only.
 
+## Implemented: `catalog-download`
+
+Path: `functions/catalog-download/`
+
+- Accepts POST/JSON only, with one UUID `bookId` and a 2 KiB request-body cap.
+- Requires a valid bearer token verified independently with Auth `getUser(token)`; anonymous users are rejected.
+- Re-queries the row on every request and permits only `published` records with a non-null SHA-256, non-null `published_at` and null `removed_at`.
+- Returns the same 404 for missing, pending, rejected and removed records.
+- Validates the database-generated `owner_id/book_id.epub` path and SHA-256 format; no path or owner can be supplied by the caller.
+- Uses the server-only service-role client to create a private-bucket signed download URL valid for 60 seconds.
+- The endpoint response is marked `no-store`; the signed URL is a bearer capability and can be shared until it expires.
+
+A signed URL is not individually revocable. Removing the object is the reliable way to cut off future access, but Supabase documents that CDN cache invalidation can take up to a minute. A copy already downloaded by a user cannot be recalled.
+
 ## Remaining work (not implemented)
 
-1. `catalog-download`: re-check published status and policy on every request; use short-lived signed URLs or streaming.
-3. Moderation-only publication operation with explicit administrator authorization.
+1. Moderation-only publication operation with explicit administrator authorization.
 4. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
 5. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
 6. Android Auth/catalogue integration only after the server workflow is verified.
