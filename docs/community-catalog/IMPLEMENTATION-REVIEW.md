@@ -94,3 +94,18 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 - [Authorization headers](https://supabase.com/docs/guides/functions/auth-headers)
 - [CORS](https://supabase.com/docs/guides/functions/cors)
 - [Supabase Changelog](https://supabase.com/changelog?tags=edge+functions)
+
+
+## `catalog-moderate`
+
+- Nouvelle Edge Function POST/JSON, corps limité à 2 KiB, champs stricts `bookId` et `decision`.
+- Authentifie le bearer token via Auth `getUser(token)` et refuse les comptes anonymes.
+- Autorisation basée uniquement sur la variable serveur `CATALOG_MODERATOR_USER_IDS` (UUID Auth séparés par des virgules) ; aucun rôle issu des métadonnées modifiables par le client.
+- Publication/rejet uniquement si la fiche est encore `pending`, possède un hash SHA-256 et n'est pas retirée.
+- Mise à jour conditionnelle atomique : une rétractation ou une modération concurrente ne peut pas être écrasée.
+- `published_at` est renseigné uniquement lors de la publication ; les états non modérables partagent une réponse 409.
+- `verify_jwt = true` ajouté à `supabase/config.toml`.
+
+Secret Edge Function requis : `CATALOG_MODERATOR_USER_IDS`. Aucun UUID de modérateur ni secret n'est enregistré dans Git. Configuration absente ou mal formée : refus fermé (503).
+
+Tests unitaires écrits mais non exécutés. Aucun déploiement ni test runtime Supabase effectué.
