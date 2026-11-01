@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.catalog-moderate]
 verify_jwt = true
+
+[functions.catalog-cleanup]
+verify_jwt = false
