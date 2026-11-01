@@ -9,7 +9,7 @@ alter table public.community_shared_books
     check (status in ('pending', 'published', 'rejected', 'removed', 'expired'));
 
 alter table public.community_shared_books
-    add column if not exists expires_at timestamptz not null default (now() + interval '24 hours'),
+    add column if not exists expires_at timestamptz default (now() + interval '24 hours'),
     add column if not exists expired_at timestamptz,
     add column if not exists storage_cleanup_at timestamptz;
 
