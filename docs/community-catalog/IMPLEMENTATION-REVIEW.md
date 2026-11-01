@@ -74,7 +74,7 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 ## Bloquants restants
 
 1. Configurer `CATALOG_MODERATOR_USER_IDS` comme secret dans un projet Supabase réel, puis tester les sessions modérateur et non-modérateur.
-2. Quotas, rate limits, nettoyage des uploads abandonnés, signalement et retrait copyright.
+2. Limites globales/IP, protection contre les abus de téléchargement, signalement et retrait copyright.
 3. Tests runtime avec deux utilisateurs et rôle anonyme ; advisors Supabase.
 4. Vérifier les schémas exposés Data API dans un vrai projet.
 5. Audit Cloudflare non exécuté ; aucun environnement isolé disponible ici.
@@ -83,10 +83,10 @@ Un téléchargement déjà commencé et une copie locale déjà enregistrée ne 
 ## Quotas et nettoyage des uploads abandonnés
 
 - Migration dédiée : `20261101000200_catalog_quotas_and_expiry.sql`.
-- Limites atomiques par propriétaire : 5 créations par heure glissante, 10 livres actifs (pending + published), 3 uploads pending.
+- Limites atomiques par propriétaire : 10 créations par heure glissante, 30 livres actifs (pending + published), 3 uploads pending.
 - Verrou transactionnel par propriétaire pour empêcher le contournement par requêtes concurrentes.
 - Réponse HTTP 429 pour les limites atteintes.
-- Expiration des uploads pending après 24 h ; la validation EPUB supprime l'échéance. Le nettoyage attend ensuite 15 minutes de grâce avant le changement d'état et la suppression Storage.
+- Expiration des uploads pending après 4 h ; la validation EPUB supprime l'échéance. Le nettoyage attend ensuite 15 minutes de grâce avant le changement d'état et la suppression Storage.
 - `catalog-cleanup` passe d'abord les fiches expirées à `expired`, puis supprime l'objet privé. La ligne est conservée comme tombstone ; les échecs Storage sont retentés lors des exécutions suivantes.
 - Fonction planifiée protégée par `CATALOG_CLEANUP_SECRET` (au moins 32 caractères), envoyé dans `x-catalog-cleanup-secret`. `verify_jwt = false` est compensé par ce secret serveur ; la planification Supabase Cron reste à configurer.
 
