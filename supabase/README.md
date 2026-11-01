@@ -91,10 +91,11 @@ Path: `functions/catalog-download/`
 - Re-queries the row on every request and permits only `published` records with a non-null SHA-256, non-null `published_at` and null `removed_at`.
 - Returns the same 404 for missing, pending, rejected and removed records.
 - Validates the database-generated `owner_id/book_id.epub` path and SHA-256 format; no path or owner can be supplied by the caller.
-- Uses the server-only service-role client to create a private-bucket signed download URL valid for 60 seconds.
-- The endpoint response is marked `no-store`; the signed URL is a bearer capability and can be shared until it expires.
+- Uses the server-only service-role client to retrieve the private object from its database-generated path, then streams the EPUB through the authenticated Edge Function.
+- Enforces the bucket's 8 MiB maximum again before returning the file.
+- Returns `application/epub+zip` with attachment disposition and `private, no-store` cache headers; no Storage URL or bearer download token is exposed.
 
-A signed URL is not individually revocable. Removing the object is the reliable way to cut off future access, but Supabase documents that CDN cache invalidation can take up to a minute. A copy already downloaded by a user cannot be recalled.
+A download already in progress or a local copy already saved by a user cannot be remotely recalled. Retraction prevents new requests from being authorized before object cleanup starts.
 
 ## Remaining work (not implemented)
 
