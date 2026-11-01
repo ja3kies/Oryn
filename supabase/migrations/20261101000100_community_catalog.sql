@@ -33,7 +33,8 @@ create table if not exists public.community_shared_books (
     constraint community_shared_books_publication_state_check
         check (
             (status = 'published' and published_at is not null and removed_at is null)
-            or (status <> 'published' and published_at is null)
+            or (status in ('pending', 'rejected') and published_at is null and removed_at is null)
+            or (status = 'removed' and removed_at is not null)
         ),
     constraint community_shared_books_removed_state_check
         check ((status = 'removed') = (removed_at is not null))
