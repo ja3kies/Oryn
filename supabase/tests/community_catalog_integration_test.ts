@@ -124,7 +124,7 @@ Deno.test({
 
       const epubBytes = makeValidEpub();
       const { error: epubUploadError } = await lifecycle.client.storage.from(BUCKET)
-        .upload(created.objectPath, new Blob([epubBytes], { type: "application/epub+zip" }), {
+        .upload(created.objectPath, new Blob([epubBytes.buffer.slice(epubBytes.byteOffset, epubBytes.byteOffset + epubBytes.byteLength) as ArrayBuffer], { type: "application/epub+zip" }), {
           contentType: "application/epub+zip", upsert: false,
         });
       assert(!epubUploadError, "Valid EPUB upload failed: " + epubUploadError?.message);
