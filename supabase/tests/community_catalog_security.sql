@@ -107,6 +107,68 @@ begin
 end;
 $checks$;
 
+
+do $quota_checks$
+declare
+    v_limit_fn regprocedure := to_regprocedure('private.enforce_community_catalog_limits()');
+begin
+    if v_limit_fn is null then
+        raise exception 'Missing per-owner catalogue quota trigger function';
+    end if;
+
+    if not exists (
+        select 1
+          from pg_catalog.pg_trigger t
+          join pg_catalog.pg_class c on c.oid = t.tgrelid
+          join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public'
+           and c.relname = 'community_shared_books'
+           and t.tgname = 'community_catalog_creation_limits'
+           and not t.tgisinternal
+    ) then
+        raise exception 'Missing catalogue creation quota trigger';
+    end if;
+
+    if has_function_privilege('anon', v_limit_fn, 'EXECUTE')
+       or has_function_privilege('authenticated', v_limit_fn, 'EXECUTE') then
+        raise exception 'Client roles must not execute the quota trigger function directly';
+    end if;
+
+    if not has_function_privilege('service_role', v_limit_fn, 'EXECUTE') then
+        raise exception 'service_role must execute the quota trigger function';
+    end if;
+
+    if not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'community_shared_books'
+           and column_name = 'expires_at'
+    ) or not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'community_shared_books'
+           and column_name = 'storage_cleanup_at'
+    ) then
+        raise exception 'Missing abandoned-upload lifecycle columns';
+    end if;
+
+    if not exists (
+        select 1
+          from pg_catalog.pg_constraint con
+          join pg_catalog.pg_class c on c.oid = con.conrelid
+          join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public'
+           and c.relname = 'community_shared_books'
+           and con.conname = 'community_shared_books_status_check'
+           and pg_catalog.pg_get_constraintdef(con.oid) like '%expired%'
+    ) then
+        raise exception 'Catalogue status constraint must include expired tombstones';
+    end if;
+end;
+$quota_checks$;
+
 rollback;
 
 select 'Oryn community catalog static security assertions passed' as result;
