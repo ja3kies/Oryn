@@ -66,15 +66,39 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse(503, { error: "service_unavailable" });
   }
 
+  // Enforce the body cap while streaming; Content-Length alone is not
+  // trustworthy because clients can omit it or use chunked transfer encoding.
   let rawBody: string;
   try {
-    rawBody = await request.text();
+    if (!request.body) {
+      return jsonResponse(400, { error: "invalid_request_body" });
+    }
+
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        return jsonResponse(413, { error: "request_too_large" });
+      }
+      chunks.push(value);
+    }
+
+    const combined = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    rawBody = new TextDecoder("utf-8", { fatal: true }).decode(combined);
   } catch {
     return jsonResponse(400, { error: "invalid_request_body" });
-  }
-
-  if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
-    return jsonResponse(413, { error: "request_too_large" });
   }
 
   let parsedJson: unknown;
