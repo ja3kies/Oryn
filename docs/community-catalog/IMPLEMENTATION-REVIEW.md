@@ -2,72 +2,65 @@
 
 Date : 2026-11-01  
 Branche : `feature/community-epub-catalog`  
-Périmètre : revue statique de la migration initiale et de sa documentation.  
-Statut : **non déployé, non testé sur un projet Supabase**.
+Périmètre : revue statique de la migration et de sa documentation.  
+Statut : **non déployé, non exécuté sur un projet Supabase**.
 
 ## Décision
 
-Ne pas déployer la migration actuelle et ne pas connecter l'interface Android au catalogue avant correction des points bloquants ci-dessous.
+La migration initiale a été corrigée dans GitHub avant tout déploiement connu. Ne pas intégrer Android ni activer le catalogue tant que les contrôles ci-dessous ne sont pas terminés.
 
-## Constats bloquants
+## Corrections apportées
 
-### 1. Fonctions privilégiées dans le schéma exposé `public`
+### 1. Fonctions privilégiées hors du schéma exposé
 
-La migration crée `public.create_community_shared_book`, `public.retract_community_shared_book` et `public.can_upload_community_epub` avec `SECURITY DEFINER`.
+- Suppression des fonctions `SECURITY DEFINER` dans `public` pour la création et le retrait.
+- Déplacement du seul helper nécessaire à la policy Storage vers `private.can_upload_community_epub(text)`.
+- `search_path = ''`, noms de schémas qualifiés, contrôle via `auth.uid()`.
+- Exécution révoquée à `PUBLIC` et `anon`, accordée uniquement à `authenticated`.
+- Le schéma `private` ne doit jamais être ajouté aux schémas exposés par la Data API.
 
-Les fonctions `create` et `retract` révoquent bien l'exécution à `PUBLIC` et `anon`, accordent l'exécution à `authenticated`, fixent `search_path = ''` et contrôlent `auth.uid()`. Ce sont de bonnes protections, mais elles ne suppriment pas le risque architectural : une fonction `SECURITY DEFINER` dans un schéma exposé peut être appelée via la Data API avec les privilèges de son propriétaire.
+Création, retrait, publication, validation et téléchargement sont désormais explicitement réservés à des Edge Functions de confiance qui valident le JWT avec Supabase Auth avant d'utiliser un client serveur. Ces Edge Functions ne sont pas encore implémentées.
 
-**Correction exigée :** déplacer toute logique privilégiée dans un schéma non exposé (par exemple `private`) et n'exposer que des points d'entrée strictement nécessaires, ou déplacer les opérations de création/retrait dans des Edge Functions qui valident le JWT et l'identité côté serveur. Ne jamais résoudre ce point en ajoutant simplement des privilèges client.
+### 2. Droits de la table
 
-La fonction de contrôle Storage doit également être déplacée hors de `public` ou remplacée par un mécanisme qui ne publie pas de fonction privilégiée dans un schéma exposé.
+- RLS activé et forcé.
+- Lecture limitée aux lignes publiées ou appartenant à l'utilisateur authentifié.
+- Privilèges directs de la table révoqués, puis SELECT limité à certaines colonnes accordé à `authenticated`.
+- Aucun INSERT/UPDATE/DELETE direct côté client.
 
-### 2. Exposition Data API à configurer explicitement
+### 3. Storage
 
-Depuis le 30 octobre 2026, les nouvelles tables ne sont plus automatiquement exposées à la Data API par défaut sur les projets concernés. La présence de grants SQL et de RLS ne garantit donc pas que les appels REST/RPC seront disponibles.
+- Bucket privé, limite de 50 MiB et MIME déclarés EPUB/ZIP.
+- Policy INSERT limitée au chemin généré du livre pending appartenant à l'utilisateur.
+- Aucune policy client SELECT/UPDATE/DELETE ajoutée pour ce bucket.
 
-**Correction exigée :** documenter et vérifier les paramètres Data API du projet de développement. N'exposer que les schémas nécessaires ; ne pas exposer le schéma interne `private`. Accorder les privilèges minimaux explicitement et conserver RLS sur chaque table exposée.
+Le MIME et la limite de taille ne remplacent pas une validation du contenu EPUB.
 
-### 3. Validation EPUB absente
+## Points bloquants restants
 
-Le MIME déclaré et l'extension `.epub` ne prouvent pas qu'un fichier est un EPUB sûr. La limite Storage de 50 MiB ne borne pas à elle seule la taille décompressée ni les structures ZIP/XML malformées.
+1. **Edge Functions absentes** : création, finalisation/validation, retrait, modération et téléchargement ne sont pas encore implémentés.
+2. **Validation EPUB absente** : contrôler ZIP, entrée `mimetype`, `META-INF/container.xml`, OPF, chemins, collisions, archives chiffrées, nombre d'entrées et tailles compressées/décompressées ; calculer SHA-256 côté serveur.
+3. **Suppression Storage absente** : le retrait doit masquer la fiche immédiatement puis supprimer l'objet de manière idempotente.
+4. **Liens signés et caches** : vérifier le statut publié à chaque demande ; utiliser une durée courte et documenter qu'un lien déjà émis reste utilisable jusqu'à expiration, sauf suppression/invalidation adaptée.
+5. **Data API** : vérifier la liste réelle des schémas exposés et les grants dans un projet de développement.
+6. **Tests d'exécution absents** : deux utilisateurs indépendants + rôle anonyme ; lecture, création, retrait, upload, remplacement, téléchargement, publication et retrait.
+7. **Audit Cloudflare absent** : à exécuter après intégration complète, dans l'environnement isolé requis par le skill.
 
-**Correction exigée :** validation serveur du conteneur ZIP, de `mimetype`, de `META-INF/container.xml`, du document OPF, des chemins, du nombre d'entrées et des tailles compressées/décompressées ; rejeter les archives chiffrées, les chemins traversants, les collisions et les limites dépassées. Calculer SHA-256 côté serveur. Ne jamais publier sur la base du seul MIME fourni par le client.
+## Vérifications statiques ajoutées
 
-### 4. Cycle de vie Storage incomplet
+Le fichier `supabase/tests/community_catalog_security.sql` contient des assertions sur les fonctions privilégiées, les grants, RLS et les policies. Il n'a pas été exécuté : aucun projet Supabase n'est connecté.
 
-Le retrait modifie immédiatement la ligne en `removed`, mais la suppression physique de l'objet n'est pas implémentée. Les URL signées éventuelles et les caches ne sont pas encore gérés.
+## État réel
 
-**Correction exigée :** implémenter un nettoyage serveur idempotent et vérifier le statut publié à chaque demande de téléchargement. Les URL signées doivent avoir une durée courte ; définir le comportement des retraits vis-à-vis des URL déjà émises et des copies locales téléchargées.
+- Migration modifiée sur GitHub, branche de travail uniquement.
+- Aucun projet Supabase accessible via la connexion actuelle.
+- Aucun SQL exécuté, aucune migration appliquée, aucun advisor exécuté.
+- Aucun EPUB téléversé ; aucune Edge Function déployée.
+- Aucun test Android ni audit Cloudflare exécuté.
 
-## Points déjà présents dans la migration
+## Références officielles
 
-- RLS activé et forcé sur `public.community_shared_books`.
-- Bucket `community-epubs` privé, limite initiale de 50 MiB.
-- Aucun accès anonyme accordé dans les grants décrits.
-- Les écritures directes client sur la table sont révoquées.
-- Les enregistrements sont créés en état `pending` avec consentement.
-- Le chemin Storage est généré depuis l'identité et l'UUID, pas depuis le nom de fichier.
-- La policy Storage limite l'upload au chemin d'un enregistrement pending du propriétaire.
-
-Ces éléments sont des propriétés du code SQL relu, pas des résultats de tests d'exécution.
-
-## Ordre de correction recommandé
-
-1. Décider de la frontière privilégiée : Edge Functions pour création/retrait/validation/téléchargement, ou fonctions internes dans un schéma non exposé avec wrappers minimaux.
-2. Revoir la migration initiale avant son premier déploiement ; ne pas modifier une migration déjà appliquée sur un environnement partagé.
-3. Ajouter des tests négatifs avec deux utilisateurs fictifs et le rôle anonyme : lecture, création, retrait, upload, remplacement, téléchargement et retrait d'un livre.
-4. Ajouter la validation EPUB et le nettoyage Storage côté serveur.
-5. Vérifier les réglages Data API et les advisors Supabase sur un projet de développement.
-6. Intégrer Android seulement après réussite des contrôles précédents.
-7. Exécuter ensuite l'audit Cloudflare Security Audit Skill complet, sur un commit identifié et dans l'environnement isolé exigé par le skill.
-
-## Références officielles consultées
-
-- [Supabase — Database Functions](https://supabase.com/docs/guides/database/functions) : préférer `SECURITY INVOKER`, contrôler explicitement les privilèges d'exécution et protéger les fonctions `SECURITY DEFINER`.
-- [Supabase — Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) : ne pas placer de fonctions `SECURITY DEFINER` dans un schéma exposé.
-- [Supabase — Changelog Data API](https://supabase.com/changelog?types=breaking-change) : évolution de l'exposition automatique des nouvelles tables, applicable à partir du 30 octobre 2026.
-- [Supabase — Private Storage downloads](https://supabase.com/docs/guides/storage/serving/downloads) : utiliser des accès authentifiés ou des URL signées à durée limitée pour les buckets privés.
-
-## Limites de cette revue
-
-Aucun projet Supabase n'est connecté. Aucun SQL n'a été exécuté. Aucun fichier EPUB n'a été téléversé. Aucun test RLS/Storage, advisor, build Android ou audit Cloudflare n'a été lancé. Les points dépendant de la configuration réelle restent à valider.
+- [Database Functions](https://supabase.com/docs/guides/database/functions)
+- [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- [Private Storage downloads](https://supabase.com/docs/guides/storage/serving/downloads)
+- [Supabase Changelog — breaking changes](https://supabase.com/changelog?types=breaking-change)
