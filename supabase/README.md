@@ -4,7 +4,7 @@ This directory contains versioned database changes and Edge Functions for the op
 
 ## Current state
 
-- The initial schema migration and first Edge Function are committed on `feature/community-epub-catalog`.
+- The initial schema migration and two Edge Functions are committed on `feature/community-epub-catalog`.
 - No Supabase project is connected to this workspace.
 - No migration or Edge Function has been deployed or executed against a live project.
 - Android is not connected to the catalogue.
@@ -14,77 +14,67 @@ This directory contains versioned database changes and Edge Functions for the op
 
 Path: `functions/catalog-create-upload/`
 
-The function:
+- Requires POST/JSON and a valid bearer token; JWT verification is enabled in `config.toml`.
+- Independently verifies the token with Auth `getUser(token)`; anonymous users are rejected.
+- Accepts only `title`, `author`, `language` and `rightsConfirmed`.
+- Requires explicit rights confirmation and stores a server-controlled declaration version.
+- Bounds metadata and streams the request body with an 8 KiB cap.
+- Derives the owner from the verified Auth user and creates a `pending` row.
+- Returns the database-generated object path for a separate authenticated upload.
+- The private bucket's object-size cap is 8 MiB. MIME declarations are not content validation.
 
-1. Requires POST with JSON and a valid bearer token (`verify_jwt = true`).
-2. Independently verifies the token with Supabase Auth `getUser(token)`.
-3. Rejects anonymous Auth users.
-4. Accepts only `title`, `author`, `language` and `rightsConfirmed`; rejects unknown fields such as `owner_id` and `storage_key`.
-5. Requires explicit `rightsConfirmed: true` and stores a server-controlled declaration version.
-6. Bounds metadata and streams the request body with an 8 KiB cap.
-7. Derives `owner_id` only from the verified Auth user.
-8. Creates a `pending` row and returns its generated object path and the 50 MiB upload limit.
+The function does not upload a file, validate EPUB contents, publish a book or issue a download URL. The service-role key is read only from server environment variables.
 
-It does **not** upload a file, validate EPUB contents, publish a book, or issue a download URL. The Android client must upload the selected file separately using the user's own authenticated session and the exact returned path. No file is uploaded merely by calling this function.
+## Implemented: `catalog-finalize-upload`
 
-The service-role key is read only from the Edge Function environment and is never returned to clients. Required server environment variables are `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+Path: `functions/catalog-finalize-upload/`
 
-Unit tests for metadata validation are in `validation_test.ts`. They require Deno and can be run from the repository root with:
+- Accepts only a UUID `bookId`; verifies the bearer token independently and rejects anonymous users.
+- Looks up the record using both the supplied ID and verified owner ID.
+- Downloads only the generated Storage path from that owner-scoped row; the client cannot provide a path.
+- Validates ZIP/EPUB structure with pinned `@zip.js/zip.js@2.24.0` and parses XML with `fast-xml-parser@5.11.2`.
+- Requires the first uncompressed `mimetype` entry, exact EPUB MIME content, `META-INF/container.xml`, a safe OPF path, OPF metadata, manifest and spine.
+- Rejects traversal/absolute paths, path collisions, encrypted entries, symlinks, ZIP64, unsupported compression, multi-disk archives and invalid CRC/local headers.
+- Applies hard limits: 8 MiB compressed file, 250 entries, 8 MiB per entry, 32 MiB total expanded content, 1 MiB per required XML file and 100:1 maximum compression ratio.
+- Streams each entry through a bounded sink and computes SHA-256 server-side.
+- Stores the hash only. A validated book remains `pending`; publication requires a separate moderation-only operation.
+- Repeated finalization is idempotent after the hash is stored.
 
-```sh
-deno test supabase/functions/catalog-create-upload/validation_test.ts
-```
+A successful structural validation is **not** a malware scan, rights review or guarantee that every EPUB reader will render the book identically.
 
-## Security boundary
+### Runtime capacity warning
 
-- Keep the Postgres `private` schema out of the exposed Data API schemas.
-- The `private` schema contains the only database `SECURITY DEFINER` helper; it only checks ownership of the exact pending Storage path.
-- Creation, retraction, publication, EPUB validation, download authorization and object deletion are server-only operations.
-- Each Edge Function must validate the bearer token with Supabase Auth before using a server-only client.
-- Never accept an owner ID as authority from the request body.
-- Never put a `service_role`/secret key in Android, source control, logs, or client-visible configuration.
+Supabase currently documents a 256 MiB memory ceiling and 2 seconds of CPU time per Edge Function request. The conservative archive limits above reduce exposure but do not prove that full validation will fit the CPU budget for every valid EPUB. Benchmark on a dedicated development project with representative worst-case files before deployment. If the CPU ceiling is exceeded, move decompression/validation to a dedicated worker rather than raising the limits or weakening checks. See [Edge Function limits](https://supabase.com/docs/guides/functions/limits).
 
-## Database migration
+## Server secrets
 
-The migration creates:
+Required server environment variables are `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`. The service-role key must never appear in Android, source control, logs or client-visible configuration.
 
-- `public.community_shared_books` with RLS enabled and forced.
-- Authenticated read access to published rows and the caller's own rows, limited to selected metadata columns.
-- No direct client INSERT/UPDATE/DELETE grants on the catalogue table.
-- A private Storage bucket, limited to 50 MiB per object and EPUB/ZIP MIME declarations.
-- A Storage INSERT policy that allows only the exact generated object path for the authenticated owner's pending record.
-- No client Storage SELECT, UPDATE or DELETE policy for this bucket.
+## Unit tests
 
-MIME declarations and Storage size caps do **not** validate an EPUB archive. Publication must remain blocked until server-side validation succeeds.
+- Metadata tests: `deno test supabase/functions/catalog-create-upload/validation_test.ts`
+- EPUB validation tests: `deno test supabase/functions/catalog-finalize-upload/validation_test.ts`
 
-## Remaining Edge Functions (not implemented)
+Tests are committed but have **not** been executed in this workspace.
 
-1. `catalog-finalize-upload`: inspect ZIP/EPUB structure, enforce compressed and expanded size/entry limits, reject traversal/encrypted archives, calculate SHA-256, then queue moderation or publish under policy.
-2. `catalog-retract`: validate owner, mark removed first, then delete the Storage object idempotently.
-3. `catalog-download`: re-check published status and download policy on every request; return a short-lived signed URL or stream the object.
-4. A moderation-only operation must be separately authorized and must not be callable by ordinary authenticated users.
+## Security boundary and database
 
-Use short signed-URL lifetimes. A URL already issued remains usable until expiry unless the object is deleted or cache invalidation is effective. A downloaded local copy cannot be remotely recalled.
+- Keep Postgres schema `private` out of exposed Data API schemas.
+- Its only `SECURITY DEFINER` helper checks the exact pending Storage path and has a pinned empty search path.
+- RLS is enabled and forced on `community_shared_books`; direct client writes are revoked.
+- Storage is private. The upload policy permits only the exact generated path for the authenticated owner.
+- Never trust an owner ID or Storage path supplied by the client.
+- Creation, finalization, retraction, publication, downloads and object deletion remain server-only.
 
-## Verification before Android integration
+## Remaining work (not implemented)
 
-1. Apply the migration only to a dedicated development Supabase project after review.
-2. Keep `private` absent from the Data API exposed-schema list.
-3. Run `supabase/tests/community_catalog_security.sql` against the migrated database.
-4. Run the Deno unit tests and add Edge Function integration tests.
-5. Test with two independent authenticated users and the anonymous role: read, create, retract, upload, overwrite, download, publication and withdrawal.
-6. Run Supabase Security Advisors and inspect every finding.
-7. Complete EPUB validation, cleanup, quotas, abuse reporting and rights/takedown workflow.
-8. Only then implement the Android repository and UI.
+1. `catalog-retract`: mark removed first, then delete the object idempotently.
+2. `catalog-download`: re-check published status and policy on every request; use short-lived signed URLs or streaming.
+3. Moderation-only publication operation with explicit administrator authorization.
+4. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
+5. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
+6. Android Auth/catalogue integration only after the server workflow is verified.
 
-## Not yet implemented
-
-- EPUB ZIP/container/OPF validation, malware/content checks and SHA-256 processing.
-- Moderation and publication lifecycle.
-- Signed downloads, quota/rate limiting and idempotent physical deletion.
-- Runtime cross-user/RLS/Storage integration tests.
-- Abuse reporting, copyright takedown and retention policy.
-- Android Auth/catalogue integration.
-- Cloudflare Security Audit Skill execution.
+A signed URL remains usable until expiry unless the object is deleted or cache invalidation is effective. A downloaded local copy cannot be remotely recalled.
 
 This is a security-oriented implementation baseline, **not a deployed or production-ready service**.
