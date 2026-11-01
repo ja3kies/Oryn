@@ -1,0 +1,149 @@
+import { createClient } from "npm:@supabase/supabase-js@2.95.0";
+import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
+import {
+  InputError,
+  parseCreateUploadInput,
+  RIGHTS_DECLARATION_VERSION,
+} from "./validation.ts";
+
+const BUCKET_ID = "community-epubs";
+const MAX_REQUEST_BYTES = 8 * 1024;
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
+
+function jsonResponse(
+  status: number,
+  body: Record<string, unknown>,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+function getBearerToken(request: Request): string | null {
+  const header = request.headers.get("Authorization");
+  if (!header) return null;
+
+  const match = /^Bearer\s+(.+)$/iu.exec(header.trim());
+  return match?.[1] ?? null;
+}
+
+Deno.serve(async (request: Request): Promise<Response> => {
+  if (request.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (request.method !== "POST") {
+    return jsonResponse(405, { error: "method_not_allowed" });
+  }
+
+  const contentType = request.headers.get("Content-Type") ?? "";
+  if (!/^application\/json(?:\s*;|$)/iu.test(contentType)) {
+    return jsonResponse(415, { error: "content_type_must_be_json" });
+  }
+
+  const declaredLength = Number(request.headers.get("Content-Length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+    return jsonResponse(413, { error: "request_too_large" });
+  }
+
+  const token = getBearerToken(request);
+  if (!token) {
+    return jsonResponse(401, { error: "authentication_required" });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    console.error("catalog-create-upload is missing required server configuration");
+    return jsonResponse(503, { error: "service_unavailable" });
+  }
+
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return jsonResponse(400, { error: "invalid_request_body" });
+  }
+
+  if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
+    return jsonResponse(413, { error: "request_too_large" });
+  }
+
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(rawBody);
+  } catch {
+    return jsonResponse(400, { error: "invalid_json" });
+  }
+
+  let input;
+  try {
+    input = parseCreateUploadInput(parsedJson);
+  } catch (error) {
+    if (error instanceof InputError) {
+      return jsonResponse(400, { error: "invalid_input", message: error.message });
+    }
+    return jsonResponse(400, { error: "invalid_input" });
+  }
+
+  // Independently verify the bearer token with Supabase Auth. Never trust a
+  // user ID or owner field supplied by the client.
+  const authClient = createClient(supabaseUrl, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  const { data: authData, error: authError } = await authClient.auth.getUser(token);
+  if (authError || !authData.user || authData.user.is_anonymous) {
+    return jsonResponse(401, { error: "valid_user_session_required" });
+  }
+
+  // Privileged credentials remain inside this server function only.
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  const { data: row, error: insertError } = await adminClient
+    .from("community_shared_books")
+    .insert({
+      owner_id: authData.user.id,
+      title: input.title,
+      author: input.author,
+      language: input.language,
+      status: "pending",
+      rights_declaration_version: RIGHTS_DECLARATION_VERSION,
+      consent_at: new Date().toISOString(),
+    })
+    .select("id, storage_key")
+    .single();
+
+  if (insertError || !row) {
+    // Avoid returning database details or user data to the caller.
+    console.error("catalog-create-upload could not create pending record");
+    return jsonResponse(500, { error: "could_not_create_upload" });
+  }
+
+  return jsonResponse(201, {
+    bookId: row.id,
+    bucket: BUCKET_ID,
+    objectPath: row.storage_key,
+    maxFileBytes: MAX_FILE_BYTES,
+    status: "pending",
+    nextStep: "upload_epub_with_authenticated_user_session",
+  });
+});
