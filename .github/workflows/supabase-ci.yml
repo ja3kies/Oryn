@@ -70,6 +70,28 @@ jobs:
           fi
           psql "$DB_URL" --set ON_ERROR_STOP=1 --file supabase/tests/community_catalog_security.sql
 
+      - name: Start local Edge Functions for integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup_secret="$(openssl rand -hex 32)"
+          printf 'CATALOG_CLEANUP_SECRET=%s\\n' "$cleanup_secret" > /tmp/oryn-functions.env
+          echo "$cleanup_secret" >> "$GITHUB_ENV"
+          supabase functions serve --env-file /tmp/oryn-functions.env > /tmp/oryn-functions.log 2>&1 &
+          echo $! > /tmp/oryn-functions.pid
+          for attempt in $(seq 1 60); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \\
+              --request POST http://127.0.0.1:54321/functions/v1/catalog-cleanup || true)"
+            if [[ "$status" == "401" ]]; then
+              echo "Local Edge Functions are ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/oryn-functions.log
+          echo "Local Edge Functions did not become ready." >&2
+          exit 1
+
       - name: Run Auth, RLS, Storage and quota integration tests
         shell: bash
         run: |
@@ -78,6 +100,8 @@ jobs:
           export SUPABASE_URL="$API_URL"
           export SUPABASE_ANON_KEY="$ANON_KEY"
           export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export FUNCTIONS_URL="$API_URL/functions/v1"
+          export CATALOG_CLEANUP_SECRET="${CATALOG_CLEANUP_SECRET}"
           deno test --allow-env --allow-net supabase/tests/community_catalog_integration_test.ts
 
       - name: Type-check all Edge Functions
@@ -112,6 +136,10 @@ jobs:
             exit 1
           fi
 
+      - name: Stop local Edge Functions
+        if: always()
+        run: |
+          if [[ -f /tmp/oryn-functions.pid ]]; then kill "$(cat /tmp/oryn-functions.pid)" || true; fi
       - name: Stop disposable Supabase stack
         if: always()
         run: supabase stop --no-backup
