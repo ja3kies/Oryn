@@ -3,6 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
 
 const BUCKET_ID = "community-epubs";
 const BATCH_SIZE = 50;
+const EXPIRY_GRACE_MS = 15 * 60 * 1000;
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -47,6 +48,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
   const now = new Date().toISOString();
+  const expiryCutoff = new Date(Date.now() - EXPIRY_GRACE_MS).toISOString();
 
   // First make expired uploads invisible and non-uploadable. The Storage
   // policy permits inserts only while the associated row remains pending.
@@ -55,7 +57,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     .update({ status: "expired", expired_at: now })
     .eq("status", "pending")
     .not("expires_at", "is", null)
-    .lt("expires_at", now)
+    .lt("expires_at", expiryCutoff)
     .select("id");
 
   if (expireError) {
