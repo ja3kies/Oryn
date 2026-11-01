@@ -4,6 +4,13 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
 const BUCKET_ID = "community-epubs";
 const BATCH_SIZE = 50;
 const EXPIRY_GRACE_MS = 15 * 60 * 1000;
+const RETRY_BASE_MS = 5 * 60 * 1000;
+const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+
+export function cleanupRetryDelayMs(attempt: number): number {
+  const safeAttempt = Math.max(1, Math.floor(attempt));
+  return Math.min(RETRY_BASE_MS * (2 ** Math.min(safeAttempt - 1, 16)), RETRY_MAX_MS);
+}
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -87,9 +94,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // batch prevents a single scheduled invocation from monopolizing resources.
   const { data: pendingCleanup, error: lookupError } = await admin
     .from("community_shared_books")
-    .select("id, owner_id, storage_key")
+    .select("id, owner_id, storage_key, storage_cleanup_attempts")
     .eq("status", "expired")
     .is("storage_cleanup_at", null)
+    .or(`storage_cleanup_retry_at.is.null,storage_cleanup_retry_at.lte.${now}`)
+    // Never-attempted rows are handled first. Failed rows are deferred until
+    // their retry time, so a bad object cannot starve the rest of the queue.
+    .order("storage_cleanup_retry_at", { ascending: true, nullsFirst: true })
     .order("expired_at", { ascending: true })
     .limit(BATCH_SIZE);
 
@@ -101,10 +112,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
   let deleted = 0;
   let failed = 0;
   for (const book of pendingCleanup ?? []) {
+    const nextAttempt = (book.storage_cleanup_attempts ?? 0) + 1;
+    const scheduleRetry = async () => {
+      const retryAt = new Date(Date.now() + cleanupRetryDelayMs(nextAttempt)).toISOString();
+      const { error } = await admin
+        .from("community_shared_books")
+        .update({
+          storage_cleanup_attempts: nextAttempt,
+          storage_cleanup_retry_at: retryAt,
+        })
+        .eq("id", book.id)
+        .eq("status", "expired")
+        .is("storage_cleanup_at", null);
+      if (error) console.error("catalog-cleanup could not schedule a retry");
+    };
+
     if (typeof book.storage_key !== "string" ||
         book.storage_key !== `${book.owner_id}/${book.id}.epub`) {
       failed++;
       console.error("catalog-cleanup encountered an invalid stored object key");
+      await scheduleRetry();
       continue;
     }
 
@@ -115,12 +142,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (removeError) {
       failed++;
       console.error("catalog-cleanup could not remove an expired object");
+      await scheduleRetry();
       continue;
     }
 
     const { error: markError } = await admin
       .from("community_shared_books")
-      .update({ storage_cleanup_at: new Date().toISOString() })
+      .update({
+        storage_cleanup_at: new Date().toISOString(),
+        storage_cleanup_retry_at: null,
+      })
       .eq("id", book.id)
       .eq("status", "expired")
       .is("storage_cleanup_at", null);
@@ -128,6 +159,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (markError) {
       failed++;
       console.error("catalog-cleanup could not record object cleanup");
+      await scheduleRetry();
     } else {
       deleted++;
     }
