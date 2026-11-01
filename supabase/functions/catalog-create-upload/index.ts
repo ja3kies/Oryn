@@ -5,6 +5,7 @@ import {
   parseCreateUploadInput,
   RIGHTS_DECLARATION_VERSION,
 } from "./validation.ts";
+import type { CreateUploadInput } from "./validation.ts";
 
 const BUCKET_ID = "community-epubs";
 const MAX_REQUEST_BYTES = 8 * 1024;
@@ -108,7 +109,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse(400, { error: "invalid_json" });
   }
 
-  let input;
+  let input: CreateUploadInput;
   try {
     input = parseCreateUploadInput(parsedJson);
   } catch (error) {
