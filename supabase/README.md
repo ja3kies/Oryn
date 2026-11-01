@@ -69,6 +69,7 @@ Required server environment variables are `SUPABASE_URL`, `SUPABASE_ANON_KEY` an
 
 - Metadata tests: `deno test supabase/functions/catalog-create-upload/validation_test.ts`
 - EPUB validation tests: `deno test supabase/functions/catalog-finalize-upload/validation_test.ts`
+- Retraction input tests: `deno test supabase/functions/catalog-retract/validation_test.ts`
 
 Tests are committed but have **not** been executed in this workspace.
 
@@ -83,8 +84,7 @@ Tests are committed but have **not** been executed in this workspace.
 
 ## Remaining work (not implemented)
 
-1. `catalog-retract`: mark removed first, then delete the object idempotently.
-2. `catalog-download`: re-check published status and policy on every request; use short-lived signed URLs or streaming.
+1. `catalog-download`: re-check published status and policy on every request; use short-lived signed URLs or streaming.
 3. Moderation-only publication operation with explicit administrator authorization.
 4. Rate limits, quotas, abandoned-upload cleanup, abuse reporting, copyright takedown and retention policy.
 5. Runtime cross-user/RLS/Storage integration tests and Supabase Security Advisors.
