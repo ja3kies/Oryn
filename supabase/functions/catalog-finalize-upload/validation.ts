@@ -82,6 +82,8 @@ async function readEntry(entry: ZipEntry, maxBytes: number, collect: boolean): P
     checkLocalFilename: true,
     checkAmbiguity: true,
     checkOverlappingEntry: true,
+    useWebWorkers: false,
+    useCompressionStream: true,
   });
   if (!collect) return null;
   const output = new Uint8Array(total);
