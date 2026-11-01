@@ -154,7 +154,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       rights_declaration_version: RIGHTS_DECLARATION_VERSION,
       consent_at: new Date().toISOString(),
     })
-    .select("id, storage_key")
+    .select("id, storage_key, expires_at")
     .single();
 
   if (insertError || !row) {
@@ -176,6 +176,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     bookId: row.id,
     bucket: BUCKET_ID,
     objectPath: row.storage_key,
+    uploadExpiresAt: row.expires_at,
     maxFileBytes: MAX_FILE_BYTES,
     status: "pending",
     nextStep: "upload_epub_with_authenticated_user_session",
