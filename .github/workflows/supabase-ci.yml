@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DB_URL="$(supabase status -o env | sed -n 's/^DB_URL="\\(.*\\)"$/\\1/p')"
+          DB_URL="$(supabase status -o env | awk -F '"' '/^DB_URL=/{print $2}')"
           if [[ -z "$DB_URL" ]]; then
             echo "Could not obtain the local Supabase DB_URL." >&2
             exit 1
