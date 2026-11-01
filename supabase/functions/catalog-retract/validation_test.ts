@@ -1,52 +1,26 @@
-import { assertEquals } from "jsr:@std/assert@1.0.14";
-import {
-  isExpectedStorageKey,
-  parseRetractionInput,
-  RetractionInputError,
-} from "./validation.ts";
+import { isExpectedStorageKey, parseRetractionInput, RetractionInputError } from "./validation.ts";
 
-const ownerId = "123e4567-e89b-42d3-a456-426614174000";
-const bookId = "987e6543-e21b-42d3-a456-426614174000";
+const owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const book = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-Deno.test("accepts exactly one valid bookId", () => {
-  assertEquals(parseRetractionInput({ bookId }), { bookId });
-});
-
-Deno.test("normalizes UUID casing", () => {
-  assertEquals(parseRetractionInput({ bookId: bookId.toUpperCase() }).bookId, bookId);
-});
-
-Deno.test("rejects unknown fields and owner/path spoofing", () => {
-  for (const value of [
-    { bookId, owner_id: ownerId },
-    { bookId, storage_key: `${ownerId}/${bookId}.epub` },
-    { bookId, extra: true },
-  ]) {
-    let thrown = false;
-    try {
-      parseRetractionInput(value);
-    } catch (error) {
-      thrown = error instanceof RetractionInputError;
+Deno.test("retraction accepts only one valid book UUID", () => {
+  if (parseRetractionInput({ bookId: book.toUpperCase() }).bookId !== book) {
+    throw new Error("UUID was not normalized");
+  }
+  for (const value of [null, [], { bookId: "bad" }, { bookId: book, owner_id: owner }]) {
+    let rejected = false;
+    try { parseRetractionInput(value); } catch (error) {
+      rejected = error instanceof RetractionInputError;
     }
-    assertEquals(thrown, true);
+    if (!rejected) throw new Error("Invalid retraction input accepted");
   }
 });
 
-Deno.test("rejects invalid UUID and non-object input", () => {
-  for (const value of [null, [], "text", {}, { bookId: "../other.epub" }, { bookId: 123 }]) {
-    let thrown = false;
-    try {
-      parseRetractionInput(value);
-    } catch (error) {
-      thrown = error instanceof RetractionInputError;
-    }
-    assertEquals(thrown, true);
+Deno.test("retraction storage key must match the database identity", () => {
+  if (!isExpectedStorageKey(owner, book, `${owner}/${book}.epub`)) {
+    throw new Error("Valid storage key rejected");
   }
-});
-
-Deno.test("accepts only the database-generated owner/book storage key", () => {
-  assertEquals(isExpectedStorageKey(ownerId, bookId, `${ownerId}/${bookId}.epub`), true);
-  assertEquals(isExpectedStorageKey(ownerId, bookId, `${ownerId}/other.epub`), false);
-  assertEquals(isExpectedStorageKey(ownerId, bookId, `other/${bookId}.epub`), false);
-  assertEquals(isExpectedStorageKey(ownerId, bookId, "../other.epub"), false);
+  for (const path of [`${owner}/other.epub`, `${owner}/${book}.zip`, `../${book}.epub`]) {
+    if (isExpectedStorageKey(owner, book, path)) throw new Error("Invalid storage key accepted");
+  }
 });

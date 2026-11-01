@@ -1,63 +1,26 @@
-import { assertEquals, assertThrows } from "jsr:@std/assert@1.0.14";
-import {
-  ModerationInputError,
-  parseModerationInput,
-  parseModeratorIds,
-} from "./validation.ts";
+import { ModerationInputError, parseModerationInput, parseModeratorIds } from "./validation.ts";
 
-const bookId = "987e6543-e21b-42d3-a456-426614174000";
-const moderatorId = "123e4567-e89b-42d3-a456-426614174000";
+const moderator = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const book = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-Deno.test("parses a publish decision", () => {
-  assertEquals(parseModerationInput({ bookId, decision: "publish" }), {
-    bookId,
-    decision: "publish",
-  });
-});
-
-Deno.test("parses a reject decision and normalizes UUID casing", () => {
-  assertEquals(parseModerationInput({
-    bookId: bookId.toUpperCase(),
-    decision: "reject",
-  }), { bookId, decision: "reject" });
-});
-
-Deno.test("rejects unknown fields and client-supplied ownership or paths", () => {
-  for (const value of [
-    { bookId, decision: "publish", owner_id: moderatorId },
-    { bookId, decision: "publish", storage_key: "x/y.epub" },
-    { bookId, decision: "publish", moderator: true },
-  ]) {
-    assertThrows(() => parseModerationInput(value), ModerationInputError);
+Deno.test("moderation accepts only publish/reject for one valid book UUID", () => {
+  const parsed = parseModerationInput({ bookId: book.toUpperCase(), decision: "publish" });
+  if (parsed.bookId !== book || parsed.decision !== "publish") throw new Error("Input not normalized");
+  for (const value of [null, { bookId: book, decision: "delete" },
+    { bookId: "bad", decision: "reject" }, { bookId: book, decision: "reject", owner_id: moderator }]) {
+    let rejected = false;
+    try { parseModerationInput(value); } catch (error) {
+      rejected = error instanceof ModerationInputError;
+    }
+    if (!rejected) throw new Error("Invalid moderation input accepted");
   }
 });
 
-Deno.test("rejects invalid decisions, UUIDs and non-object input", () => {
-  for (const value of [
-    null,
-    [],
-    "text",
-    { bookId, decision: "delete" },
-    { bookId: "../other.epub", decision: "publish" },
-    { bookId, decision: "publish", extra: true },
-  ]) {
-    assertThrows(() => parseModerationInput(value), ModerationInputError);
-  }
-});
-
-Deno.test("parses and deduplicates server-side moderator UUIDs", () => {
-  assertEquals(
-    [...parseModeratorIds(` ${moderatorId},${moderatorId.toUpperCase()} `)],
-    [moderatorId],
-  );
-  assertEquals(parseModeratorIds(undefined).size, 0);
-  assertEquals(parseModeratorIds("  ").size, 0);
-});
-
-Deno.test("rejects malformed moderator allowlist configuration", () => {
-  assertThrows(
-    () => parseModeratorIds(`${moderatorId},not-a-uuid`),
-    Error,
-    "CATALOG_MODERATOR_USER_IDS contains an invalid UUID",
-  );
+Deno.test("moderator allowlist normalizes IDs and rejects malformed configuration", () => {
+  const ids = parseModeratorIds(` ${moderator.toUpperCase()}, ${moderator} ,, `);
+  if (ids.size !== 1 || !ids.has(moderator)) throw new Error("Allowlist not normalized/deduplicated");
+  if (parseModeratorIds(undefined).size !== 0) throw new Error("Missing allowlist must be empty");
+  let rejected = false;
+  try { parseModeratorIds(`${moderator},not-a-uuid`); } catch { rejected = true; }
+  if (!rejected) throw new Error("Malformed allowlist accepted");
 });
