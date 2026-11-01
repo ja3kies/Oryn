@@ -96,14 +96,16 @@ async function readEntry(entry: ZipEntry, maxBytes: number, collect: boolean): P
 function resolveOpfPath(container: unknown): string {
   for (const rootfile of findLocalName(container, "rootfile")) {
     if (rootfile && typeof rootfile === "object") {
-      const path = (rootfile as Record<string, unknown>)["@_full-path"];
-      if (typeof path === "string" && path.trim()) return path.trim();
+      const item = rootfile as Record<string, unknown>;
+      const path = item["@_full-path"];
+      if (typeof path === "string" && path.trim() &&
+          item["@_media-type"] === "application/oebps-package+xml") return path.trim();
     }
   }
-  throw new EpubValidationError("container_rootfile_missing");
+  throw new EpubValidationError("container_rootfile_missing_or_invalid");
 }
 
-function validateOpf(opf: unknown): void {
+function validateOpf(opf: unknown, opfPath: string, archiveNames: Set<string>): void {
   if (findLocalName(opf, "package").length === 0) throw new EpubValidationError("opf_package_missing");
   if (
     findLocalName(opf, "title").map(textValue).filter(Boolean).length === 0 ||
@@ -111,8 +113,44 @@ function validateOpf(opf: unknown): void {
   ) {
     throw new EpubValidationError("opf_required_metadata_missing");
   }
-  if (findLocalName(opf, "manifest").length === 0 || findLocalName(opf, "spine").length === 0) {
+
+  const manifestItems = findLocalName(opf, "item");
+  if (manifestItems.length === 0 || findLocalName(opf, "manifest").length === 0 ||
+      findLocalName(opf, "spine").length === 0) {
     throw new EpubValidationError("opf_manifest_or_spine_missing");
+  }
+
+  const manifestIds = new Set<string>();
+  const opfDirectory = opfPath.includes("/") ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1) : "";
+  for (const item of manifestItems) {
+    if (!item || typeof item !== "object") throw new EpubValidationError("opf_manifest_item_invalid");
+    const attributes = item as Record<string, unknown>;
+    const id = attributes["@_id"];
+    const href = attributes["@_href"];
+    if (typeof id !== "string" || !id.trim() || manifestIds.has(id) ||
+        typeof href !== "string" || !href.trim() || typeof attributes["@_media-type"] !== "string") {
+      throw new EpubValidationError("opf_manifest_item_invalid");
+    }
+    manifestIds.add(id);
+
+    const rawPath = href.split(/[?#]/u, 1)[0];
+    let decodedPath: string;
+    try {
+      decodedPath = decodeURIComponent(rawPath);
+    } catch {
+      throw new EpubValidationError("opf_manifest_href_invalid");
+    }
+    assertSafePath(decodedPath);
+    const resolvedPath = opfDirectory + decodedPath;
+    if (!archiveNames.has(resolvedPath)) throw new EpubValidationError("opf_manifest_resource_missing");
+  }
+
+  for (const itemRef of findLocalName(opf, "itemref")) {
+    if (!itemRef || typeof itemRef !== "object") throw new EpubValidationError("opf_spine_item_invalid");
+    const idref = (itemRef as Record<string, unknown>)["@_idref"];
+    if (typeof idref !== "string" || !manifestIds.has(idref)) {
+      throw new EpubValidationError("opf_spine_reference_invalid");
+    }
   }
 }
 
@@ -193,7 +231,8 @@ export async function validateEpub(blob: Blob): Promise<string> {
 
     const opfBytes = await readEntry(opfEntry, MAX_XML_BYTES, true);
     const opfText = new TextDecoder("utf-8", { fatal: true }).decode(opfBytes!);
-    validateOpf(parseXml(opfText));
+    const archiveNames = new Set(entries.filter((entry) => !entry.directory).map((entry) => entry.filename));
+    validateOpf(parseXml(opfText), opfPath, archiveNames);
 
     // Fully read all remaining files through a bounded sink to verify CRC and
     // actual decompressed byte counts rather than trusting ZIP declarations.
