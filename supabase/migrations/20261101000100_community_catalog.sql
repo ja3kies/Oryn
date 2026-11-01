@@ -71,7 +71,7 @@ values (
     'community-epubs',
     'community-epubs',
     false,
-    52428800,
+    8388608,
     array['application/epub+zip', 'application/zip']
 )
 on conflict (id) do update
