@@ -105,7 +105,7 @@ Migration: `migrations/20261101000200_catalog_quotas_and_expiry.sql`.
 
 - Per-owner database limits are enforced atomically under an advisory transaction lock: at most 5 catalogue creation attempts per rolling hour, 10 active books (`pending` + `published`) and 3 pending uploads.
 - Limit violations return HTTP 429 from `catalog-create-upload`; the database remains the authority, so concurrent requests cannot bypass the quota by racing.
-- New pending uploads expire after 24 hours. Successful EPUB validation clears the upload deadline so a validated book can wait for moderation.
+- New pending uploads expire after 24 hours. Successful EPUB validation clears the upload deadline so a validated book can wait for moderation. Cleanup waits an additional 15-minute grace period before transitioning an overdue upload, reducing races with an in-flight Storage upload.
 - `catalog-cleanup` changes overdue pending records to `expired` before deleting the private Storage object. Expired rows are retained as tombstones. Failed object deletion remains queued for a later run.
 - `catalog-cleanup` has `verify_jwt = false` because it is intended for a scheduler, and therefore requires the high-entropy `CATALOG_CLEANUP_SECRET` header. Configure a random secret of at least 32 characters in Edge Function secrets and send it as `x-catalog-cleanup-secret`. Never commit the secret.
 - Schedule `catalog-cleanup` periodically (for example hourly) using Supabase Cron/HTTP with the secret stored in Vault. The schedule is **not configured by this repository change**.
