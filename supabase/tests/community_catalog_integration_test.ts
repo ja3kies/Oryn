@@ -41,9 +41,11 @@ async function insertBook(
   ownerId: string,
   status: "pending" | "published" | "rejected",
   suffix: string,
+  createdAt?: string,
 ) {
   const { data, error } = await admin.from("community_shared_books").insert({
     owner_id: ownerId,
+    ...(createdAt ? { created_at: createdAt } : {}),
     title: `Integration ${suffix}`,
     author: "Oryn Test",
     language: "en",
@@ -133,8 +135,13 @@ Deno.test({
       });
       assert(pendingLimitError, "The fourth pending upload must be rejected");
 
+      // Age these fixtures so the independent one-hour creation quota does not
+      // prevent reaching the 30-book active quota in a single test run.
+      const olderThanHour = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
       // Thirty active books are allowed; the 31st is rejected.
-      for (let i = 0; i < 30; i++) await insertBook(admin, active.id, "published", `active-${i}`);
+      for (let i = 0; i < 30; i++) {
+        await insertBook(admin, active.id, "published", `active-${i}`, olderThanHour);
+      }
       const { error: activeLimitError } = await admin.from("community_shared_books").insert({
         owner_id: active.id, title: "Active overflow", author: "Test", language: "en",
         status: "published", published_at: new Date().toISOString(), sha256: "b".repeat(64),
