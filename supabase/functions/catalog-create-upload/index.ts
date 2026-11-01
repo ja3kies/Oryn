@@ -9,7 +9,7 @@ import type { CreateUploadInput } from "./validation.ts";
 
 const BUCKET_ID = "community-epubs";
 const MAX_REQUEST_BYTES = 8 * 1024;
-const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
 function jsonResponse(
   status: number,
