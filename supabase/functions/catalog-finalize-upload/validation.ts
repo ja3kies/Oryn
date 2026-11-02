@@ -169,15 +169,21 @@ export async function validateEpub(blob: Blob): Promise<string> {
   });
 
   try {
-    const entries = await reader.getEntries();
-    if (entries.length < 3 || entries.length > MAX_ENTRIES) {
+    const entries: ZipEntry[] = [];
+    // Reject at entry 251 instead of allocating metadata for an entire hostile directory.
+    for await (const entry of reader.getEntriesGenerator()) {
+      if (entries.length >= MAX_ENTRIES) {
+        throw new EpubValidationError("archive_entry_count_out_of_range");
+      }
+      entries.push(entry);
+    }
+    if (entries.length < 3) {
       throw new EpubValidationError("archive_entry_count_out_of_range");
     }
 
     const names = new Set<string>();
     let expandedTotal = 0;
     let containerEntry: ZipEntry | undefined;
-    let opfEntry: ZipEntry | undefined;
 
     for (const [index, entry] of entries.entries()) {
       const name = entry.filename;
@@ -229,7 +235,7 @@ export async function validateEpub(blob: Blob): Promise<string> {
     const containerText = new TextDecoder("utf-8", { fatal: true }).decode(containerBytes!);
     const opfPath = resolveOpfPath(parseXml(containerText));
     assertSafePath(opfPath);
-    opfEntry = entries.find((entry) => entry.filename === opfPath);
+    const opfEntry = entries.find((entry) => entry.filename === opfPath);
     if (!opfEntry || opfEntry.directory) throw new EpubValidationError("opf_file_missing");
 
     const opfBytes = await readEntry(opfEntry, MAX_XML_BYTES, true);
