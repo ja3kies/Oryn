@@ -153,7 +153,10 @@ internal fun CommunityDemoNotice() {
         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
 }
 
-internal fun communityBookTitle(book: CommunityBook): String = tr(book.title)
+internal fun communityMetadata(text: String, origin: CommunityOrigin): String =
+    if (origin == CommunityOrigin.Simulation) tr(text) else text
+
+internal fun communityBookTitle(book: CommunityBook): String = communityMetadata(book.title, book.origin)
 
 @Composable
 private fun CommunityBookRow(book: CommunityBook, onClick: () -> Unit) {
@@ -162,7 +165,7 @@ private fun CommunityBookRow(book: CommunityBook, onClick: () -> Unit) {
         Column(Modifier.padding(OrynSpace.md), verticalArrangement = Arrangement.spacedBy(OrynSpace.xxs)) {
             if (book.origin == CommunityOrigin.Simulation) Text(tr("Exemple simulé · aucun fichier"), style = MaterialTheme.typography.labelMedium)
             Text(communityBookTitle(book), style = MaterialTheme.typography.titleMedium)
-            Text(book.author, style = MaterialTheme.typography.bodyMedium)
+            Text(communityMetadata(book.author, book.origin), style = MaterialTheme.typography.bodyMedium)
             Text(trf("Langue : %s", book.language), style = MaterialTheme.typography.bodySmall)
             Text(tr("Consulter la fiche"), style = MaterialTheme.typography.labelLarge)
         }

@@ -89,10 +89,10 @@ internal fun CommunityBookDetailDialog(state: CommunityDetailState, onClose: () 
 private fun CommunityBookDetailContent(details: CommunityBookDetails) {
     var downloadReview by remember(details.book.id) { mutableStateOf(false) }
     if (details.book.origin == CommunityOrigin.Simulation) CommunityDemoNotice()
-    Text(details.book.author, style = MaterialTheme.typography.titleMedium)
+    Text(communityMetadata(details.book.author, details.book.origin), style = MaterialTheme.typography.titleMedium)
     Text(trf("Langue : %s", details.book.language))
     Text(tr("Format : EPUB"))
-    Text(details.description ?: tr("Description non disponible."))
+    Text(details.description?.let { communityMetadata(it, details.book.origin) } ?: tr("Description non disponible."))
     if (details.sizeBytes != null) Text(trf("Taille : %s Ko", (details.sizeBytes + 1023) / 1024))
     else Text(tr("Taille du fichier indisponible."))
     Text(tr(if (details.sha256 == null) "Intégrité non vérifiée · téléchargement impossible." else "Une vérification du fichier sera nécessaire avant tout import."))

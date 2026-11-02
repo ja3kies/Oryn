@@ -1,6 +1,7 @@
 package com.example.oryn.reader.community.edge
 
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.CancellableContinuation
 import okhttp3.Authenticator
 import okhttp3.Call
 import okhttp3.Callback
@@ -14,7 +15,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Closed endpoint allowlist; there is deliberately no arbitrary path or server cleanup entry. */
@@ -55,6 +55,12 @@ internal class CommunityEdgeHttpBody(val status: Int, val bytes: ByteArray) {
     override fun toString() = "CommunityEdgeHttpBody([redacted])"
 }
 
+/** Ownership crosses a cancellable dispatcher hop. Undelivered buffers must be discarded. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+internal fun CancellableContinuation<CommunityEdgeHttpBody>.resumeOwned(body: CommunityEdgeHttpBody) {
+    resume(body) { body.bytes.fill(0) }
+}
+
 /** Internal HTTP adapter: only the guarded production factory wires this into the app.
  * Independently tested against a TLS loopback server. Never logs request/response content.
  */
@@ -88,7 +94,7 @@ internal class HttpsCommunityEdgeHttp(
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) { continuation.resumeWithException(e) }
                 override fun onResponse(call: Call, response: Response) {
-                    try { continuation.resume(read(response, statuses, responseMime, maxBytes)) }
+                    try { continuation.resumeOwned(read(response, statuses, responseMime, maxBytes)) }
                     catch (error: Exception) { continuation.resumeWithException(error) }
                 }
             })
