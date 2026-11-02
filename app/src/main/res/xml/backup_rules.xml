@@ -6,10 +6,7 @@
            (annotations, historique lecture, favoris, progression).
 -->
 <full-backup-content>
+    <!-- Liste restrictive : les autres domaines/chemins restent exclus implicitement. -->
     <include domain="sharedpref" path="." />
     <include domain="file" path="datastore" />
-    <exclude domain="database" path="." />
-    <exclude domain="file" path="covers" />
-    <exclude domain="file" path="books" />
-    <exclude domain="external" path="." />
 </full-backup-content>

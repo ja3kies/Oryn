@@ -6,12 +6,9 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
+        <!-- Même liste restrictive : aucune base Room ni aucun livre dans le cloud. -->
         <include domain="sharedpref" path="." />
         <include domain="file" path="datastore" />
-        <exclude domain="database" path="." />
-        <exclude domain="file" path="covers" />
-        <exclude domain="file" path="books" />
-        <exclude domain="external" path="." />
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="." />

@@ -1,0 +1,11 @@
+# Template uniquement : non lu par l'application, aucune valeur de secours.
+# Fusionner dans local.properties (ignoré par Git), sans écraser sdk.dir ou les autres préférences.
+# Remplir uniquement avec les valeurs d'un projet Supabase Auth de test séparé et vérifié.
+# La clé est publique (sb_publishable_...), jamais un secret OAuth ni service_role.
+community.supabase.url=
+community.supabase.publishableKey=
+community.auth.provider=
+community.auth.redirectHost=
+# Conserver false jusqu'au contrôle de l'isolation, TLS et assetlinks sur l'appareil de test.
+community.auth.isolatedVerified=false
+community.auth.enabled=false

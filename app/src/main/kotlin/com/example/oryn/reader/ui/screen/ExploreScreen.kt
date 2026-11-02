@@ -75,6 +75,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oryn.reader.data.remote.GutendexClient
@@ -198,12 +202,17 @@ fun ExploreScreen(
             }
         }
 
-        // Deux espaces : catalogues (navigateur intégré) / recherche de classiques
+        // Sources externes, classiques et communauté restent distincts.
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GlassChip(tr("Catalogues"), tab == 0, { tab = 0 })
                 GlassChip(tr("Rechercher un classique"), tab == 1, { tab = 1 })
+                GlassChip(tr("Communauté"), tab == 2, { tab = 2 }, Modifier.semantics { selected = tab == 2; role = Role.Tab })
             }
+        }
+
+        if (tab == 2) {
+            item { CommunityCatalogSection() }
         }
 
         if (tab == 0) {
