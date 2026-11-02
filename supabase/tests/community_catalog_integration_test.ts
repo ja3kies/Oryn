@@ -139,6 +139,18 @@ Deno.test({
       assertEqual(finalized.status, "pending", "Validation must not publish without moderation");
       assert(/^[a-f0-9]{64}$/u.test(finalized.sha256), "Finalization must persist a SHA-256 digest");
 
+      // Unpublished files must never be available through the download function.
+      const pendingDownload = await callFunction("catalog-download", b.accessToken, { bookId: created.bookId });
+      assertEqual(pendingDownload.status, 404, "Pending EPUB must not be downloadable");
+
+      // An unrelated user cannot retract the owner's book.
+      const unauthorizedRetraction = await callFunction("catalog-retract", b.accessToken, { bookId: created.bookId });
+      assertEqual(unauthorizedRetraction.status, 404, "Another user must not retract the owner's EPUB");
+      const { data: untouched, error: untouchedError } = await admin
+        .from("community_shared_books").select("status").eq("id", created.bookId).single();
+      assert(!untouchedError && untouched, "Book state must be readable to service role");
+      assertEqual(untouched.status, "pending", "Unauthorized retraction must not mutate book state");
+
       // A normal authenticated owner must never be able to moderate their own
       // upload. The Edge Function must deny this before changing its state.
       const ownerModeration = await callFunction("catalog-moderate", lifecycle.accessToken, {
