@@ -1,7 +1,7 @@
 # Oryn — phases 7 à 10 : audit, robustesse et préparation
 
 2026-11-02 · branche `feature/community-epub-catalog` · décision **NO-GO pour activation/livraison publique**.
-Audit local du code et tests hermétiques réalisés ; validation réelle Android/Supabase et lint global incomplets. Aucun déploiement, changement de production, activation réseau, upload ou opération destructive distante. Room, Gutendex, bibliothèque et lecteur préservés.
+Audit local du code et tests hermétiques réalisés ; validation réelle Android/Supabase incomplète. Lint stabilisé ensuite : voir la dernière section. Aucun déploiement, changement de production, activation réseau, upload ou opération destructive distante. Room, Gutendex, bibliothèque et lecteur préservés.
 
 ## Périmètre, méthode et état Git
 
@@ -15,7 +15,7 @@ Le working tree initial contenait toutes les phases 1–6 non commitées. Elles 
 | `d7f591b` | Échéance d’upload, recontrôle du retrait, garde du test local, lockfile |
 | `5b0c50b` | Annulation HTTP et traductions communautaires |
 | `e04ddd6` | Répertoire ZIP borné, régressions d’archives et microbenchmark |
-| Commit suivant | Ce rapport et mise à jour ciblée du README Supabase |
+| `3db42e0` | Rapport initial et mise à jour ciblée du README Supabase |
 
 Le workflow Cloudflare complet exigé par [SECURITY-PLAN](../community-catalog/SECURITY-PLAN.md) n’a **pas** été exécuté : vérificateurs indépendants et sandbox d’audit conforme non établis. Ce document est une revue ciblée avec preuves de régression, pas une certification de sécurité ni une autorisation d’activation. Ce prérequis demeure `needs_validation`.
 
@@ -43,7 +43,7 @@ Migration `supabase/migrations/20261102173226_enforce_pending_upload_deadline.sq
 | Edge / autorisation | Allowlist HTTPS avant bearer, aucune redirection/retry/cookie/cache/interceptor ; 401/403/404/429/5xx/coupures/annulation testés, corps d’erreur non exposés. Propriétaire dérivé de getUser ; modération allowlist serveur, refus client par défaut ; cleanup absent de l’API Android | Déploiement effectif, configuration JWT gateway, quotas globaux/IP, limites de téléchargement et CPU. getUser vérifie l’identité ; il ne prouve pas ici une révocation immédiate de tous JWT après logout. Contrôler session_id/auth.sessions si une telle garantie est requise |
 | RLS / Storage | Migrations : RLS activée/forcée, writes clients révoqués, lecture publiée/propre, bucket privé, helper privé SECURITY DEFINER à search_path vide et owner/path exacts ; migration préparée plus restrictive | Politiques effectives sur instance, schémas exposés, anciennes politiques Storage permissives, Security Advisors, deux utilisateurs + anonyme. TO authenticated inclut les comptes anonymes si cette option est activée : les handlers les refusent, mais la politique de lecture directe ne les distingue pas ; tester cette configuration avant ouverture |
 | Consentement / retrait | Deux confirmations liées à une sélection, réinitialisation UI ; préparation révocable/consommation atomique unique ; aucun upload automatique, URI persistée ou contenu envoyé par l’UI ; 202 retrait ne republie pas | Droits réels/modération et retrait Storage en présence de concurrence, gestion des objets orphelins après suppression de compte, reprise des suppressions removed en échec (cleanup actuel cible expired ; retrait à retenter explicitement) |
-| Release / permissions | Garde sur DEX et manifest binaire : fixtures/traductions spécifiques absentes, contrôle positif debug et négatif debug-as-release ; INTERNET + permission signature AndroidX seulement ; cleartext=false ; callback Auth désactivé et HTTPS autoVerify/path exact | Signature de diffusion, AAB/splits et appareil. Le release produit reste non signé |
+| Release / permissions | Garde sur DEX et manifest binaire : fixtures/traductions spécifiques absentes, contrôle positif debug et négatif debug-as-release ; INTERNET + permission signature AndroidX seulement ; cleartext=false ; callback Auth désactivé sans filtre en release ; overlay debug HTTPS autoVerify/path exact réservé à une configuration Auth complète | Signature de diffusion, AAB/splits et appareil. Le release produit reste non signé |
 
 Les limites dépendant du déploiement sont des hypothèses/contrôles restants, pas des vulnérabilités de production démontrées. Aucune politique RLS/Storage/Auth désactivée, aucun bucket rendu public, aucune clé privilégiée Android, aucun code de nettoyage serveur exposé au mobile.
 
@@ -62,7 +62,7 @@ Ces gains concernent uniquement le rejet d’un répertoire hostile local ; aucu
 
 Compose : composants/thème Oryn, 48 dp, rôles des cases et filtres, annonces d’états, états hors ligne et distinction simulation conservés ; traductions de fixtures toujours exclusivement debug. Aucun résultat de TalkBack/contraste effectif/font scaling sur appareil n’est inventé.
 
-## Phase 9 — résultats vérifiés
+## Phase 9 — résultats initiaux, avant stabilisation lint
 
 | Vérification | Résultat final |
 | --- | --- |
@@ -84,11 +84,11 @@ Dépendances : pas de nouvelle dépendance Android dans les phases 7–10, réso
 
 Recherche de secrets : clés privées, clés Supabase privilégiées, clés AWS et JWT dont role=service_role ; aucun credential dans les rapports. Les scans par motifs et des patches textuels historiques ne prouvent pas l’absence de tout secret dans tous les anciens blobs binaires. Les tokens de fixtures ne figurent pas dans les logs des passes finales JVM.
 
-SHA-256 des APK vérifiés :
+SHA-256 des APK vérifiés, actualisés après stabilisation :
 
 ```text
-debug   38796186ad90b8a063f726d919883f5f97c36e484d2ace8518c5998fb7364964
-release e26b718eb22bce8c3476c737855e5b0224c0dbe4f4920afab8bb305eca03420f
+debug   d25a1e4e8f62c7ccff778c8cf4e232a999016087734de2a6d8d42de4dcbde133
+release 0818cea7295765c7f7e6bc908d649d987ce7f731307bead5ca031229042823fc
 ```
 
 Commandes finales reproductibles (JDK 17, SDK 35, Gradle wrapper du projet) :
@@ -105,9 +105,9 @@ Microbenchmark : exporter `git show debb5bf:supabase/functions/catalog-finalize-
 
 ## Phase 10 — checklist réelle et activation progressive
 
-Checklist détaillée appareil/isolé réutilisée : [phase 6](../community-catalog/ANDROID-SECURITY-PHASE-6.md#checklist-appareil--à-exécuter-non-validée-ici). Compléments obligatoires, tous encore ouverts :
+Checklist détaillée appareil/isolé réutilisée : [phase 6](../community-catalog/ANDROID-SECURITY-PHASE-6.md#checklist-appareil--à-exécuter-non-validée-ici). Compléments obligatoires, statut actualisé après stabilisation :
 
-- [ ] Résoudre les 15 diagnostics lint préexistants et refaire les vérifications concernées ; contrôler diff et fonctionnement de lecture/import avant livraison.
+- [x] Résoudre les 15 diagnostics lint préexistants, relancer lint/JVM/builds et contrôler le diff. Les vérifications réelles de lecture/import restent dans la checklist appareil ci-dessous.
 - [ ] Appareil jetable API 24–30 et 31+, version cible, certificat installé et hash APK consignés ; exécuter `connectedDebugAndroidTest`, puis vrais scénarios navigateur → retour Oryn, mort de processus/redémarrage, refresh, mode avion, logout. Keystore/backup/logcat privés, TalkBack/FR/EN/font scaling, Gutendex et lecture locale à contrôler.
 - [ ] Domaine HTTPS réellement possédé, TLS et assetlinks sans redirect/wildcard, package + empreinte exacts ; PM verified et link handling autorisé requis, y compris après révocation/changement de navigateur. Aucun fallback custom scheme. Configuration privée sans valeurs fictives ; Auth reste false actuellement en debug **et** release.
 - [ ] Instance Supabase locale jetable réellement disponible : vérifier sa provenance puis opt-in loopback du runner, credentials injectés privément. Appliquer la nouvelle migration **sur cette instance uniquement**, exécuter les deux SQL de sécurité et l’intégration A/B/anonyme/modérateur. Refuser upload/finalisation au-delà de l’échéance même sans Cron, revalidation tardive, retrait pendant fetch et accès après retrait. Tester politiques effectives, objets expirés/removed/orphelins, quota/CPU et erreurs. Aucun de ces tests ne devient un test de production.
@@ -122,4 +122,46 @@ Plan d’ouverture, sans changement de flags effectué ici :
 5. **Partage isolé explicite** : nouvelle confirmation par EPUB, droits/version/identité liés, aucun upload en arrière-plan ou rejeu ; finalisation et publication restent séparées, modération serveur, cleanup réservé serveur. Vérifier retrait/échecs avant élargissement.
 6. **Éventuel pilote public** : décision de livraison séparée après tous contrôles et autorisation explicite de déploiement ; aucune opération de production couverte par cette session. Ouverture graduelle à un groupe limité, métriques agrégées sans données privées, arrêt immédiat des nouvelles opérations en cas de défaut d’isolement. Revenir aux gates fermées, arrêter les nouvelles tâches et effacer localement les sessions via le parcours prévu ; les mutations déjà engagées doivent être réconciliées, jamais rejouées silencieusement.
 
-Prochaine priorité : lever le lint et obtenir un appareil + domaine vérifié + Supabase local pour exécuter la checklist, particulièrement la migration/RLS/Storage. La préparation locale des phases 7–10 est terminée ; aucune validation externe ou livraison publique n’est déclarée accomplie.
+Prochaine priorité : obtenir un appareil + domaine vérifié + Supabase local pour exécuter la checklist, particulièrement la migration/RLS/Storage. La préparation locale des phases 7–10 est terminée ; aucune validation externe ou livraison publique n’est déclarée accomplie.
+
+
+## Stabilisation finale — validation locale actuelle
+
+2026-11-02 · départ `3db42e0`, working tree propre. **15/15 diagnostics initiaux résolus ; zéro erreur lint debug/release.** Les résultats de phase 9 ci-dessus restent historiques. Aucun nouvel audit Supabase, aucune activation Auth/réseau/transfert, aucun déploiement/push.
+
+### Classement et corrections minimales
+
+| Diagnostic initial | Sévérité / origine | Risque de correction et traitement |
+| --- | --- | --- |
+| 13 × ProduceStateDoesNotAssignValue | Error ; analyse UAST de lint 8.7.3, alors que les 13 producteurs affectent effectivement value | Risque modéré côté outillage, nul changement métier : moteur lint seul épinglé en 8.9.3 via l’option AGP prévue `android.experimental.lint.version`. AGP 8.7.3, Kotlin 2.0.21, Compose et dépendances runtime inchangés. Les écrans, clés, coroutines et affectations d’origine sont conservés. |
+| 1 × ByteOrderMark | Error ; caractère U+FEFF littéral dans la chaîne removePrefix du lecteur TXT | Risque très faible : notation `"\uFEFF"` équivalente. **Fichier de classe BookTextLoader byte pour byte identique** à celui sauvegardé avant correction ; aucun changement du décodage, repli d’encodage ou normalisation des lignes. |
+| 1 × AppLinkUrlError | Error ; filtre MainActivity VIEW de fichiers avec MIME mais sans schémas explicites | Risque faible sur la résolution des intents : content/file explicités, quatre MIME, action et catégories conservés. Les URI de fichiers exploitables gardent le même périmètre ; aucune autorisation http/https ajoutée au filtre d’import. Résolution réelle sur appareil encore à vérifier. |
+
+Le moteur plus récent a aussi détecté **une erreur supplémentaire confirmée** : hôte Auth vide dans le filtre HTTPS, même lorsque l’activité était désactivée. Correction sans valeur fictive : filtre retiré du manifeste commun ; `app/src/isolatedAuth/AndroidManifest.xml` sélectionné **uniquement pour debug si authConfigured est complet et explicitement isolé**. Release ne sélectionne jamais cet overlay. Sans configuration, callback désactivé et aucun filtre Auth dans les APK. Le filtre optionnel conserve HTTPS, autoVerify, chemin exact et hôte configurable ; aucune protection PKCE ou vérification OS modifiée.
+
+Trois tests JVM ajoutés dans CommunityManifestPolicyTest : périmètre content/file et MIME d’import ; absence de filtre Auth commun et attributs du callback ; contrat HTTPS strict de l’overlay optionnel. La garde d’APK exige désormais un callback release désactivé **sans aucun filtre**, plutôt qu’un filtre à hôte vide. Le fichier de session généré par Kotlin est ignoré via `/.kotlin/`, jamais ajouté à Git.
+
+### Preuves et contrôles exécutés
+
+- Essais locaux d’explicitation des récepteurs et d’activation K2 sous l’ancien moteur non concluants, **retirés**. Aucun écran remanié pour satisfaire lint, aucune suppression, baseline, règle désactivée ou erreur transformée en warning.
+- Contrôle négatif sous lint 8.9.3 : un producteur temporaire réellement vide fait échouer lint avec **exactement une erreur ProduceStateDoesNotAssignValue**, dans LintProduceStateSentinel.kt. La règle est donc toujours active. Source temporaire supprimée dans finally, absente de Git et des DEX debug/release finaux.
+- Passe ciblée : fusion manifestes debug/release + **3 tests de manifeste réussis**. Vérification du bytecode TXT identique, puis validation globale ci-dessous.
+
+```sh
+./gradlew :app:lintDebug :app:lintRelease :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --continue --console=plain
+python3 scripts/check-community-release.py
+```
+
+| Contrôle actuel | Résultat réellement obtenu |
+| --- | --- |
+| Lint 8.9.3 debug/release | **Réussi, 0 erreur** ; respectivement **93 et 85 avertissements** conservés. Ces avertissements ne sont pas masqués et ne sont pas assimilés à des vulnérabilités démontrées. Ils comprennent recommandations de versions/UseKtx, ressources, ModifierParameter, API 24, accessibilité HTML, singleton de contexte et trois diagnostics TLS dans le JAR BouncyCastle déjà présent ; aucune réécriture métier ou mise à jour runtime faite pour les supprimer. |
+| JVM global | **112 tests : 111 réussis, 0 échec/erreur, 1 ignoré** (sonde Auth isolée, configuration absente). Les 3 nouveaux tests sont compris dans ce total, pas additionnés une deuxième fois. |
+| Builds | **Debug et release réussis**, invocation globale BUILD SUCCESSFUL. Le lint release complet a passé ; les tâches lintVital sont ensuite marquées SKIPPED par AGP après ce contrôle complet, pas désactivées. |
+| APK debug manuel | `app/build/outputs/apk/debug/app-debug.apk`, signature vérifiée par apksigner. Release : `app-release-unsigned.apk`, aucune signature de publication ajoutée. Hashes actualisés plus haut. |
+| Garde d’artefacts | Réussie : fixtures hors release et contrôle positif debug ; permissions inchangées, cleartext false, callback release sans filtre. Contrôle des deux APK et BuildConfig : **Auth false, aucun filtre de callback**, aucune source temporaire. Les gates catalogue/transferts demeurent fermées et couvertes par les tests JVM existants. |
+| Instrumentés / SQL-RLS | **Non exécutés** : ADB ne détecte aucun appareil, Docker ne contient aucun Supabase local, aucun environnement isolé prêt. Les cinq scénarios Android restent disponibles ; aucun succès matériel, App Links, Keystore ou SQL/RLS n’est revendiqué. |
+| Diff / secrets / Git | Diff contrôlé, pas de modification Room/Gutendex/algorithmes du lecteur, sources Compose identiques au départ. Recherche de clés privées/secret Supabase/clé AWS/JWT service_role dans modifications, logs de stabilisation et DEX : aucune correspondance des motifs contrôlés. Aucun secret ni APK/cache ajouté à Git. |
+
+Logs détaillés conservés hors Git dans `/tmp/oryn-stabilization-*.log` : ciblage initial, résolution moteur, contrôle négatif, tests manifestes et passe finale. Aucun rerun des anciens audits/backend Deno inchangés n’est présenté comme une nouvelle preuve.
+
+Commits de code : `658e2a3` (lint et cache), `3207608` (BOM équivalent), `bd93630` (manifestes, tests, garde d’APK), suivis du commit documentaire du présent état. Aucun push. **Préparation locale terminée ; livraison publique toujours NO-GO** jusqu’à validation appareil, domaine HTTPS réellement vérifié, instance Supabase isolée et audit indépendant prévus dans la checklist. Prochaine action : tester l’APK debug sur appareil, puis valider l’overlay Auth et SQL/RLS uniquement quand ces prérequis existent.
