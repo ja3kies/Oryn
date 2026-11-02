@@ -4,11 +4,11 @@ This directory contains versioned database changes and Edge Functions for the op
 
 ## Current state
 
-- Two schema migrations and six Edge Functions are committed on `feature/community-epub-catalog`.
+- Versioned schema migrations and six Edge Functions are committed on `feature/community-epub-catalog`.
 - No Supabase project is connected to this workspace.
 - No migration or Edge Function has been deployed or executed against a live project.
 - Android is not connected to the catalogue.
-- Do not enable community-catalog UI or claim upload/download is operational.
+- Keep community networking and transfers disabled; development simulation is explicitly labelled.
 
 ## Implemented: `catalog-create-upload`
 
@@ -67,12 +67,12 @@ Required server environment variables are `SUPABASE_URL`, `SUPABASE_ANON_KEY` an
 
 ## Unit tests
 
-- Metadata tests: `deno test supabase/functions/catalog-create-upload/validation_test.ts`
-- EPUB validation tests: `deno test supabase/functions/catalog-finalize-upload/validation_test.ts`
-- Retraction input tests: `deno test supabase/functions/catalog-retract/validation_test.ts`
-- Moderation input tests: `deno test supabase/functions/catalog-moderate/validation_test.ts`
+- Metadata tests: `deno test --lock=supabase/deno.lock --frozen supabase/functions/catalog-create-upload/validation_test.ts`
+- EPUB validation tests: `deno test --lock=supabase/deno.lock --frozen supabase/functions/catalog-finalize-upload/validation_test.ts`
+- Retraction input tests: `deno test --lock=supabase/deno.lock --frozen supabase/functions/catalog-retract/validation_test.ts`
+- Moderation input tests: `deno test --lock=supabase/deno.lock --frozen supabase/functions/catalog-moderate/validation_test.ts`
 
-Tests are committed but have **not** been executed in this workspace.
+Hermetic validation results and remaining real-backend checks: [phases 7–10](../docs/security/oryn-phases-7-10.md).
 
 ## Security boundary and database
 
@@ -136,4 +136,15 @@ Path: `functions/catalog-moderate/`
 
 Configure `CATALOG_MODERATOR_USER_IDS` as an Edge Function secret containing only trusted moderator Auth UUIDs. Never commit moderator IDs or service-role credentials. If the allowlist is absent or malformed, moderation fails closed with 503.
 
-Unit tests are committed at `functions/catalog-moderate/validation_test.ts`; they have not been executed.
+Moderation unit tests were executed with the hermetic suite; see the consolidated validation report linked above.
+
+
+## Local integration test safety
+
+`tests/community_catalog_integration_test.ts` now skips unless
+`ORYN_CATALOG_TEST_LOCAL_VERIFIED=true`. It accepts only explicit loopback
+`SUPABASE_URL` and same-origin `FUNCTIONS_URL` ending exactly in `/functions/v1`;
+URLs are checked before credentials are read. Inject the existing test keys and
+cleanup secret privately through the runner, never through committed files or
+logged command arguments. A remote URL is rejected even after opt-in. See the
+consolidated report for non-executed SQL/RLS/Storage checks and rollout gates.
