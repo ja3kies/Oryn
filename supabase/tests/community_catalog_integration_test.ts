@@ -1,9 +1,12 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.95.0";
 import { strToU8, zipSync } from "npm:fflate@0.8.2";
 
-const url = Deno.env.get("SUPABASE_URL") ?? "";
-const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+import { localCatalogTestSettings } from "./local_test_settings.ts";
+
+const settings = localCatalogTestSettings((key) => Deno.env.get(key));
+const url = settings?.url ?? "";
+const anonKey = settings?.anonKey ?? "";
+const serviceKey = settings?.serviceKey ?? "";
 const BUCKET = "community-epubs";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -36,7 +39,7 @@ async function callFunction(
   accessToken: string,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const functionsUrl = Deno.env.get("FUNCTIONS_URL") ?? "";
+  const functionsUrl = settings?.functionsUrl ?? "";
   return await fetch(functionsUrl + "/" + name, {
     method: "POST",
     headers: {
@@ -94,6 +97,7 @@ async function insertBook(
 
 Deno.test({
   name: "community catalogue Auth, RLS, Storage isolation and quotas",
+  ignore: settings === null,
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
@@ -251,15 +255,23 @@ Deno.test({
       const expiredPayload = new Blob(["expired cleanup integration object"], {
         type: "application/epub+zip",
       });
-      const { error: expiredUploadError } = await cleanup.client.storage.from(BUCKET)
+      const { error: deniedExpiredUpload } = await cleanup.client.storage.from(BUCKET)
+        .upload(expiredBook.storage_key, expiredPayload, { contentType: "application/epub+zip", upsert: false });
+      assert(deniedExpiredUpload, "Expired ticket must not permit Storage INSERT before cleanup");
+      const expiredFinalize = await callFunction("catalog-finalize-upload", cleanup.accessToken, { bookId: expiredBook.id });
+      assertEqual(expiredFinalize.status, 409, "Expired ticket must not finalize before cleanup");
+      await expiredFinalize.body?.cancel();
+      uploaded.push({ ownerId: cleanup.id, key: expiredBook.storage_key });
+      // Server-only seeding represents an object uploaded before its ticket expired.
+      const { error: expiredUploadError } = await admin.storage.from(BUCKET)
         .upload(expiredBook.storage_key, expiredPayload, {
           contentType: "application/epub+zip",
           upsert: false,
         });
       assert(!expiredUploadError, `Could not upload expired fixture: ${expiredUploadError?.message}`);
 
-      const functionsUrl = Deno.env.get("FUNCTIONS_URL") ?? "";
-      const cleanupSecret = Deno.env.get("CATALOG_CLEANUP_SECRET") ?? "";
+      const functionsUrl = settings?.functionsUrl ?? "";
+      const cleanupSecret = settings?.cleanupSecret ?? "";
       assert(functionsUrl && cleanupSecret.length >= 32, "Local Edge Function test configuration is required");
 
       const deniedCleanup = await fetch(`${functionsUrl}/catalog-cleanup`, {

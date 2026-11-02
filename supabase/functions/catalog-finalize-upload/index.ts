@@ -95,7 +95,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   });
   const { data: book, error: lookupError } = await admin
     .from("community_shared_books")
-    .select("id, owner_id, storage_key, status, sha256")
+    .select("id, owner_id, storage_key, status, sha256, expires_at")
     .eq("id", bookId)
     .eq("owner_id", authData.user.id)
     .maybeSingle();
@@ -108,6 +108,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (book.status !== "pending") return jsonResponse(409, { error: "upload_not_pending" });
   if (book.sha256) {
     return jsonResponse(200, { bookId, status: "pending", validated: true, sha256: book.sha256 });
+  }
+
+  // Expiry is authorization, not a side effect of a scheduled cleanup invocation.
+  if (typeof book.expires_at !== "string" || !Number.isFinite(Date.parse(book.expires_at)) ||
+      Date.parse(book.expires_at) <= Date.now()) {
+    return jsonResponse(409, { error: "upload_expired" });
   }
 
   // Never accept a Storage path from the caller: use the owner-scoped row.
@@ -129,6 +135,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
       .maybeSingle();
 
     if (updateError) {
+      if (updateError.code === "P0001" && updateError.message === "catalog_upload_expired") {
+        return jsonResponse(409, { error: "upload_expired" });
+      }
       console.error("catalog-finalize-upload hash update failed");
       return jsonResponse(500, { error: "could_not_finalize_upload" });
     }

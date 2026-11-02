@@ -127,6 +127,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse(422, { error: "stored_file_size_invalid" });
   }
 
+  // A retraction can commit during the Storage fetch. Recheck immediately before
+  // handing bytes to the response; already-delivered bytes cannot be recalled.
+  const { data: stillPublished, error: recheckError } = await admin
+    .from("community_shared_books")
+    .select("id")
+    .eq("id", book.id)
+    .eq("status", "published")
+    .eq("sha256", book.sha256)
+    .not("published_at", "is", null)
+    .is("removed_at", null)
+    .maybeSingle();
+  if (recheckError) {
+    return jsonResponse(503, { error: "download_temporarily_unavailable" });
+  }
+  if (!stillPublished) return jsonResponse(404, { error: "published_book_not_found" });
+
   return new Response(file.stream(), {
     status: 200,
     headers: {
