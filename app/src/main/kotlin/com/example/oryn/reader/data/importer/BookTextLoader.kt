@@ -158,7 +158,7 @@ class BookTextLoader(private val context: Context) {
         } catch (_: CharacterCodingException) {
             String(bytes, charset("windows-1252"))
         }
-        return text.removePrefix("﻿").replace("\r\n", "\n").replace('\r', '\n')
+        return text.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
     }
 
     // ── HTML : lu tel quel (encodage déclaré dans la page, sinon UTF-8, sinon windows-1252) ──
