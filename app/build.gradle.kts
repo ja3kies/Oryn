@@ -69,6 +69,10 @@ android {
             )
         }
     }
+    // No empty/fallback App Link host when Auth is unavailable; release never selects this overlay.
+    if (authConfigured) {
+        sourceSets.getByName("debug").manifest.srcFile("src/isolatedAuth/AndroidManifest.xml")
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

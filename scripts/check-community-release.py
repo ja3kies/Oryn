@@ -68,11 +68,8 @@ def main():
     require(len(callbacks) == 1, "Expected one dedicated callback activity")
     callback = callbacks[0]
     require(re.search(r'android:enabled[^\n]*=false', callback), "Release Auth callback enabled")
-    require(re.search(r'android:autoVerify[^\n]*=true', callback), "App Link verification missing")
-    require(re.search(r'android:scheme[^\n]*="https"', callback), "Callback must use HTTPS")
-    require(re.search(r'android:path[^\n]*="/auth/callback"', callback), "Callback path is not exact")
-    require('android:pathPrefix' not in callback and 'android:pathPattern' not in callback, "Broad callback path")
-    print("PASS: release APK excludes fixtures; debug positive control, permissions and disabled HTTPS callback verified")
+    require("E: intent-filter" not in callback, "Release Auth callback must expose no link filter")
+    print("PASS: release excludes fixtures; debug positive control, permissions and disabled callback without link filter verified")
 
 
 if __name__ == "__main__":
