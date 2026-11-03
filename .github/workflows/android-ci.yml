@@ -7,6 +7,7 @@ on:
     branches:
       - main
       - 'security/**'
+      - 'feat/oryn-reader-150'
 
 permissions:
   contents: read
@@ -64,6 +65,8 @@ jobs:
           test -x "$AAPT" && test -x "$SIGNER"
           INFO="$("$AAPT" dump badging "$APK" | grep '^package:')"
           echo "$INFO" | grep -q "name='com.example.oryn.reader'"
+          echo "$INFO" | grep -q "versionCode='6'"
+          echo "$INFO" | grep -q "versionName='1.5.0'"
           "$SIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/oryn-signature.txt"
           EXPECTED="$(keytool -exportcert -alias "$ORYN_DEBUG_KEY_ALIAS" -keystore "$ORYN_DEBUG_KEYSTORE_PATH" -storetype PKCS12 -storepass "$ORYN_DEBUG_STORE_PASSWORD" 2>/dev/null | sha256sum | cut -d' ' -f1)"
           ACTUAL="$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/oryn-signature.txt" | head -1 | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
