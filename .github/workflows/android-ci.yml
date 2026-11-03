@@ -31,7 +31,20 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Restore persistent debug keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ORYN_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_B64"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/oryn-debug.p12"
+          chmod 600 "$RUNNER_TEMP/oryn-debug.p12"
+
       - name: Assemble debug
+        env:
+          ORYN_DEBUG_KEYSTORE_PATH: ${{ runner.temp }}/oryn-debug.p12
+          ORYN_DEBUG_STORE_PASSWORD: ${{ secrets.ORYN_DEBUG_STORE_PASSWORD }}
+          ORYN_DEBUG_KEY_PASSWORD: ${{ secrets.ORYN_DEBUG_KEY_PASSWORD }}
+          ORYN_DEBUG_KEY_ALIAS: ${{ secrets.ORYN_DEBUG_KEY_ALIAS }}
         run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Upload debug APK

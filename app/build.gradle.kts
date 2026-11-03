@@ -56,8 +56,23 @@ android {
         buildConfigField("String", "COMMUNITY_SUPABASE_PUBLISHABLE_KEY", communityString("community.supabase.publishableKey"))
     }
 
+    signingConfigs {
+        create("persistentDebug") {
+            val path = System.getenv("ORYN_DEBUG_KEYSTORE_PATH")
+            if (!path.isNullOrBlank()) {
+                storeFile = file(path)
+                storePassword = System.getenv("ORYN_DEBUG_STORE_PASSWORD")
+                keyAlias = System.getenv("ORYN_DEBUG_KEY_ALIAS")
+                keyPassword = System.getenv("ORYN_DEBUG_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
+            if (!System.getenv("ORYN_DEBUG_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("persistentDebug")
+            }
             buildConfigField("boolean", "COMMUNITY_AUTH_ENABLED", authConfigured.toString())
             manifestPlaceholders["communityAuthEnabled"] = authConfigured.toString()
         }
