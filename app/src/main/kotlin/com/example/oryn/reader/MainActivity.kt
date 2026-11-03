@@ -126,7 +126,8 @@ class MainActivity : ComponentActivity() {
                             currentAccent = accentTheme,
                             onAccentChange = viewModel::setAccentTheme,
                             onBack = { selectedBookId = null },
-                            onUpdateProgress = viewModel::updateBookProgress
+                            onUpdateProgress = viewModel::updateBookProgress,
+                            onToggleBookmark = viewModel::toggleFavorite
                         )
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {

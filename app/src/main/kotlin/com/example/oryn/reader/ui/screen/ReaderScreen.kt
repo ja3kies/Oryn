@@ -6,65 +6,49 @@ import com.example.oryn.reader.i18n.tr
 import com.example.oryn.reader.i18n.trf
 import com.example.oryn.reader.ui.theme.linkColor
 import android.app.Activity
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import eu.wewox.pagecurl.ExperimentalPageCurlApi
-import eu.wewox.pagecurl.config.rememberPageCurlConfig
-import eu.wewox.pagecurl.page.PageCurl
-import eu.wewox.pagecurl.page.rememberPageCurlState
-import android.graphics.Bitmap
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import com.example.oryn.reader.i18n.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.*
+import com.example.oryn.reader.ui.components.ReaderControlsState
+import com.example.oryn.reader.ui.components.ReaderControlsEvent
+import com.example.oryn.reader.ui.components.ReaderControlsBackHandler
+import com.example.oryn.reader.ui.components.ReaderCompactControls
+import com.example.oryn.reader.ui.components.ReaderSurfaceTapBackdrop
+import com.example.oryn.reader.ui.components.ReaderSheetFocus
+import com.example.oryn.reader.ui.components.readerChromeMetrics
+import com.example.oryn.reader.ui.components.readerChapterProgress
+import com.example.oryn.reader.ui.components.transition
+import com.example.oryn.reader.ui.components.readerControlsKeyModifier
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.Font
@@ -72,7 +56,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.oryn.reader.R
@@ -85,34 +68,29 @@ import com.example.oryn.reader.data.local.entity.BookEntity
 import com.example.oryn.reader.data.local.preferences.ReaderFontFamily
 import com.example.oryn.reader.data.local.preferences.ReaderMarginSize
 import com.example.oryn.reader.data.local.preferences.ReaderPreferencesRepository
-import com.example.oryn.reader.data.local.preferences.ReaderScrollMode
 import com.example.oryn.reader.data.local.preferences.ReaderSettings
-import com.example.oryn.reader.data.local.preferences.ReaderTextAlign
 import com.example.oryn.reader.data.local.OrynDatabase
-import com.example.oryn.reader.data.local.entity.AnnotationEntity
-import com.example.oryn.reader.ui.components.OrynIcons
-import com.example.oryn.reader.ui.components.ReaderChromeColor
 import com.example.oryn.reader.ui.components.ReaderControlsSheet
 import com.example.oryn.reader.ui.theme.AppAccentTheme
 import com.example.oryn.reader.ui.theme.pageColor
 import com.example.oryn.reader.ui.theme.textColor
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import kotlin.math.absoluteValue
-import kotlin.math.roundToInt
 
 val ReaderOpenDyslexicFont: FontFamily? = runCatching {
     FontFamily(Font(R.font.opendyslexic_regular, FontWeight.Normal))
 }.getOrNull()
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class ReaderTool { CONTENTS, SEARCH, ANNOTATIONS, TIMER }
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ReaderScreen(
     book: BookEntity,
     currentAccent: AppAccentTheme,
     onAccentChange: (AppAccentTheme) -> Unit,
     onBack: () -> Unit,
-    onUpdateProgress: (BookEntity, Float) -> Unit
+    onUpdateProgress: (BookEntity, Float) -> Unit,
+    onToggleBookmark: (BookEntity) -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -129,13 +107,26 @@ fun ReaderScreen(
     var liveProgress by remember(book.id) { mutableStateOf(book.progress) }
 
     var loadResult by remember { mutableStateOf<BookLoadResult?>(null) }
-    var uiVisible by remember { mutableStateOf(false) }
-    var annotationsOpen by remember { mutableStateOf(false) }
+    var controlsState by rememberSaveable(book.id) { mutableStateOf(ReaderControlsState.HIDDEN) }
+    var sheetFocus by rememberSaveable(book.id) { mutableStateOf(ReaderSheetFocus.ALL) }
+    var activeTool by rememberSaveable(book.id) { mutableStateOf<ReaderTool?>(null) }
+    val controlsEvent: (ReaderControlsEvent) -> Unit = { controlsState = controlsState.transition(it) }
+    val timer = rememberSaveable(book.id, saver = ReaderSessionTimer.Saver) { ReaderSessionTimer() }
+    TrackReaderSession(timer)
+    fun openTool(tool: ReaderTool) { controlsState = ReaderControlsState.HIDDEN; activeTool = tool }
+    fun closeTool(revealControls: Boolean = true) {
+        activeTool = null
+        if (revealControls) controlsEvent(ReaderControlsEvent.SHOW_COMPACT)
+    }
     var jumpRequest by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // Fiche « Définir / Traduire » ouverte depuis le menu de sélection
     var lookup by remember { mutableStateOf<LookupRequest?>(null) }
-    var tocOpen by remember { mutableStateOf(false) }
-    var searchOpen by remember { mutableStateOf(false) }
+    fun showLookup(request: LookupRequest) {
+        controlsEvent(ReaderControlsEvent.HIDE)
+        activeTool = null
+        lookup = request
+    }
+    ReaderControlsBackHandler(controlsState, activeTool == null && lookup == null, controlsEvent, onBack)
     val annotationDao = remember { OrynDatabase.getDatabase(context).annotationDao() }
 
     // Autorisation expirée (« Permission Denial ») : l'utilisateur re-sélectionne le fichier, on la rétablit
@@ -188,10 +179,10 @@ fun ReaderScreen(
         window.attributes = params
     }
 
-    LaunchedEffect(settings.hideStatusBar, uiVisible) {
+    LaunchedEffect(settings.hideStatusBar, controlsState) {
         val window = activity?.window ?: return@LaunchedEffect
         val controller = WindowInsetsControllerCompat(window, view)
-        if (settings.hideStatusBar && !uiVisible) {
+        if (settings.hideStatusBar && controlsState == ReaderControlsState.HIDDEN) {
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.statusBars())
         } else {
@@ -247,9 +238,15 @@ fun ReaderScreen(
     val useReflow = wantReflow && reflowBook?.scanned == false
     val reflowBuilding = wantReflow && reflowBook == null && !reflowFailed
     val reflowUnavailable = wantReflow && !useReflow && !reflowBuilding
-    val effectiveRich: RichBook? = readerRich ?: if (useReflow) reflowBook?.rich else null
+    val effectiveRich: RichBook? = remember(loadResult, reflowBook, useReflow) {
+        readerRich ?: if (useReflow) reflowBook?.rich else (loadResult as? BookLoadResult.Success)
+            ?.takeIf { it.pdf == null && it.html == null }
+            ?.let { RichBook(it.pages.joinToString("\n\n"), emptyList(), emptyList()) }
+    }
     // Les annotations du mode texte (positions en caractères) sont rangées à part de celles des pages PDF
     val annotBookId = if (useReflow) -book.id else book.id
+    var chapterPagesAfter by remember(annotBookId, effectiveRich) { mutableStateOf<Int?>(null) }
+    var visiblePosition by remember(annotBookId, effectiveRich) { mutableStateOf<Int?>(null) }
     val annotationsFlow = remember(annotBookId) { annotationDao.observe(annotBookId) }
     val annotations by annotationsFlow.collectAsState(initial = emptyList())
     LaunchedEffect(reflowUnavailable) {
@@ -275,11 +272,29 @@ fun ReaderScreen(
         ReaderMarginSize.WIDE -> 56.dp
     }
 
+    val chromeToc = effectiveRich?.toc ?: pdfToc
+    val chromeIsPdf = readerPdf != null && !useReflow
+    val chromePosition = visiblePosition ?: if (effectiveRich != null) (liveProgress * effectiveRich.text.length).toInt() else pdfCurrentPage * PDF_STRIDE
+    val documentLength = effectiveRich?.text?.length ?: if (chromeIsPdf) (pdfPageCount.toLong() * PDF_STRIDE).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() else 0
+    val chapter = remember(chromeToc, chromePosition, documentLength, chromeIsPdf, visiblePosition) {
+        if (visiblePosition == null) null else readerChapterProgress(chromeToc.map { it.offset to it.title }, chromePosition, documentLength, if (chromeIsPdf) PDF_STRIDE else null)
+    }
+    val chromeTitle = chapter?.title?.takeIf { it.isNotBlank() } ?: book.title
+    val chapterRemaining = (if (chromeIsPdf) chapter?.remainingPages else chapterPagesAfter)?.let { trf("%s pages après cette page", it) }
+    val density = LocalDensity.current
+    val systemInsets = WindowInsets.systemBarsIgnoringVisibility
+    val chromeInsets = systemInsets.union(WindowInsets.displayCutout)
+    val cutoutTop = with(density) { (chromeInsets.getTop(this) - systemInsets.getTop(this)).coerceAtLeast(0).toDp() }
+    val cutoutBottom = with(density) { (chromeInsets.getBottom(this) - systemInsets.getBottom(this)).coerceAtLeast(0).toDp() }
+    val chromeMetrics = readerChromeMetrics(density.fontScale, chromeToc.isNotEmpty())
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
+            .readerControlsKeyModifier(controlsState, activeTool == null && lookup == null, controlsEvent)
     ) {
+        ReaderSurfaceTapBackdrop({ controlsEvent(ReaderControlsEvent.SURFACE_TAP) }, Modifier.matchParentSize())
         if (ready) {
             when (val result = loadResult) {
                 null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -318,12 +333,19 @@ fun ReaderScreen(
 
                 is BookLoadResult.Success -> {
                     val pdf = result.pdf
-                    val toggleUi = { uiVisible = !uiVisible }
+                    val toggleUi = { controlsEvent(ReaderControlsEvent.SURFACE_TAP) }
                     val saveProgress: (Float) -> Unit = { fraction ->
                         liveProgress = fraction.coerceIn(0f, 1f)
                         onUpdateProgress(book, liveProgress)
                     }
 
+                    // Fixed, font-scale-aware gutters keep text clear without repaginating on a tap.
+                    Box(Modifier.fillMaxSize()
+                        .windowInsetsPadding(chromeInsets.only(WindowInsetsSides.Horizontal))
+                        .padding(top = chromeMetrics.top + 16.dp + cutoutTop, bottom = chromeMetrics.bottom + 16.dp + cutoutBottom)
+                        .semantics {
+                            onClick(label = tr(if (controlsState == ReaderControlsState.HIDDEN) "Afficher les commandes de lecture" else "Masquer les commandes de lecture")) { controlsEvent(ReaderControlsEvent.SURFACE_TAP); true }
+                        }) {
                     val htmlPage = result.html
                     if (htmlPage != null) {
                         val linkColor = settings.themePreset.linkColor
@@ -355,20 +377,21 @@ fun ReaderScreen(
                             horizontalPadding = horizontalPadding,
                             onProgress = saveProgress,
                             onCenterTap = toggleUi,
+                            onVisiblePosition = { visiblePosition = it },
                             annotations = annotations,
                             onAddAnnotation = { a -> scope.launch { annotationDao.insert(a) } },
                             onUpdateAnnotation = { a -> scope.launch { annotationDao.update(a) } },
                             onDeleteAnnotation = { a -> scope.launch { annotationDao.delete(a) } },
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
-                            onDefine = { lookup = LookupRequest(LookupMode.DEFINE, it) },
-                            onTranslate = { lookup = LookupRequest(LookupMode.TRANSLATE, it) }
+                            onDefine = { showLookup(LookupRequest(LookupMode.DEFINE, it)) },
+                            onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
                         )
                     } else {
                         // Le texte est remis en page à la taille réelle de l'écran : plus de bas de page coupé
                         val rich = remember(result, reflowBook, useReflow) {
                             (if (useReflow) reflowBook?.rich else null)
-                                ?: result.rich ?: RichBook(result.pages.joinToString("\n\n"), emptyList(), emptyList())
+                                ?: effectiveRich ?: result.rich ?: RichBook(result.pages.joinToString("\n\n"), emptyList(), emptyList())
                         }
                         // Couleur des liens adaptée au fond de chaque thème de lecture
                         val linkColor = settings.themePreset.linkColor
@@ -386,15 +409,18 @@ fun ReaderScreen(
                             horizontalPadding = horizontalPadding,
                             onProgress = saveProgress,
                             onCenterTap = toggleUi,
+                            onVisiblePosition = { visiblePosition = it },
+                            onChapterPagesAfter = { chapterPagesAfter = it },
                             annotations = annotations,
                             onAddAnnotation = { a -> scope.launch { annotationDao.insert(a) } },
                             onUpdateAnnotation = { a -> scope.launch { annotationDao.update(a) } },
                             onDeleteAnnotation = { a -> scope.launch { annotationDao.delete(a) } },
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
-                            onDefine = { lookup = LookupRequest(LookupMode.DEFINE, it) },
-                            onTranslate = { lookup = LookupRequest(LookupMode.TRANSLATE, it) }
+                            onDefine = { showLookup(LookupRequest(LookupMode.DEFINE, it)) },
+                            onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
                         )
+                    }
                     }
                 }
             }
@@ -402,107 +428,64 @@ fun ReaderScreen(
 
         lookup?.let { request -> LookupSheet(request) { lookup = null } }
 
-        // Barre du haut
-        AnimatedVisibility(
-            visible = uiVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            // Même fond (légèrement transparent) que la fiche de réglages
-            val chromeText = Color(0xFFF2F2EF)
-            Surface(
-                color = ReaderChromeColor,
-                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                shadowElevation = 8.dp
-            ) {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(book.title, color = chromeText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                            Text(
-                                book.author,
-                                color = Color(0xFFB6B6B0),
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Retour"), tint = chromeText)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-            }
-        }
+        if (activeTool == null && lookup == null) ReaderCompactControls(
+            state = controlsState, metrics = chromeMetrics, chapterTitle = chromeTitle,
+            chapterRemaining = chapterRemaining, bookProgress = liveProgress, chapterProgress = chapter?.fraction,
+            bookmarked = book.isFavorite, currentAccent = currentAccent, onBack = onBack,
+            onTimer = { openTool(ReaderTool.TIMER) }, onBookmark = { onToggleBookmark(book) },
+            onContents = chromeToc.takeIf { it.isNotEmpty() }?.let { { openTool(ReaderTool.CONTENTS) } },
+            onAnnotations = if (effectiveRich != null || chromeIsPdf) ({ openTool(ReaderTool.ANNOTATIONS) }) else null,
+            onExpand = { focus -> sheetFocus = focus; controlsEvent(ReaderControlsEvent.EXPAND) },
+            modifier = Modifier.fillMaxSize()
+        )
+        if (activeTool == ReaderTool.TIMER) ReaderTimerDialog(timer) { closeTool() }
 
-        if (tocOpen && (effectiveRich != null || readerPdf != null)) {
+        if (activeTool == ReaderTool.CONTENTS && (effectiveRich != null || readerPdf != null)) {
             TocDialog(
                 entries = effectiveRich?.toc ?: pdfToc,
                 currentOffset = if (effectiveRich != null) (liveProgress * effectiveRich.text.length).toInt() else pdfCurrentPage * PDF_STRIDE,
                 onJump = { offset ->
-                    tocOpen = false
-                    uiVisible = false
+                    closeTool(false)
+                    controlsEvent(ReaderControlsEvent.HIDE)
                     jumpRequest = offset to 0
                 },
-                onDismiss = { tocOpen = false }
+                onDismiss = { closeTool() }
             )
         }
-        if (searchOpen && effectiveRich != null) {
+        if (activeTool == ReaderTool.SEARCH && effectiveRich != null) {
             SearchDialog(
                 text = effectiveRich.text,
                 onJump = { offset, length ->
-                    searchOpen = false
-                    uiVisible = false
+                    closeTool(false)
+                    controlsEvent(ReaderControlsEvent.HIDE)
                     jumpRequest = offset to length
                 },
-                onDismiss = { searchOpen = false }
+                onDismiss = { closeTool() }
             )
         }
-        if (annotationsOpen) {
+        if (activeTool == ReaderTool.ANNOTATIONS) {
             AnnotationsDialog(
                 title = book.title,
                 author = book.author,
                 annotations = annotations,
                 onJump = { offset ->
-                    annotationsOpen = false
-                    uiVisible = false
+                    closeTool(false)
+                    controlsEvent(ReaderControlsEvent.HIDE)
                     jumpRequest = offset to 0
                 },
                 onDelete = { a -> scope.launch { annotationDao.delete(a) } },
-                onDismiss = { annotationsOpen = false }
+                onDismiss = { closeTool() }
             )
         }
 
-        // Panneau de réglages flottant
-        AnimatedVisibility(
-            visible = uiVisible,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-        ) {
+        if (controlsState == ReaderControlsState.EXPANDED) {
             val rb = effectiveRich
             val toc = rb?.toc ?: pdfToc
             val isPdf = readerPdf != null && !useReflow
-            val position = if (rb != null) (liveProgress * rb.text.length).toInt() else pdfCurrentPage * PDF_STRIDE
+            val position = chromePosition
             val chapterIndex = toc.indexOfLast { it.offset <= position }
-            val chapterTitle = toc.getOrNull(chapterIndex)?.title?.takeIf { it.isNotBlank() } ?: book.title
-            // Estimation : ~1 000 caractères par minute de lecture (EPUB / TXT) ; page courante pour un PDF
-            val remaining = when {
-                rb != null -> (((1f - liveProgress) * rb.text.length) / 1000f).toInt().let { m ->
-                    when {
-                        m < 1 -> tr("moins d'une minute restante")
-                        m < 60 -> trf("≈ %s min restantes", m)
-                        else -> trf("≈ %s h %s restantes", m / 60, "%02d".format(m % 60))
-                    }
-                }
-                isPdf -> trf("page %s / %s", pdfCurrentPage + 1, pdfPageCount)
-                else -> null
-            }
+            val chapterTitle = chromeTitle
+            val remaining = chapterRemaining ?: if (isPdf) trf("page %s / %s", pdfCurrentPage + 1, pdfPageCount) else null
             fun jump(offset: Int) {
                 val o: Int
                 if (rb != null) {
@@ -513,11 +496,12 @@ fun ReaderScreen(
                     o = offset
                     liveProgress = ((o / PDF_STRIDE + 1f) / pdfPageCount).coerceIn(0f, 1f)
                 } else return
-                uiVisible = false
+                controlsEvent(ReaderControlsEvent.HIDE)
                 jumpRequest = o to 0
             }
             ReaderControlsSheet(
                 settings = settings,
+                initialFocus = sheetFocus,
                 onSettingsChange = { updater ->
                     scope.launch { preferencesRepo.updateSettings(updater) }
                 },
@@ -539,10 +523,10 @@ fun ReaderScreen(
                 } else null,
                 currentAccent = currentAccent,
                 onAccentChange = onAccentChange,
-                onDismiss = { uiVisible = false },
-                onOpenToc = toc.takeIf { it.isNotEmpty() }?.let { { uiVisible = false; tocOpen = true } },
-                onOpenSearch = rb?.let { { uiVisible = false; searchOpen = true } },
-                onOpenAnnotations = if (rb != null || isPdf) { { uiVisible = false; annotationsOpen = true } } else null,
+                onDismiss = { controlsEvent(ReaderControlsEvent.DISMISS_SHEET) },
+                onOpenToc = toc.takeIf { it.isNotEmpty() }?.let { { openTool(ReaderTool.CONTENTS) } },
+                onOpenSearch = rb?.let { { openTool(ReaderTool.SEARCH) } },
+                onOpenAnnotations = if (rb != null || isPdf) { { openTool(ReaderTool.ANNOTATIONS) } } else null,
                 readingProgress = liveProgress,
                 remainingLabel = remaining,
                 onSeek = when {

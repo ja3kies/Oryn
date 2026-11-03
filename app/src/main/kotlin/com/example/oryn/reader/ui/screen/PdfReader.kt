@@ -132,7 +132,8 @@ internal fun PdfReader(
     jumpRequest: Pair<Int, Int>?,
     onJumpHandled: () -> Unit,
     onDefine: ((String) -> Unit)? = null,
-    onTranslate: ((String) -> Unit)? = null
+    onTranslate: ((String) -> Unit)? = null,
+    onVisiblePosition: ((Int) -> Unit)? = null
 ) {
     val total = pdf.pageCount
     val context = LocalContext.current
@@ -153,6 +154,7 @@ internal fun PdfReader(
     }
     var showIndicator by remember { mutableStateOf(false) }
     LaunchedEffect(startPage) {
+        onVisiblePosition?.invoke(startPage * PDF_STRIDE)
         showIndicator = true
         kotlinx.coroutines.delay(2000)
         showIndicator = false

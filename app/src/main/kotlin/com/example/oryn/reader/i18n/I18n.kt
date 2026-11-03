@@ -146,6 +146,21 @@ fun Text(
 
 private val Dictionary: Map<String, String> by lazy {
     mapOf(
+        "Commandes de lecture" to "Reading controls",
+        "Afficher les commandes de lecture" to "Show reading controls",
+        "Masquer les commandes de lecture" to "Hide reading controls",
+        "Chronomètre de lecture" to "Reading timer",
+        "Retirer le marque-page du livre" to "Remove book bookmark",
+        "Marquer le livre" to "Bookmark book",
+        "Mise en page" to "Reading layout",
+        "Typographie" to "Typography",
+        "Livre : %s %%" to "Book: %s %%",
+        "Chapitre : %s %%" to "Chapter: %s %%",
+        "%s pages après cette page" to "%s pages after this page",
+        "Réduire les commandes" to "Collapse controls",
+        "Temps dans cette session : %s min %s s" to "Time in this session: %s min %s s",
+        "Pause" to "Pause",
+        "Réinitialiser" to "Reset",
         "Page suivante" to "Next page",
         "Impossible d’ouvrir le sélecteur de fichiers." to "Unable to open the file picker.",
         "Seules les informations du fichier sont lues. Son contenu n’est ni vérifié ni envoyé." to "Only file information is read. Its content is neither verified nor sent.",

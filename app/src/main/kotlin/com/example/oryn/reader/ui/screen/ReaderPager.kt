@@ -82,6 +82,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import com.example.oryn.reader.ui.components.readerChapterPagesAfter
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -172,10 +174,9 @@ internal fun BookPager(
                 if (latestPageTap?.invoke(curlState.current, offset) == true) {
                     true // un lien a été touché
                 } else {
-                    // tiers central : affiche / masque l'interface
-                    val centre = offset.x > size.width * 0.33f && offset.x < size.width * 0.67f
-                    if (centre) latestTap()
-                    centre
+                    // A single surface tap controls chrome; page turns remain drag gestures.
+                    latestTap()
+                    true
                 }
             }
         )
@@ -314,7 +315,9 @@ internal fun ReflowReader(
     jumpRequest: Pair<Int, Int>? = null,
     onJumpHandled: () -> Unit = {},
     onDefine: ((String) -> Unit)? = null,
-    onTranslate: ((String) -> Unit)? = null
+    onTranslate: ((String) -> Unit)? = null,
+    onVisiblePosition: ((Int) -> Unit)? = null,
+    onChapterPagesAfter: ((Int?) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val fontResolver = LocalFontFamilyResolver.current
@@ -356,9 +359,12 @@ internal fun ReflowReader(
         // ne change pas quand la barre d'état apparaît ou disparaît.
         val topPad = with(density) { bars.getTop(density).toDp() } + 12.dp
         val bottomPad = with(density) { bars.getBottom(density).toDp() } + 8.dp
-        val footerHeight = 28.dp
-        val textHeight = maxHeight - topPad - bottomPad - footerHeight
-        val widthPx = with(density) { (maxWidth - horizontalPadding * 2).roundToPx() }
+        val desiredFooter = maxOf(28.dp, with(density) { MaterialTheme.typography.bodySmall.lineHeight.toDp() } + 4.dp)
+        val minimumLine = (settings.fontSizePt * settings.lineSpacing * density.fontScale).dp + 4.dp
+        // On short, enlarged-text viewports the reading line takes priority over the duplicate counter.
+        val footerHeight = if (maxHeight - topPad - bottomPad >= minimumLine + desiredFooter) desiredFooter else 0.dp
+        val textHeight = (maxHeight - topPad - bottomPad - footerHeight).coerceAtLeast(1.dp)
+        val widthPx = with(density) { (maxWidth - horizontalPadding * 2).roundToPx() }.coerceAtLeast(1)
         // Marge de sécurité : le TextMeasurer du thread background et le Text
         // Compose du thread UI peuvent diverger de quelques pixels (arrondis
         // lineHeight float). On retire une ligne complète pour garantir que
@@ -449,6 +455,14 @@ internal fun ReflowReader(
             val starts = current.starts
             key(current.key, jumpNonce) {
                 val index = starts.binarySearch(anchor[0]).let { if (it >= 0) it else -it - 2 }
+                fun reportVisible(page: Int) {
+                    val offset = starts.getOrNull(page) ?: return
+                    onVisiblePosition?.invoke(offset)
+                    onChapterPagesAfter?.invoke(readerChapterPagesAfter(starts, page, book.toc.map { it.offset }, text.length))
+                }
+                LaunchedEffect(current.key, jumpNonce) {
+                    reportVisible(index.coerceIn(0, maxOf(0, starts.lastIndex)))
+                }
                 BookPager(
                     pageCount = starts.size,
                     initialPage = index.coerceIn(0, max(0, starts.size - 1)),
@@ -458,6 +472,7 @@ internal fun ReflowReader(
                         selection = null
                         activeId = null
                         anchor[0] = starts[page]
+                        reportVisible(page)
                         val endOffset = if (page + 1 < starts.size) starts[page + 1] else text.length
                         onProgress(endOffset.toFloat() / text.length)
                     },
@@ -617,7 +632,7 @@ internal fun ReflowReader(
                                 onTextLayout = { textLayout = it },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(textHeight)
+                                    .height(textHeight).testTag("ReaderPageText")
                                     .onGloballyPositioned { textCoords = it }
                                     .drawWithContent {
                                         val lr = textLayout
@@ -657,7 +672,7 @@ internal fun ReflowReader(
                                         }
                                     }
                             )
-                            Box(Modifier.fillMaxWidth().height(footerHeight), contentAlignment = Alignment.BottomCenter) {
+                            if (footerHeight > 0.dp) Box(Modifier.fillMaxWidth().height(footerHeight), contentAlignment = Alignment.BottomCenter) {
                                 Text(
                                     text = "${page + 1} / ${starts.size}",
                                     style = MaterialTheme.typography.bodySmall,

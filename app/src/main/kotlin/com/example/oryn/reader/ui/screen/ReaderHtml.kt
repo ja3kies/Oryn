@@ -13,7 +13,9 @@ import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +48,7 @@ private class HtmlState(var target: Float) {
  * Page HTML affichée telle quelle (styles, images, tableaux, mise en page d'origine).
  * JavaScript désactivé : un fichier HTML n'exécute jamais de code. Seuls les liens web demandent confirmation.
  */
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun HtmlReader(
@@ -153,7 +155,7 @@ internal fun HtmlReader(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(pageColor).statusBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(pageColor).windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility)) {
         AndroidView(
             factory = { webView },
             modifier = Modifier.fillMaxSize(),

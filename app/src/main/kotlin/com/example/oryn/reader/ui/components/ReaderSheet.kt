@@ -2,16 +2,14 @@ package com.example.oryn.reader.ui.components
 
 import com.example.oryn.reader.i18n.tr
 import com.example.oryn.reader.i18n.trf
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import com.example.oryn.reader.data.local.preferences.ReaderTextAlign
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.AnimatedContent
@@ -50,6 +48,17 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +96,8 @@ import com.example.oryn.reader.ui.theme.textColor
 val ReaderChromeColor: Color
     @Composable get() = Color(0xFF0E0E0E).copy(alpha = 0.97f)
 
+enum class ReaderSheetFocus { ALL, TYPOGRAPHY, LAYOUT }
+
 enum class ReaderSettingsTab(val label: String, val icon: ImageVector) {
     ESSENTIALS("Essentiels", OrynIcons.Font),
     APPEARANCE("Apparence", OrynIcons.Palette)
@@ -96,6 +107,7 @@ enum class ReaderSettingsTab(val label: String, val icon: ImageVector) {
  * Panneau de réglages de lecture, version compacte :
  * cartes côte à côte, steppers à icônes, puces de thème / police / accent sur une seule ligne.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderControlsSheet(
     settings: ReaderSettings,
@@ -114,21 +126,34 @@ fun ReaderControlsSheet(
     onNextChapter: (() -> Unit)? = null,
     pdfReflow: Boolean = false,
     onTogglePdfReflow: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialFocus: ReaderSheetFocus = ReaderSheetFocus.ALL
 ) {
     // Panneau toujours sombre (encre) : les commandes ressortent en accent, en clair comme en sombre
     val panel = remember(currentAccent) {
         orynColorScheme(true, currentAccent).copy(primary = currentAccent.accentDark, onPrimary = androidx.compose.ui.graphics.Color(0xFF141414))
     }
     MaterialTheme(colorScheme = panel, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
-        ReaderControlsSheetContent(
-            settings, onSettingsChange, currentChapterTitle, currentAccent, onAccentChange, onDismiss,
-            onOpenToc, onOpenSearch, onOpenAnnotations, readingProgress, remainingLabel, onSeek,
-            onPrevChapter, onNextChapter, pdfReflow, onTogglePdfReflow, modifier
-        )
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val scope = rememberCoroutineScope()
+        val collapse: () -> Unit = { scope.launch { sheetState.hide(); onDismiss() }; Unit }
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            dragHandle = null,
+            containerColor = Color.Transparent,
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+        ) {
+            ReaderControlsSheetContent(
+                settings, onSettingsChange, currentChapterTitle, currentAccent, onAccentChange, collapse,
+                onOpenToc, onOpenSearch, onOpenAnnotations, readingProgress, remainingLabel, onSeek,
+                onPrevChapter, onNextChapter, pdfReflow, onTogglePdfReflow, modifier, initialFocus
+            )
+        }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ReaderControlsSheetContent(
     settings: ReaderSettings,
@@ -148,23 +173,38 @@ private fun ReaderControlsSheetContent(
     /** PDF seulement : bascule entre les pages telles quelles et le texte remis en forme. */
     pdfReflow: Boolean = false,
     onTogglePdfReflow: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialFocus: ReaderSheetFocus = ReaderSheetFocus.ALL
 ) {
     val colors = MaterialTheme.colorScheme
-    var expanded by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val dragOffset = remember { Animatable(0f) }
-    val dismissDistance = with(LocalDensity.current) { 64.dp.toPx() }
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     var tab by remember { mutableStateOf(ReaderSettingsTab.ESSENTIALS) }
     val motionEnabled = systemAnimationsEnabled(LocalContext.current)
+    val closeFocus = remember { FocusRequester() }
+    val typographyTarget = remember { BringIntoViewRequester() }
+    val layoutTarget = remember { BringIntoViewRequester() }
+    LaunchedEffect(initialFocus) {
+        withFrameNanos { }
+        closeFocus.requestFocus()
+        when (initialFocus) {
+            ReaderSheetFocus.TYPOGRAPHY -> typographyTarget.bringIntoView()
+            ReaderSheetFocus.LAYOUT -> layoutTarget.bringIntoView()
+            ReaderSheetFocus.ALL -> Unit
+        }
+    }
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(horizontal = 10.dp, vertical = 6.dp)
-            .graphicsLayer { translationY = dragOffset.value },
+            .semantics { paneTitle = tr("Réglages de lecture") }
+            .onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
+                    if (it.nativeKeyEvent.repeatCount == 0) onDismiss()
+                    true
+                } else false
+            },
         shape = RoundedCornerShape(34.dp),
         color = ReaderChromeColor,
         tonalElevation = 0.dp,
@@ -173,7 +213,7 @@ private fun ReaderControlsSheetContent(
         Column(
             modifier = Modifier
                 .heightIn(max = minOf(520.dp, screenHeight * 0.7f))
-                .animateContentSize()
+                .animateContentSize(tween(if (motionEnabled) 160 else 0))
                 .verticalScroll(rememberScrollState())
                 .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -183,36 +223,10 @@ private fun ReaderControlsSheetContent(
                 Modifier
                     .align(Alignment.CenterHorizontally)
                     .fillMaxWidth(0.6f)
-                    .height(28.dp)
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, delta ->
-                                change.consume()
-                                scope.launch {
-                                    dragOffset.snapTo((dragOffset.value + delta).coerceIn(-dismissDistance, dismissDistance * 2f))
-                                }
-                            },
-                            onDragEnd = {
-                                scope.launch {
-                                    if (dragOffset.value > dismissDistance) {
-                                        if (expanded) {
-                                            expanded = false
-                                            dragOffset.animateTo(0f)
-                                        } else {
-                                            onDismiss()
-                                            delay(400)
-                                            dragOffset.snapTo(0f)
-                                        }
-                                    } else {
-                                        if (dragOffset.value < 0f) expanded = true
-                                        dragOffset.animateTo(0f)
-                                    }
-                                }
-                            },
-                            onDragCancel = { scope.launch { dragOffset.animateTo(0f) } }
-                        )
-                    }
-                    .clickable(role = Role.Button, onClickLabel = if (expanded) tr("Réduire les réglages") else tr("Tous les réglages")) { expanded = !expanded },
+                    .heightIn(min = 48.dp)
+                    .focusRequester(closeFocus)
+                    .semantics { contentDescription = tr("Réduire les commandes") }
+                    .clickable(role = Role.Button, onClickLabel = tr("Réduire les commandes"), onClick = onDismiss),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
@@ -290,90 +304,55 @@ private fun ReaderControlsSheetContent(
                 }
             }
 
-            // Réglages rapides : taille + thème
-            if (!expanded) {
-                val size = settings.fontSizePt.coerceIn(10, 36)
-                MiniCard {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IconToggle(OrynIcons.Minus, tr("Diminuer la taille"), enabled = size > 10, container = colors.surfaceContainer) {
-                            onSettingsChange { it.copy(fontSizePt = (it.fontSizePt - 1).coerceAtLeast(10)) }
-                        }
-                        Text("$size pt", style = MaterialTheme.typography.labelLarge, color = colors.onSurface)
-                        IconToggle(OrynIcons.Plus, tr("Augmenter la taille"), enabled = size < 36, container = colors.surfaceContainer) {
-                            onSettingsChange { it.copy(fontSizePt = (it.fontSizePt + 1).coerceAtMost(36)) }
-                        }
-                        Spacer(Modifier.weight(1f))
-                        ReaderThemePreset.entries.forEach { preset ->
-                            ThemeDot(preset, settings.themePreset == preset) {
-                                onSettingsChange { it.copy(themePreset = preset) }
-                            }
-                        }
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Réglages de lecture"),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onSurface
+                    )
                 }
-                Text(
-                    tr("Tous les réglages"),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.primary,
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .clip(CircleShape)
-                        .clickable(role = Role.Button) { expanded = true }
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                )
-            } else {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Modifier
+                        .clip(CircleShape)
+                        .background(colors.surfaceContainerLow)
+                        .padding(2.dp)
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            tr("Réglages de lecture"),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.onSurface
+                    ReaderSettingsTab.entries.forEach { t ->
+                        IconToggle(
+                            icon = t.icon,
+                            description = tr(t.label),
+                            selected = tab == t,
+                            shape = CircleShape,
+                            onClick = { tab = t }
                         )
-                    }
-                    Row(
-                        Modifier
-                            .clip(CircleShape)
-                            .background(colors.surfaceContainerLow)
-                            .padding(2.dp)
-                    ) {
-                        ReaderSettingsTab.entries.forEach { t ->
-                            IconToggle(
-                                icon = t.icon,
-                                description = t.label,
-                                selected = tab == t,
-                                shape = CircleShape,
-                                onClick = { tab = t }
-                            )
-                        }
-                    }
-                }
-
-                AnimatedContent(
-                    targetState = tab,
-                    transitionSpec = {
-                        if (motionEnabled) fadeIn(tween(140)) togetherWith fadeOut(tween(90))
-                        else EnterTransition.None togetherWith ExitTransition.None
-                    },
-                    label = "readerSettingsTab"
-                ) { current ->
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        when (current) {
-                            ReaderSettingsTab.ESSENTIALS -> EssentialsPage(settings, onSettingsChange)
-                            ReaderSettingsTab.APPEARANCE -> AppearancePage(
-                                settings, onSettingsChange, currentAccent, onAccentChange
-                            )
-                        }
                     }
                 }
             }
+
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    if (motionEnabled) fadeIn(tween(140)) togetherWith fadeOut(tween(90))
+                    else EnterTransition.None togetherWith ExitTransition.None
+                },
+                label = "readerSettingsTab"
+            ) { current ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when (current) {
+                        ReaderSettingsTab.ESSENTIALS -> EssentialsPage(settings, onSettingsChange, typographyTarget, layoutTarget)
+                        ReaderSettingsTab.APPEARANCE -> AppearancePage(
+                            settings, onSettingsChange, currentAccent, onAccentChange
+                        )
+                    }
+                }
+            }
+
         }
     }
 }
@@ -418,16 +397,20 @@ private fun ThemeDot(preset: ReaderThemePreset, selected: Boolean, onClick: () -
 
 /* ───────────────────────── Pages ───────────────────────── */
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ColumnScope.EssentialsPage(
     settings: ReaderSettings,
-    onSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit
+    onSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
+    typographyTarget: BringIntoViewRequester,
+    layoutTarget: BringIntoViewRequester
 ) {
+    val columns = if (LocalConfiguration.current.screenWidthDp < 380) 1 else 2
     val size = settings.fontSizePt.coerceIn(10, 36)
     val spacing = settings.lineSpacing.coerceIn(1f, 2.5f)
 
     // Taille + interligne côte à côte
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(Modifier.fillMaxWidth().bringIntoViewRequester(typographyTarget), maxItemsInEachRow = columns, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         StepperCard(
             icon = OrynIcons.TextSize,
             title = tr("Taille"),
@@ -470,7 +453,7 @@ private fun ColumnScope.EssentialsPage(
     }
 
     // Alignement | carte « Marges + Défilement » coupée en deux moitiés côte à côte
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(Modifier.fillMaxWidth().bringIntoViewRequester(layoutTarget), maxItemsInEachRow = columns, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         MiniCard(fillWidth = false) {
             CardTitle(OrynIcons.AlignLeft, tr("Texte"))
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -655,7 +638,7 @@ private fun IconToggle(
     }
     Box(
         modifier = Modifier
-            .size(size)
+            .size(maxOf(size, 48.dp))
             .clip(shape)
             .background(if (selected) colors.primaryContainer else container)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
@@ -792,7 +775,7 @@ private fun AccentDot(
 
     Box(
         modifier = modifier
-            .height(34.dp)
+            .heightIn(min = 48.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .semantics { contentDescription = tr(accent.label) },
         contentAlignment = Alignment.Center
