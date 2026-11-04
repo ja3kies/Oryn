@@ -33,7 +33,7 @@ object BookInfoClient {
 
     suspend fun load(context: Context, book: BookEntity): BookInfo = withContext(Dispatchers.IO) {
         val cacheFile = File(File(context.filesDir, "info").apply { mkdirs() }, "v2-${book.id}.json")
-        readCache(cacheFile)?.let { return@withContext it }
+        readCache(cacheFile)?.let { return@withContext it.withOverrides(BookInfoOverrides.get(context, book.id)) }
 
         // 1. Résumé intégré à l'EPUB
         var description: String? = null
@@ -97,7 +97,7 @@ object BookInfoClient {
         val info = BookInfo(description, source, rating?.takeIf { it > 0f }, count, year)
         // On ne garde en cache que si le réseau a répondu (sinon on réessaiera la prochaine fois)
         if (reachable || description != null) writeCache(cacheFile, info)
-        info
+        info.withOverrides(BookInfoOverrides.get(context, book.id))
     }
 
     private fun get(url: String): String {
