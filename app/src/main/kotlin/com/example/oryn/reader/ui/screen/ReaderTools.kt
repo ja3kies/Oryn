@@ -118,7 +118,7 @@ internal fun SearchDialog(
     val colors = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    var selectedHit by remember(query, currentOffset, text) { mutableStateOf(-1) }
+    var selectedHit by remember(query, text) { mutableStateOf(-1) }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     val hits by produceState<List<SearchHit>?>(emptyList(), query, text) {
