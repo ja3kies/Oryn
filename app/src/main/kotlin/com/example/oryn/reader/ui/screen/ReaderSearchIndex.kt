@@ -4,7 +4,8 @@ package com.example.oryn.reader.ui.screen
 internal data class ReaderSearchMatch(val offset: Int, val length: Int)
 
 internal fun findReaderMatches(text: String, query: String, limit: Int = 200): List<ReaderSearchMatch> {
-    val needle = query.trim()\n    if (needle.length > text.length) return emptyList()
+    val needle = query.trim()
+    if (needle.length > text.length) return emptyList()
     if (needle.length < 2 || limit <= 0 || text.isEmpty()) return emptyList()
     val matches = ArrayList<ReaderSearchMatch>()
     var from = 0
