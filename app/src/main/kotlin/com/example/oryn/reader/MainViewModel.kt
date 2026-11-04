@@ -370,6 +370,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } else {
                             if (file.exists() || !incoming.renameTo(file)) throw java.io.IOException("Book publication failed")
                             publishedFile = true
+                            if (metadataReader.read(uri)?.format != "EPUB") throw java.io.IOException("Invalid EPUB download")
                             val hash = computeContentHash(uri)
                             val existingCover = hash?.let(coverStore::findByHash)
                             val cover = if (existingCover == null) coverBytes?.let { coverStore.saveBytes(it, hash) } else null
