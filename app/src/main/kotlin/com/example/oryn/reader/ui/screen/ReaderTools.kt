@@ -56,11 +56,11 @@ internal fun TocDialog(
 ) {
     val colors = MaterialTheme.colorScheme
     val currentIndex = remember(entries, currentOffset) {
-        entries.indices.asSequence().filter { entries[it].offset <= currentOffset }.maxByOrNull { entries[it].offset } ?: 0
+        readerCurrentTocIndex(entries.map { it.offset }, currentOffset)
     }
     val listState = rememberLazyListState()
     LaunchedEffect(entries, currentIndex) {
-        if (entries.isNotEmpty()) listState.scrollToItem((currentIndex - 2).coerceAtLeast(0))
+        if (currentIndex >= 0) listState.scrollToItem((currentIndex - 2).coerceAtLeast(0))
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -95,7 +95,7 @@ internal fun TocDialog(
                                 .background(if (current) colors.primary.copy(alpha = 0.12f) else colors.surface)
                                 .semantics { selected = current }
                                 .clickable { onJump(entry.offset) }
-                                .padding(start = (12 + entry.level.coerceAtMost(4) * 16).dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+                                .padding(start = (12 + entry.level.coerceIn(0, 4) * 16).dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
                         )
                     }
                 }
