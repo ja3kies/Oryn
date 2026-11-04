@@ -23,11 +23,13 @@ import com.example.oryn.reader.data.local.entity.BookEntity
 import com.example.oryn.reader.data.local.preferences.UserPreferencesRepository
 import com.example.oryn.reader.data.remote.GutendexClient
 import com.example.oryn.reader.data.remote.OnlineBook
+import com.example.oryn.reader.data.repository.LibraryMutationCoordinator
 import com.example.oryn.reader.data.repository.ownedBookFile
 import com.example.oryn.reader.data.repository.BookRepository
 import com.example.oryn.reader.ui.components.CoverCache
 import com.example.oryn.reader.ui.theme.AppAccentTheme
 import com.example.oryn.reader.ui.theme.AppThemeMode
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -54,13 +56,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BookRepository(
         OrynDatabase.getDatabase(application).bookDao()
     )
+    private val libraryMutations = LibraryMutationCoordinator()
+
     private val metadataReader = BookMetadataReader(application)
     private val coverStore = CoverStore(application)
     private val prefsRepository = UserPreferencesRepository(application)
     
     fun deleteBooks(books: List<BookEntity>) {
         if (books.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             val db = OrynDatabase.getDatabase(getApplication<Application>())
             db.bookDao().deleteBooksWithAnnotations(books.map { it.id }.distinct())
             books.forEach { deleteOwnedBookFile(it) }
@@ -104,7 +108,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch { repository.deleteSamples() }
-        viewModelScope.launch(Dispatchers.IO) { backfillCovers() }
+        launchLibraryMutation { backfillCovers() }
     }
 
     /**
@@ -191,7 +195,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (uris.isEmpty()) return
         val app = getApplication<Application>()
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             val copied = mutableListOf<Uri>()
             var failed = 0
             val directory = File(app.filesDir, "books/shared").apply { mkdirs() }
@@ -254,81 +258,83 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            if (copied.isNotEmpty()) importBooks(copied)
+            if (copied.isNotEmpty()) importBooksInternal(copied, favorite = false)
             if (failed > 0) toast(trf("Partage : %s fichier(s) inaccessible(s)", failed))
         }
     }
 
     fun importBooks(uris: List<Uri>, favorite: Boolean = false) {
         if (uris.isEmpty()) return
+        launchLibraryMutation { importBooksInternal(uris, favorite) }
+    }
+
+    /** Called while holding the library mutation lock, including after shared-file publication. */
+    private suspend fun importBooksInternal(uris: List<Uri>, favorite: Boolean) {
         val app = getApplication<Application>()
+        var added = 0
+        var duplicates = 0
+        var unsupported = 0
+        var failed = 0
 
-        viewModelScope.launch(Dispatchers.IO) {
-            var added = 0
-            var duplicates = 0
-            var unsupported = 0
-            var failed = 0
-
-            for (uri in uris) {
-                currentCoroutineContext().ensureActive()
-                try {
-                    val path = uri.toString()
-                    if (repository.exists(path)) {
-                        duplicates++
-                        continue
-                    }
-
-                    val meta = metadataReader.read(uri)
-                    if (meta == null) {
-                        unsupported++
-                        continue
-                    }
-
-                    // Les URI file:// partagées sont déjà copiées dans le stockage privé.
-                    if (uri.scheme == "content") {
-                        runCatching {
-                            app.contentResolver.takePersistableUriPermission(
-                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                            )
-                        }.recoverCatching {
-                            app.contentResolver.takePersistableUriPermission(
-                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                        }
-                    }
-                    val hash = computeContentHash(uri)
-                    val existingCover = hash?.let(coverStore::findByHash)
-                    val embeddedCover = if (existingCover == null)
-                        meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
-                    val inserted = repository.addBook(
-                        BookEntity(
-                            title = meta.title,
-                            author = meta.author,
-                            filePath = path,
-                            format = meta.format,
-                            isFavorite = favorite,
-                            coverPath = existingCover ?: embeddedCover ?: if (meta.format == "EPUB") "" else null,
-                            contentHash = hash
-                        )
-                    )
-                    if (inserted) added++ else duplicates++
-                } catch (_: SecurityException) {
-                    failed++
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    failed++
+        for (uri in uris) {
+            currentCoroutineContext().ensureActive()
+            try {
+                val path = uri.toString()
+                if (repository.exists(path)) {
+                    duplicates++
+                    continue
                 }
-            }
 
-            val summary = buildList {
-                if (added > 0) add(trf("%s importé(s)", added))
-                if (duplicates > 0) add(trf("%s déjà présent(s)", duplicates))
-                if (unsupported > 0) add(trf("%s format(s) non pris en charge", unsupported))
-                if (failed > 0) add(trf("%s échec(s) d’accès ou d’import", failed))
-            }.joinToString(" · ").ifBlank { tr("Aucun livre importé.") }
-            toast(trf("Importation : %s", summary))
+                val meta = metadataReader.read(uri)
+                if (meta == null) {
+                    unsupported++
+                    continue
+                }
+
+                // Les URI file:// partagées sont déjà copiées dans le stockage privé.
+                if (uri.scheme == "content") {
+                    runCatching {
+                        app.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                    }.recoverCatching {
+                        app.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                }
+                val hash = computeContentHash(uri)
+                val existingCover = hash?.let(coverStore::findByHash)
+                val embeddedCover = if (existingCover == null)
+                    meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
+                val inserted = repository.addBook(
+                    BookEntity(
+                        title = meta.title,
+                        author = meta.author,
+                        filePath = path,
+                        format = meta.format,
+                        isFavorite = favorite,
+                        coverPath = existingCover ?: embeddedCover ?: if (meta.format == "EPUB") "" else null,
+                        contentHash = hash
+                    )
+                )
+                if (inserted) added++ else duplicates++
+            } catch (_: SecurityException) {
+                failed++
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                failed++
+            }
         }
+
+        val summary = buildList {
+            if (added > 0) add(trf("%s importé(s)", added))
+            if (duplicates > 0) add(trf("%s déjà présent(s)", duplicates))
+            if (unsupported > 0) add(trf("%s format(s) non pris en charge", unsupported))
+            if (failed > 0) add(trf("%s échec(s) d’accès ou d’import", failed))
+        }.joinToString(" · ").ifBlank { tr("Aucun livre importé.") }
+        toast(trf("Importation : %s", summary))
     }
 
     /** Télécharge un EPUB du domaine public et l'ajoute à la bibliothèque. */
@@ -337,13 +343,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _downloadingIds.update { it + book.id }
         val app = getApplication<Application>()
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             val file = File(File(app.filesDir, "books"), "gutenberg-${book.id}.epub")
             try {
                 val uri = Uri.fromFile(file)
                 if (repository.exists(uri.toString())) {
                     toast(tr("Déjà dans ta bibliothèque"))
-                    return@launch
+                    return@launchLibraryMutation
                 }
                 GutendexClient.download(book.epubUrl, file)
 
@@ -366,8 +372,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
                 toast(trf("« %s » ajouté", book.title))
+            } catch (cancelled: CancellationException) {
+                deleteUnreferencedDownload(file)
+                throw cancelled
             } catch (_: Exception) {
-                file.delete()
+                deleteUnreferencedDownload(file)
                 toast(tr("Téléchargement impossible. Vérifie ta connexion."))
             } finally {
                 _downloadingIds.update { it - book.id }
@@ -381,7 +390,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _webDownloads.update { it + url }
         val app = getApplication<Application>()
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             var target: File? = null
             try {
                 val dir = File(app.filesDir, "books").apply { mkdirs() }
@@ -399,7 +408,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (meta == null) {
                     target.delete()
                     toast(tr("Format non pris en charge (EPUB, PDF ou TXT)."))
-                    return@launch
+                    return@launchLibraryMutation
                 }
                 val hash = computeContentHash(uri)
                 val existingCover = hash?.let(coverStore::findByHash)
@@ -416,12 +425,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
                 toast(trf("« %s » ajouté à ta bibliothèque", meta.title))
+            } catch (cancelled: CancellationException) {
+                target?.let { deleteUnreferencedDownload(it) }
+                throw cancelled
             } catch (_: Exception) {
-                target?.delete()
+                target?.let { deleteUnreferencedDownload(it) }
                 toast(tr("Téléchargement impossible. Le site demande peut-être une connexion."))
             } finally {
                 _webDownloads.update { it - url }
             }
+        }
+    }
+
+    /** Cancellation can arrive after Room committed: never remove a file that a row now references. */
+    private suspend fun deleteUnreferencedDownload(file: File) = withContext(NonCancellable) {
+        if (!repository.exists(Uri.fromFile(file).toString())) {
+            ownedBookFile(file, File(getApplication<Application>().filesDir, "books"))?.delete()
         }
     }
 
@@ -444,7 +463,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Aucune écriture dans le fichier EPUB source.
      */
     fun setCover(book: BookEntity, imageUri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             val hash = book.contentHash ?: computeContentHash(Uri.parse(book.filePath))
             val oldPath = book.coverPath
             // Invalide le cache AVANT d'écraser : même chemin, bitmap potentiellement stale
@@ -452,7 +471,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val path = coverStore.saveUri(imageUri, hash)
             if (path == null) {
                 toast(tr("Image illisible"))
-                return@launch
+                return@launchLibraryMutation
             }
             // Invalide aussi le nouveau chemin (hash-based), au cas où il existe déjà
             CoverCache.invalidate(path)
@@ -468,11 +487,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBookInfo(book: BookEntity, title: String, author: String) {
         val cleanTitle = title.trim().ifBlank { book.title }
         val cleanAuthor = author.trim().ifBlank { "Auteur inconnu" }
-        viewModelScope.launch(Dispatchers.IO) { repository.updateInfo(book.id, cleanTitle, cleanAuthor) }
+        launchLibraryMutation { repository.updateInfo(book.id, cleanTitle, cleanAuthor) }
     }
 
     fun removeCover(book: BookEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             repository.updateCover(book.id, "")
             book.coverPath?.takeIf { it.isNotBlank() && !repository.coverIsReferenced(it) }
                 ?.let(coverStore::delete)
@@ -490,12 +509,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteBook(book: BookEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        launchLibraryMutation {
             val db = OrynDatabase.getDatabase(getApplication<Application>())
             db.bookDao().deleteBooksWithAnnotations(listOf(book.id))
             // La couverture est conservée pour une éventuelle réimportation.
             deleteOwnedBookFile(book)
         }
+    }
+
+    /** Serializes filesystem publication/reclamation with the Room references to those files. */
+    private fun launchLibraryMutation(block: suspend () -> Unit) = viewModelScope.launch(Dispatchers.IO) {
+        libraryMutations.mutate(block)
     }
 
     private suspend fun toast(message: String) {
