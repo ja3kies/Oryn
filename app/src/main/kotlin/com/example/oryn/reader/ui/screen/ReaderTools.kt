@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.oryn.reader.data.importer.TocEntry
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -131,7 +133,8 @@ internal fun SearchDialog(
         value = null // recherche en cours
         delay(250) // attend la fin de la saisie
         value = withContext(Dispatchers.Default) {
-            findReaderMatches(text, q).map { match ->
+            val searchContext = currentCoroutineContext()
+            findReaderMatches(text, q, checkCancellation = { searchContext.ensureActive() }).map { match ->
                 val i = match.offset
                 val a = (i - 40).coerceAtLeast(0)
                 val b = (i + match.length + 60).coerceAtMost(text.length)

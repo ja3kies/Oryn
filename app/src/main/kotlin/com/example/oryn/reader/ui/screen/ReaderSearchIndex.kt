@@ -3,17 +3,25 @@ package com.example.oryn.reader.ui.screen
 /** Search offsets refer to the original document; never normalize its text before jumping. */
 internal data class ReaderSearchMatch(val offset: Int, val length: Int)
 
-internal fun findReaderMatches(text: String, query: String, limit: Int = 200): List<ReaderSearchMatch> {
+internal fun findReaderMatches(
+    text: String, query: String, limit: Int = 200, checkCancellation: () -> Unit = {}
+): List<ReaderSearchMatch> {
     val needle = query.trim()
     if (needle.length > text.length) return emptyList()
     if (needle.length < 2 || limit <= 0 || text.isEmpty()) return emptyList()
     val matches = ArrayList<ReaderSearchMatch>()
     var from = 0
     while (from <= text.length - needle.length && matches.size < limit) {
-        val offset = text.indexOf(needle, startIndex = from, ignoreCase = true)
-        if (offset < 0) break
-        matches.add(ReaderSearchMatch(offset, needle.length))
-        from = offset + needle.length
+        // Unlike String.indexOf, this bounded scan can abandon obsolete queries even
+        // when a multi-megabyte document contains no match. Offsets remain UTF-16.
+        if (from % 1024 == 0) checkCancellation()
+        if (text.regionMatches(from, needle, 0, needle.length, ignoreCase = true)) {
+            matches.add(ReaderSearchMatch(from, needle.length))
+            from += needle.length
+            checkCancellation()
+        } else {
+            from++
+        }
     }
     return matches
 }

@@ -37,4 +37,18 @@ class ReaderSearchIndexTest {
         assertEquals(0, readerSearchStep(2, 3, 1))
         assertEquals(-1, readerSearchStep(0, 0, 1))
     }
+    @Test fun abandonedSearchWithoutMatchesStopsWithinOneScanBlock() {
+        var checks = 0
+        val cancelled = java.util.concurrent.CancellationException("obsolete query")
+        try {
+            findReaderMatches("a".repeat(2_000_000), "zz", checkCancellation = {
+                if (++checks == 2) throw cancelled
+            })
+            org.junit.Assert.fail("Search did not observe cancellation")
+        } catch (error: java.util.concurrent.CancellationException) {
+            org.junit.Assert.assertSame(cancelled, error)
+        }
+        org.junit.Assert.assertEquals(2, checks)
+    }
+
 }
