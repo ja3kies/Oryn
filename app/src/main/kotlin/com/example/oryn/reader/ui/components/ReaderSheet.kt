@@ -303,32 +303,48 @@ private fun ReaderControlsSheetContent(
                 }
             }
 
+            Text(
+                tr("Réglages de lecture"),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onSurface,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+            )
+            // Two labelled tabs are easier to discover than icon-only segmented options.
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(CircleShape)
+                    .background(colors.surfaceContainerLow)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        tr("Réglages de lecture"),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onSurface
-                    )
-                }
-                Row(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(colors.surfaceContainerLow)
-                        .padding(2.dp)
-                ) {
-                    ReaderSettingsTab.entries.forEach { t ->
-                        IconToggle(
-                            icon = t.icon,
-                            description = tr(t.label),
-                            selected = tab == t,
-                            shape = CircleShape,
-                            onClick = { tab = t }
+                ReaderSettingsTab.entries.forEach { section ->
+                    val active = tab == section
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(CircleShape)
+                            .background(if (active) colors.primaryContainer else Color.Transparent)
+                            .selectable(selected = active, role = Role.Tab, onClick = { tab = section })
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            section.icon, contentDescription = null,
+                            tint = if (active) colors.onPrimaryContainer else colors.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            tr(section.label),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (active) colors.onPrimaryContainer else colors.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
