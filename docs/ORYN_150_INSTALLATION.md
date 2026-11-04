@@ -1,8 +1,8 @@
-# Oryn Reader 1.5.0 — installation Android
+# Oryn Reader 1.1.0 — installation Android
 
 ## APK et signature
 
-Télécharger l'artefact `oryn-debug-apk` du workflow Android CI associé à la branche `feat/oryn-reader-150`. Vérifier dans les logs CI les contrôles `PACKAGE_AND_SIGNATURE=VERIFIED` et `versionName='1.5.0'`. Un artefact compilé ne prouve pas une installation réussie.
+Télécharger l'artefact `oryn-debug-apk` du workflow Android CI associé à la branche `feat/oryn-reader-150`. Vérifier dans les logs CI les contrôles `PACKAGE_AND_SIGNATURE=VERIFIED` et `versionName='1.1.0'`. Un artefact compilé ne prouve pas une installation réussie.
 
 Le certificat debug persistant attendu a pour empreinte SHA-256 :
 `0a04ec768a45ed39a4d04a441aed80e93277006277ee89d58c8c1437fd61f205`.
