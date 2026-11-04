@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -159,7 +158,8 @@ class MainActivity : ComponentActivity() {
                                     label = "screenTransition"
                                 ) { target ->
                                     when (target) {
-                                        "home" -> key(books) {
+                                        // Database emissions update content without discarding search, selection or scroll state.
+                                        "home" -> {
                                             HomeScreen(
                                                 books = books,
                                                 isLoading = booksState == null,
@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
                                         "explore" -> ExploreScreen(
                                             onImportClick = { importLauncher.launch(importMimeTypes) }
                                         )
-                                        "bookmarks" -> key(favorites) {
+                                        "bookmarks" -> {
                                             BookmarksScreen(
                                                 favorites = favorites,
                                                 isLoading = booksState == null,
