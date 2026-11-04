@@ -147,7 +147,7 @@ fun Text(
 private val Dictionary: Map<String, String> by lazy {
     mapOf(
         "Conseil de lecture" to "Reading tip",
-        "1re édition" to "First published",
+        "Année (catalogue)" to "Catalog year",
         "Commandes de lecture" to "Reading controls",
         "Afficher les commandes de lecture" to "Show reading controls",
         "Masquer les commandes de lecture" to "Hide reading controls",
