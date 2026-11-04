@@ -2,6 +2,7 @@ package com.example.oryn.reader.data.importer
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.util.concurrent.CancellationException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -32,7 +33,7 @@ class EpubArchiveInputStreamTest {
     @Test fun forbiddenEntryPathsAreRejectedBeforeTheirContentIsRead() {
         for (name in listOf("../outside", "a/../../outside", "/absolute", "a\\..\\outside", "C:/outside", "a/../outside")) {
             EpubArchiveInputStream(ByteArrayInputStream(archive(name to "data".toByteArray()))).use { zip ->
-                assertThrows("Unsafe path accepted: $name", Exception::class.java) { zip.nextEntry }
+                assertThrows("Unsafe path accepted: $name", IOException::class.java) { zip.nextEntry }
             }
         }
     }
@@ -41,7 +42,7 @@ class EpubArchiveInputStreamTest {
         val bytes = archive("large.xhtml" to ByteArray(8192) { 65 })
         EpubArchiveInputStream(ByteArrayInputStream(bytes), maxEntryBytes = 1024).use { zip ->
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.readBytes() }
+            assertThrows(IOException::class.java) { zip.readBytes() }
         }
     }
 
@@ -49,7 +50,7 @@ class EpubArchiveInputStreamTest {
         val bytes = archive("ignored.xhtml" to ByteArray(8192) { 65 }, "next.xhtml" to byteArrayOf(1))
         EpubArchiveInputStream(ByteArrayInputStream(bytes), maxEntryBytes = 1024).use { zip ->
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.nextEntry }
+            assertThrows(IOException::class.java) { zip.nextEntry }
         }
     }
 
@@ -57,7 +58,7 @@ class EpubArchiveInputStreamTest {
         val bytes = archive("ignored.xhtml" to ByteArray(8192) { 65 })
         EpubArchiveInputStream(ByteArrayInputStream(bytes), maxEntryBytes = 1024).use { zip ->
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.closeEntry() }
+            assertThrows(IOException::class.java) { zip.closeEntry() }
         }
     }
 
@@ -65,7 +66,7 @@ class EpubArchiveInputStreamTest {
         val bytes = archive("large.xhtml" to ByteArray(8192) { 65 })
         EpubArchiveInputStream(ByteArrayInputStream(bytes), maxEntryBytes = 1024).use { zip ->
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.skip(8192) }
+            assertThrows(IOException::class.java) { zip.skip(8192) }
         }
     }
 
@@ -75,7 +76,7 @@ class EpubArchiveInputStreamTest {
             zip.nextEntry
             assertEquals(700, zip.readBytes().size)
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.readBytes() }
+            assertThrows(IOException::class.java) { zip.readBytes() }
         }
     }
 
@@ -84,7 +85,7 @@ class EpubArchiveInputStreamTest {
         EpubArchiveInputStream(ByteArrayInputStream(bytes), maxEntries = 2).use { zip ->
             zip.nextEntry
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.nextEntry }
+            assertThrows(IOException::class.java) { zip.nextEntry }
         }
     }
 
@@ -97,7 +98,7 @@ class EpubArchiveInputStreamTest {
         }
         EpubArchiveInputStream(ByteArrayInputStream(bytes)).use { zip ->
             zip.nextEntry
-            assertThrows(Exception::class.java) { zip.nextEntry }
+            assertThrows(IOException::class.java) { zip.nextEntry }
         }
     }
 
