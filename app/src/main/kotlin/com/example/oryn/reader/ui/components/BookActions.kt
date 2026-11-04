@@ -269,7 +269,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             color = inkSecondary(),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-                        RatingRow(info)
+                        RatingRow(book.id, info)
                         Row(
                             Modifier.padding(top = 10.dp).fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -416,29 +416,54 @@ private fun CoverAction(
     }
 }
 
+/** The reader's personal rating is local and editable; online community ratings are read-only. */
 @Composable
-private fun RatingRow(info: BookInfo?) {
+private fun RatingRow(bookId: Long, info: BookInfo?) {
     val colors = MaterialTheme.colorScheme
-    val amber = Color(0xFFF5A524)
-    val rating = info?.rating
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        repeat(5) { i ->
-            Icon(
-                OrynIcons.Star, null,
-                tint = if (rating != null && i < Math.round(rating)) amber else colors.onSurface.copy(alpha = 0.18f),
-                modifier = Modifier.size(18.dp)
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("oryn_book_ratings", android.content.Context.MODE_PRIVATE) }
+    var personalRating by remember(bookId) { androidx.compose.runtime.mutableIntStateOf(prefs.getInt("book_$bookId", 0).coerceIn(0, 5)) }
+    val starColor = if (colors.background.luminance() < 0.5f) Color(0xFFFFD27C) else Color(0xFF935000)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            if (personalRating > 0) trf("Ma note : %s/5", personalRating) else tr("Ma note : non noté"),
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.onSurface
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            (1..5).forEach { score ->
+                androidx.compose.material3.IconButton(
+                    modifier = Modifier.size(48.dp),
+                    onClick = {
+                        val next = if (personalRating == score) 0 else score
+                        personalRating = next
+                        prefs.edit().putInt("book_$bookId", next).apply()
+                    }
+                ) {
+                    Icon(
+                        OrynIcons.Star,
+                        contentDescription = trf("Ma note : %s étoiles", score),
+                        tint = if (score <= personalRating) starColor else colors.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+        }
+        if (info?.rating != null && info.ratingCount > 0) {
+            Text(
+                trf("Note Open Library : %s/5 · %s avis",
+                    String.format(Lang.locale, "%.1f", info.rating), info.ratingCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant
             )
         }
-        Text(
-            when {
-                info == null -> "  …"
-                rating == null -> tr("  Pas encore noté")
-                else -> "  " + String.format(Lang.locale, "%.1f", rating) +
-                    if (info.ratingCount > 0) trf(" · %s avis", info.ratingCount) else ""
-            },
-            style = MaterialTheme.typography.labelMedium,
-            color = inkSecondary()
-        )
     }
 }
 
