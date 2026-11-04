@@ -59,6 +59,8 @@ fun BookTile(
             .aspectRatio(0.70f)
             .glass(RoundedCornerShape(22.dp), tint)
             .combinedClickable(
+                onClickLabel = trf("Ouvrir %s", book.title),
+                onLongClickLabel = tr("Options du livre"),
                 onClick = onClick,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
