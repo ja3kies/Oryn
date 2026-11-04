@@ -148,6 +148,8 @@ private val Dictionary: Map<String, String> by lazy {
     mapOf(
         "Conseil de lecture" to "Reading tip",
         "Année (catalogue)" to "Catalog year",
+        "Supprimer la couverture ?" to "Remove this cover?",
+        "Tu pourras choisir une autre couverture depuis la fiche du livre." to "You can choose another cover from the book details.",
         "Commandes de lecture" to "Reading controls",
         "Afficher les commandes de lecture" to "Show reading controls",
         "Masquer les commandes de lecture" to "Hide reading controls",
