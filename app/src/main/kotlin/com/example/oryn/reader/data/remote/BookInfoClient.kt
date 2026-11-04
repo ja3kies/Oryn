@@ -12,7 +12,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.text.Normalizer
 
 /** Informations affichées dans la fiche d'un livre. */
 data class BookInfo(
@@ -33,7 +32,7 @@ object BookInfoClient {
     private const val MAX_CACHE_BYTES = 256 * 1024
 
     suspend fun load(context: Context, book: BookEntity): BookInfo = withContext(Dispatchers.IO) {
-        val cacheFile = File(File(context.filesDir, "info").apply { mkdirs() }, "${book.id}.json")
+        val cacheFile = File(File(context.filesDir, "info").apply { mkdirs() }, "v2-${book.id}.json")
         readCache(cacheFile)?.let { return@withContext it }
 
         // 1. Résumé intégré à l'EPUB
@@ -55,19 +54,28 @@ object BookInfoClient {
                 ?.let { "&author=" + URLEncoder.encode(it, "UTF-8") }.orEmpty()
             val search = JSONObject(
                 get("https://openlibrary.org/search.json?title=$title$author&limit=3" +
-                    "&fields=key,title,first_publish_year,ratings_average,ratings_count")
+                    "&fields=key,title,author_name,first_publish_year,ratings_average,ratings_count")
             )
             reachable = true
             val docs = search.optJSONArray("docs")
-            val wanted = norm(book.title)
             if (docs != null) {
                 for (i in 0 until docs.length()) {
                     val doc = docs.getJSONObject(i)
-                    val found = norm(doc.optString("title"))
-                    if (found.isBlank() || !(found.contains(wanted) || wanted.contains(found))) continue
-                    if (doc.has("ratings_average")) rating = doc.optDouble("ratings_average").toFloat()
-                    count = doc.optInt("ratings_count", 0)
-                    if (doc.has("first_publish_year")) year = doc.optInt("first_publish_year")
+                    if (!sameOpenLibraryTitle(book.title, doc.optString("title"))) continue
+                    // The catalogue can return identically titled works by different authors.
+                    val authors = doc.optJSONArray("author_name")
+                    val expectedAuthor = book.author.substringBefore(',').trim()
+                    if (authors != null && authors.length() > 0 &&
+                        expectedAuthor.isNotBlank() && !expectedAuthor.equals("Auteur inconnu", true) &&
+                        (0 until authors.length()).none { index ->
+                            sameOpenLibraryAuthor(expectedAuthor, authors.optString(index))
+                        }
+                    ) continue
+                    count = doc.optInt("ratings_count", 0).coerceAtLeast(0)
+                    rating = doc.optDouble("ratings_average", Double.NaN).toFloat()
+                        .takeIf { it.isFinite() && it in 0.1f..5f && count > 0 }
+                    year = doc.optInt("first_publish_year", 0)
+                        .takeIf { it in 1450..java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
                     if (description == null) {
                         val key = doc.optString("key")
                         if (key.isNotBlank()) {
@@ -119,10 +127,6 @@ object BookInfoClient {
     private fun clean(raw: String): String =
         HtmlCompat.fromHtml(raw.substringBefore("\n----------").substringBefore("\r\n----------"), HtmlCompat.FROM_HTML_MODE_COMPACT)
             .toString().trim()
-
-    private fun norm(text: String): String =
-        Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD)
-            .replace(Regex("\\p{Mn}+"), "").replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
 
     private fun readCache(file: File): BookInfo? = runCatching {
         if (!file.exists() || System.currentTimeMillis() - file.lastModified() > CACHE_DAYS * 86_400_000L) return null
