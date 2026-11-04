@@ -120,8 +120,8 @@ class BookTextLoader(private val context: Context) {
     }
 
 
-    suspend fun loadBook(filePath: String, format: String): BookLoadResult = withContext(Dispatchers.IO) {
-        if (filePath.isBlank()) return@withContext BookLoadResult.Error("Chemin de fichier invalide.")
+    suspend fun loadBook(filePath: String, format: String): BookLoadResult = loadDocumentWithCleanup(load = load@{
+        if (filePath.isBlank()) return@load BookLoadResult.Error("Chemin de fichier invalide.")
         val uri = Uri.parse(filePath)
 
         runCatching {
@@ -149,7 +149,7 @@ class BookTextLoader(private val context: Context) {
             if (it is CancellationException) throw it
             BookLoadResult.Error(trf("Erreur de chargement : %s", it.localizedMessage))
         }
-    }
+    }, dispose = { (it as? BookLoadResult.Success)?.pdf?.close() })
 
     // ── TXT : UTF-8 strict, repli windows-1252 pour les vieux fichiers ──
     private fun loadTxt(uri: Uri): String? {
@@ -212,7 +212,7 @@ class BookTextLoader(private val context: Context) {
         var entryCount = 0
         var totalBytes = 0L
         context.contentResolver.openInputStream(uri)?.use { input ->
-            ZipInputStream(input.buffered()).use { zip ->
+            EpubArchiveInputStream(input.buffered()).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     if (++entryCount > MAX_EPUB_ENTRIES) throw java.io.IOException(tr("Archive EPUB invalide (trop de fichiers)."))
