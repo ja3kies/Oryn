@@ -334,6 +334,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Grille" to "Grid",
         "Liste" to "List",
         "Annuler la sélection" to "Cancel selection",
+        "Supprimer la sélection ?" to "Delete selected books?",
+        "%s livres seront retirés de ta bibliothèque. Tes fichiers importés ne sont pas touchés." to "%s books will be removed from your library. Your imported files are not touched.",
         "%s sélectionné" to "%s selected",
         "%s sélectionnés" to "%s selected",
         "Tout sélectionner" to "Select all",

@@ -171,7 +171,8 @@ fun BookCard(
     onBookClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSelect: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSelectionMode: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
     val tint = rememberCoverTint(book)
@@ -193,7 +194,7 @@ fun BookCard(
                     onClick = onBookClick,
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        actions = true
+                        if (isSelectionMode) onBookClick() else actions = true
                     }
                 )
                 .padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 14.dp),

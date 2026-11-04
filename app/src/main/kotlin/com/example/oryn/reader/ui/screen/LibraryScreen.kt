@@ -2,6 +2,10 @@ package com.example.oryn.reader.ui.screen
 
 import com.example.oryn.reader.i18n.tr
 import com.example.oryn.reader.i18n.trf
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -133,8 +137,27 @@ internal fun LibraryContent(
     var sortName by rememberSaveable { mutableStateOf(HomeSort.RECENT.name) }
     var viewName by rememberSaveable { mutableStateOf(LibraryView.GRID.name) }
     var menuOpen by remember { mutableStateOf(false) }
-    var isSelectionMode by remember { mutableStateOf(false) }
-    var selectedBooks by remember { mutableStateOf(setOf<BookEntity>()) }
+    var isSelectionMode by rememberSaveable { mutableStateOf(false) }
+    var selectedIds by rememberSaveable { mutableStateOf(longArrayOf()) }
+    var pendingDeleteIds by rememberSaveable { mutableStateOf(longArrayOf()) }
+    val selectedSet = selectedIds.toSet()
+    val selectedBooks = books.filter { it.id in selectedSet }
+    val pendingDeleteBooks = books.filter { it.id in pendingDeleteIds }
+    fun clearSelection() { isSelectionMode = false; selectedIds = longArrayOf() }
+    BackHandler(isSelectionMode) { clearSelection() }
+    if (pendingDeleteBooks.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteIds = longArrayOf() },
+            title = { Text(tr("Supprimer la sélection ?")) },
+            text = { Text(trf("%s livres seront retirés de ta bibliothèque. Tes fichiers importés ne sont pas touchés.", pendingDeleteBooks.size)) },
+            confirmButton = { TextButton(onClick = {
+                onDeleteBooks(pendingDeleteBooks)
+                pendingDeleteIds = longArrayOf()
+                clearSelection()
+            }) { Text(tr("Supprimer")) } },
+            dismissButton = { TextButton(onClick = { pendingDeleteIds = longArrayOf() }) { Text(tr("Annuler")) } }
+        )
+    }
     
     val colors = MaterialTheme.colorScheme
 
@@ -175,8 +198,7 @@ internal fun LibraryContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 PillIcon(Icons.Rounded.Close, tr("Annuler la sélection")) {
-                    isSelectionMode = false
-                    selectedBooks = emptySet()
+                    clearSelection()
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
@@ -187,15 +209,13 @@ internal fun LibraryContent(
                     modifier = Modifier.weight(1f)
                 )
                 PillIcon(Icons.Rounded.SelectAll, tr("Tout sélectionner")) {
-                    if (selectedBooks.size == shown.size) selectedBooks = emptySet()
-                    else selectedBooks = shown.toSet()
+                    selectedIds = if (shown.isNotEmpty() && shown.all { it.id in selectedSet }) longArrayOf()
+                        else shown.map { it.id }.toLongArray()
                 }
                 Box(
                     Modifier.size(48.dp).clip(CircleShape).clickable {
                         if (selectedBooks.isNotEmpty()) {
-                            onDeleteBooks(selectedBooks.toList())
-                            isSelectionMode = false
-                            selectedBooks = emptySet()
+                            pendingDeleteIds = selectedBooks.map { it.id }.toLongArray()
                         }
                     },
                     contentAlignment = Alignment.Center
@@ -300,11 +320,11 @@ internal fun LibraryContent(
                     }
                 }
                 itemsIndexed(shown, key = { _, book -> book.id }) { index, book ->
-                    val isSelected = selectedBooks.contains(book)
+                    val isSelected = book.id in selectedSet
                     val handleClick = {
                         if (isSelectionMode) {
-                            selectedBooks = if (isSelected) selectedBooks - book else selectedBooks + book
-                            if (selectedBooks.isEmpty()) isSelectionMode = false
+                            selectedIds = (if (isSelected) selectedSet - book.id else selectedSet + book.id).toLongArray()
+                            if (selectedIds.isEmpty()) isSelectionMode = false
                         } else {
                             onBookClick(book)
                         }
@@ -312,7 +332,7 @@ internal fun LibraryContent(
                     val handleSelect = {
                         if (!isSelectionMode) {
                             isSelectionMode = true
-                            selectedBooks = selectedBooks + book
+                            selectedIds = (selectedSet + book.id).toLongArray()
                         }
                     }
 
@@ -322,7 +342,9 @@ internal fun LibraryContent(
                                 book,
                                 onBookClick = handleClick,
                                 onSelect = handleSelect,
-                                onToggleFavorite = { onToggleFavorite(book) }
+                                onToggleFavorite = { onToggleFavorite(book) },
+                                isSelectionMode = isSelectionMode,
+                                modifier = Modifier.semantics { if (isSelectionMode) selected = isSelected }
                             )
                             if (isSelectionMode) {
                                 Icon(
@@ -393,7 +415,7 @@ internal fun Shelf(
             if (onHeader != null) {
                 Row(
                     Modifier
-                        .heightIn(min = 40.dp)
+                        .heightIn(min = 48.dp)
                         .solidSurface(CircleShape)
                         .clickable(onClickLabel = tr("Tout voir"), onClick = onHeader)
                         .padding(horizontal = 14.dp),
@@ -517,11 +539,12 @@ internal fun GridBook(
     Column(
         modifier
             .fillMaxWidth()
+            .semantics { if (isSelectionMode) selected = isSelected }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    actions = true
+                    if (isSelectionMode) onClick() else actions = true
                 }
             )
     ) {
