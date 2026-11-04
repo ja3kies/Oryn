@@ -81,6 +81,9 @@ jobs:
           test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL"
           echo "PACKAGE_AND_SIGNATURE=VERIFIED"
           echo "$INFO"
+          printf 'commit=%s\napk_sha256=%s\ncertificate_sha256=%s\n' \
+            "$(git rev-parse HEAD)" "$(sha256sum "$APK" | cut -d' ' -f1)" "$ACTUAL" \
+            | tee app/build/outputs/apk/debug/build-info.txt
 
       - name: Upload JVM test results
         if: always()
@@ -104,7 +107,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: oryn-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/build-info.txt
           if-no-files-found: error
           retention-days: 7
 
