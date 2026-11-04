@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Compile debug APK
+    name: Validate Android and build test APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,16 +40,16 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/oryn-debug.p12"
           chmod 600 "$RUNNER_TEMP/oryn-debug.p12"
 
-      - name: JVM regression tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
-
-      - name: Assemble debug
+      - name: JVM, lint, debug, release and instrumented-test compilation
         env:
           ORYN_DEBUG_KEYSTORE_PATH: ${{ runner.temp }}/oryn-debug.p12
           ORYN_DEBUG_STORE_PASSWORD: ${{ secrets.ORYN_DEBUG_STORE_PASSWORD }}
           ORYN_DEBUG_KEY_PASSWORD: ${{ secrets.ORYN_DEBUG_KEY_PASSWORD }}
           ORYN_DEBUG_KEY_ALIAS: ${{ secrets.ORYN_DEBUG_KEY_ALIAS }}
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --continue --stacktrace
+
+      - name: Verify locked community features in packaged APKs
+        run: python3 scripts/check-community-release.py
 
       - name: Verify APK identity, version and signing certificate
         env:
@@ -83,6 +83,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oryn-lint-reports
+          path: app/build/reports/lint-results-*
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -90,3 +99,7 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/oryn-debug.p12"
