@@ -200,6 +200,8 @@ fun BookCard(
                 .glass(RoundedCornerShape(28.dp), tint)
                 .semantics { if (isSelectionMode) selected = isSelected }
                 .combinedClickable(
+                    onClickLabel = trf("Ouvrir %s", book.title),
+                    onLongClickLabel = tr("Options du livre"),
                     onClick = onBookClick,
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
