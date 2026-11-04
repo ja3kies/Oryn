@@ -27,6 +27,7 @@ data class ChromeColors(
 data class EditorialColors(
     val teal: Color = Color(0xFF0F3A3A),
     val cherry: Color = Color(0xFFB5185F),
+    val plum: Color = Color(0xFF4A0B3D),
     val lime: Color = Color(0xFFD0E86E),
     val cyan: Color = Color(0xFF35C1C2),
     val parchment: Color = Color(0xFFFEFFDE),
