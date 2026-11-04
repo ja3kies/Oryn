@@ -14,7 +14,7 @@ object BookInfoOverrides {
         val store = prefs(context)
         return LocalBookInfoOverrides(
             description = store.getString("description_$bookId", null),
-            year = store.getInt("year_$bookId", 0).takeIf { it in 1450..2100 }
+            year = store.getInt("year_$bookId", 0).takeIf { it in 1..2100 }
         )
     }
 
