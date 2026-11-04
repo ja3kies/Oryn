@@ -147,6 +147,7 @@ fun Text(
 private val Dictionary: Map<String, String> by lazy {
     mapOf(
         "Conseil de lecture" to "Reading tip",
+        "1re édition" to "First published",
         "Commandes de lecture" to "Reading controls",
         "Afficher les commandes de lecture" to "Show reading controls",
         "Masquer les commandes de lecture" to "Hide reading controls",
@@ -155,8 +156,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Marquer le livre" to "Bookmark book",
         "Mise en page" to "Reading layout",
         "Typographie" to "Typography",
-        "Livre : %s %%" to "Book: %s %%",
-        "Chapitre : %s %%" to "Chapter: %s %%",
+        "Livre : %s %" to "Book: %s %%",
+        "Chapitre : %s %" to "Chapter: %s %%",
         "%s pages après cette page" to "%s pages after this page",
         "Réduire les commandes" to "Collapse controls",
         "Temps dans cette session : %s min %s s" to "Time in this session: %s min %s s",
