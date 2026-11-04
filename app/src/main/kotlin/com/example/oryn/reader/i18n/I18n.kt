@@ -163,6 +163,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Options du livre" to "Book options",
         "Ma note : non noté" to "My rating: not rated",
         "Ma note : %s étoiles" to "Rate %s stars",
+        "Noter %s étoiles" to "Rate %s stars",
+        "Effacer ma note de %s étoiles" to "Clear my %s-star rating",
         "Note Open Library : %s/5 · %s avis" to "Open Library rating: %s/5 · %s reviews",
         "Année (catalogue)" to "Catalog year",
         "Supprimer la couverture ?" to "Remove this cover?",
