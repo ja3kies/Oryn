@@ -21,6 +21,13 @@ class ReaderSearchIndexTest {
         assertEquals(0, readerSearchStartIndex(matches, 0))
         assertEquals(-1, readerSearchStartIndex(emptyList(), 0))
     }
+    @Test fun searchHandlesOversizedQueryAndAdjacentNonOverlappingMatches() {
+        assertTrue(findReaderMatches("abc", "abcdefgh").isEmpty())
+        assertEquals(
+            listOf(ReaderSearchMatch(0, 2), ReaderSearchMatch(2, 2)),
+            findReaderMatches("aaaa", "aa")
+        )
+    }
     @Test fun navigationDoesNotOverflowAtIntegerBounds() {
         assertEquals(0, readerSearchStep(Int.MAX_VALUE, 2, Int.MAX_VALUE))
         assertEquals(0, readerSearchStep(Int.MIN_VALUE, 2, Int.MIN_VALUE))
