@@ -19,7 +19,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -119,10 +118,10 @@ internal fun SearchDialog(
     val colors = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    var selectedHit by remember(query, currentOffset) { mutableStateOf(-1) }
+    var selectedHit by remember(query, currentOffset, text) { mutableStateOf(-1) }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
-    val hits by produceState<List<SearchHit>?>(emptyList(), query) {
+    val hits by produceState<List<SearchHit>?>(emptyList(), query, text) {
         val q = query.trim()
         if (q.length < 2) {
             value = emptyList()
