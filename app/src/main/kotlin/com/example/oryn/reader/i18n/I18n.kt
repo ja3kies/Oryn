@@ -546,7 +546,7 @@ private val Dictionary: Map<String, String> by lazy {
         "Préparation du texte…" to "Preparing text…",
         "Une seule fois par livre : le résultat est ensuite gardé." to "Only once per book: the result is then kept.",
         "Revenir aux pages" to "Back to pages",
-        "Ce PDF ne contient pas de texte exploitable : affichage en pages." to "This PDF has no usable text: showing pages instead.",
+        "Mode texte indisponible : affichage en pages." to "Text mode unavailable: showing pages instead.",
         "Domaine public, EPUB prêts à lire" to "Public domain, ready-to-read EPUBs",
         "Des milliers de classiques francophones" to "Thousands of French-language classics",
         "Littérature francophone du domaine public" to "Public-domain French-language literature",

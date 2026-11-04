@@ -261,7 +261,7 @@ fun ReaderScreen(
     LaunchedEffect(reflowUnavailable) {
         if (reflowUnavailable) {
             android.widget.Toast.makeText(
-                context, tr("Ce PDF ne contient pas de texte exploitable : affichage en pages."), android.widget.Toast.LENGTH_LONG
+                context, tr("Mode texte indisponible : affichage en pages."), android.widget.Toast.LENGTH_LONG
             ).show()
         }
     }
