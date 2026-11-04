@@ -10,3 +10,12 @@ internal fun ownedBookFile(file: File, booksDirectory: File): File? = runCatchin
         it.isFile && (it.parentFile == root || it.parentFile == File(root, "shared"))
     }
 }.getOrNull()
+
+/** Caller owns the library mutation lock; only files created by that operation are candidates. */
+internal suspend fun discardUnreferencedOwnedFiles(
+    created: List<File>, booksDirectory: File, isReferenced: suspend (File) -> Boolean
+) {
+    for (file in created) {
+        if (!isReferenced(file)) ownedBookFile(file, booksDirectory)?.delete()
+    }
+}

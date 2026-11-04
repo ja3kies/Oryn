@@ -24,6 +24,7 @@ import com.example.oryn.reader.data.local.preferences.UserPreferencesRepository
 import com.example.oryn.reader.data.remote.GutendexClient
 import com.example.oryn.reader.data.remote.OnlineBook
 import com.example.oryn.reader.data.repository.LibraryMutationCoordinator
+import com.example.oryn.reader.data.repository.discardUnreferencedOwnedFiles
 import com.example.oryn.reader.data.repository.ownedBookFile
 import com.example.oryn.reader.data.repository.BookRepository
 import com.example.oryn.reader.ui.components.CoverCache
@@ -197,69 +198,94 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         launchLibraryMutation {
             val copied = mutableListOf<Uri>()
+            val created = mutableListOf<File>()
             var failed = 0
             val directory = File(app.filesDir, "books/shared").apply { mkdirs() }
 
-            for (uri in uris.distinct()) {
-                currentCoroutineContext().ensureActive()
-                var temp: File? = null
-                try {
-                    val name = runCatching {
-                        app.contentResolver.query(
-                            uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-                        )?.use { cursor ->
-                            if (cursor.moveToFirst()) cursor.getString(0) else null
-                        }
-                    }.getOrNull()?.takeIf { it.isNotBlank() }
-                        ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                        ?: "livre"
-
-                    val safeName = name.substringAfterLast('/').substringAfterLast('\\')
-                        .replace(Regex("[^\\p{L}\\p{N}._ -]"), "_")
-                        .trim().take(100).ifBlank { "livre" }
-
-                    val digest = MessageDigest.getInstance("SHA-256")
-                    temp = File.createTempFile("incoming-", ".tmp", directory)
-
-                    app.contentResolver.openInputStream(uri)?.use { input ->
-                        temp.outputStream().use { output ->
-                            val buffer = ByteArray(8192)
-                            var total = 0L
-                            while (true) {
-                                val count = input.read(buffer)
-                                if (count < 0) break
-                                total += count
-                                if (total > MAX_SHARED_IMPORT_BYTES) {
-                                    throw java.io.IOException(tr("Fichier trop volumineux"))
-                                }
-                                digest.update(buffer, 0, count)
-                                output.write(buffer, 0, count)
+            try {
+                for (uri in uris.distinct()) {
+                    currentCoroutineContext().ensureActive()
+                    var temp: File? = null
+                    try {
+                        val name = runCatching {
+                            app.contentResolver.query(
+                                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+                            )?.use { cursor ->
+                                if (cursor.moveToFirst()) cursor.getString(0) else null
                             }
+                        }.getOrNull()?.takeIf { it.isNotBlank() }
+                            ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+                            ?: "livre"
+
+                        val safeName = name.substringAfterLast('/').substringAfterLast('\\')
+                            .replace(Regex("[^\\p{L}\\p{N}._ -]"), "_")
+                            .trim().take(100).ifBlank { "livre" }
+
+                        val digest = MessageDigest.getInstance("SHA-256")
+                        temp = File.createTempFile("incoming-", ".tmp", directory)
+
+                        app.contentResolver.openInputStream(uri)?.use { input ->
+                            temp.outputStream().use { output ->
+                                val buffer = ByteArray(8192)
+                                var total = 0L
+                                while (true) {
+                                    currentCoroutineContext().ensureActive()
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    if (total > MAX_SHARED_IMPORT_BYTES) {
+                                        throw java.io.IOException(tr("Fichier trop volumineux"))
+                                    }
+                                    digest.update(buffer, 0, count)
+                                    output.write(buffer, 0, count)
+                                }
+                            }
+                        } ?: throw java.io.IOException(tr("URI inaccessible"))
+
+                        val hash = digest.digest().joinToString("") { "%02x".format(it) }
+                        val destination = File(directory, "$hash-$safeName")
+
+                        if (destination.exists()) {
+                            temp.delete()
+                        } else if (temp.renameTo(destination)) {
+                            created += destination
+                        } else if (destination.createNewFile()) {
+                            // Only write a file atomically reserved by this import; never replace an existing file.
+                            created += destination
+                            temp.inputStream().use { input ->
+                                destination.outputStream().use { output ->
+                                    val buffer = ByteArray(8192)
+                                    while (true) {
+                                        currentCoroutineContext().ensureActive()
+                                        val count = input.read(buffer)
+                                        if (count < 0) break
+                                        output.write(buffer, 0, count)
+                                    }
+                                }
+                            }
+                            temp.delete()
                         }
-                    } ?: throw java.io.IOException(tr("URI inaccessible"))
 
-                    val hash = digest.digest().joinToString("") { "%02x".format(it) }
-                    val destination = File(directory, "$hash-$safeName")
-
-                    if (destination.exists()) {
-                        temp.delete()
-                    } else if (!temp.renameTo(destination)) {
-                        temp.copyTo(destination, overwrite = true)
-                        temp.delete()
+                        copied += Uri.fromFile(destination)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        failed++
+                    } finally {
+                        temp?.takeIf { it.exists() }?.delete()
                     }
+                }
 
-                    copied += Uri.fromFile(destination)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    failed++
-                } finally {
-                    temp?.takeIf { it.exists() }?.delete()
+                if (copied.isNotEmpty()) importBooksInternal(copied, favorite = false)
+                if (failed > 0) toast(trf("Partage : %s fichier(s) inaccessible(s)", failed))
+            } finally {
+                // This block already owns the mutation mutex: do not acquire it again during cleanup.
+                withContext(NonCancellable) {
+                    discardUnreferencedOwnedFiles(created, File(app.filesDir, "books")) {
+                        repository.exists(Uri.fromFile(it).toString())
+                    }
                 }
             }
-
-            if (copied.isNotEmpty()) importBooksInternal(copied, favorite = false)
-            if (failed > 0) toast(trf("Partage : %s fichier(s) inaccessible(s)", failed))
         }
     }
 
