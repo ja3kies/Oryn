@@ -60,22 +60,27 @@ class PdfPages internal constructor(
     val pageCount: Int = renderer.pageCount
 
     private val lock = ReentrantLock()
-    private val cache = LruCache<Int, Bitmap>(6)
+    // Byte-bounded rather than six unbounded bitmaps; displayed pages retain their own references.
+    private data class RenderKey(val index: Int, val width: Int)
+    private val cache = object : LruCache<RenderKey, Bitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: RenderKey, bitmap: Bitmap): Int = bitmap.byteCount
+    }
     private var closed = false
 
     suspend fun render(index: Int, widthPx: Int = 1080): Bitmap? = withContext(Dispatchers.IO) {
         lock.withLock {
             if (closed || index !in 0 until pageCount) return@withLock null
-            cache.get(index)?.let { return@withLock it }
+            val key = RenderKey(index, widthPx.coerceIn(1, 4096))
+            cache.get(key)?.let { return@withLock it }
             runCatching {
                 renderer.openPage(index).use { page ->
-                    val height = (page.height.toFloat() * widthPx / page.width).toInt().coerceAtLeast(1)
-                    val bitmap = Bitmap.createBitmap(widthPx, height, Bitmap.Config.ARGB_8888)
+                    val size = pdfRenderSize(page.width, page.height, key.width) ?: return@use null
+                    val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
                     bitmap.eraseColor(Color.WHITE)
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     bitmap
                 }
-            }.getOrNull()?.also { cache.put(index, it) }
+            }.getOrNull()?.also { cache.put(key, it) }
         }
     }
 

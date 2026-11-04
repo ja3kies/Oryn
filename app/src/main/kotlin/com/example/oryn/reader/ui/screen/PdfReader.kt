@@ -215,11 +215,12 @@ internal fun PdfReader(
                 currentPageRef = currentPageRef,
                 lockPaging = selection != null
             ) { page ->
-                val bitmap by produceState<Bitmap?>(null, page, pdf) { value = pdf.render(page) }
+                val renderWidth = maxWidthPx.coerceIn(1, 4096)
+                val bitmap by produceState<Bitmap?>(null, page, pdf, renderWidth) { value = pdf.render(page, renderWidth) }
                 val textPage by produceState(PdfTextPage.EMPTY, page, pdf) { value = pdf.text.page(page) }
-                LaunchedEffect(page) {
-                    pdf.render(page + 1)
-                    pdf.render(page - 1)
+                LaunchedEffect(page, pdf, renderWidth) {
+                    pdf.render(page + 1, renderWidth)
+                    pdf.render(page - 1, renderWidth)
                 }
                 val words = textPage.words
                 var boxSize by remember { mutableStateOf(IntSize.Zero) }
