@@ -84,9 +84,8 @@ import com.example.oryn.reader.ui.components.CoverStack
 import com.example.oryn.reader.ui.components.BookActionsHost
 import com.example.oryn.reader.ui.components.FavoriteButton
 import com.example.oryn.reader.ui.components.LibraryEmptyState
-import com.example.oryn.reader.ui.components.MascotMood
 import com.example.oryn.reader.ui.components.OrynIcons
-import com.example.oryn.reader.ui.components.OrynMascot
+import com.example.oryn.reader.ui.components.OrynBrandMark
 import com.example.oryn.reader.ui.components.OrynNav
 import com.example.oryn.reader.ui.components.HomeSection
 import com.example.oryn.reader.ui.components.glass
@@ -189,11 +188,7 @@ private fun Dashboard(
         // ── Coin supérieur : mascotte à gauche, menu à droite, puis grande salutation à deux tons
         item(key = "top") {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OrynMascot(
-                    size = 44.dp,
-                    mood = if (bubble) MascotMood.WOW else MascotMood.HAPPY,
-                    onClick = { tip += 1 }
-                )
+                OrynBrandMark(onClick = { tip += 1 })
                 Spacer(Modifier.weight(1f))
                 Box {
                     Box(
