@@ -247,13 +247,12 @@ internal fun LibraryContent(
                     Modifier.solidSurface(CircleShape).padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    PillIcon(OrynIcons.Plus, tr("Importer un livre"), onImportClick)
                     Box {
                         PillIcon(OrynIcons.Filter, tr("Trier et filtrer")) { menuOpen = true }
                         RoundedMenu { DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             HomeSort.entries.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(option.label) },
+                                    text = { Text(tr(option.label)) },
                                     leadingIcon = { Icon(if (option == HomeSort.TITLE || option == HomeSort.AUTHOR) OrynIcons.SortAz else OrynIcons.Sort, null, modifier = Modifier.size(22.dp)) },
                                     trailingIcon = {
                                         if (option == sort) Icon(OrynIcons.Check, null, tint = colors.primary, modifier = Modifier.size(20.dp))
