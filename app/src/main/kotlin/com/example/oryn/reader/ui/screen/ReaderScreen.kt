@@ -220,7 +220,7 @@ fun ReaderScreen(
     val readerPdf = (loadResult as? BookLoadResult.Success)?.pdf
     val pdfToc by produceState(emptyList<TocEntry>(), readerPdf) { value = readerPdf?.text?.outline().orEmpty() }
     val pdfPageCount = readerPdf?.pageCount ?: 0
-    val pdfCurrentPage = if (pdfPageCount > 0) (Math.round(liveProgress * pdfPageCount) - 1).coerceIn(0, pdfPageCount - 1) else 0
+    val pdfCurrentPage = pdfPageAtProgress(liveProgress, pdfPageCount)
 
     // Mode « texte » d'un PDF : le texte est remis en forme (titres, paragraphes) puis lu comme un livre numérique
     var reflowProgress by remember { mutableStateOf(0f) }

@@ -149,7 +149,7 @@ internal fun PdfReader(
 
     var startPage by remember(pdf) {
         mutableIntStateOf(
-            if (initialProgress > 0f && total > 0) ((initialProgress * total).toInt() - 1).coerceIn(0, total - 1) else 0
+            pdfPageAtProgress(initialProgress, total)
         )
     }
     var showIndicator by remember { mutableStateOf(false) }
