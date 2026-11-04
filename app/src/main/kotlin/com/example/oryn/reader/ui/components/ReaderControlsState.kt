@@ -28,7 +28,9 @@ fun readerChapterProgress(
     titles: List<Pair<Int, String>>, position: Int, documentLength: Int, pdfStride: Int? = null
 ): ReaderChapterProgress? {
     if (documentLength <= 0 || position < 0 || position >= documentLength || titles.isEmpty()) return null
-    val ordered = titles.sortedBy { it.first }.filter { it.first in 0 until documentLength }
+    val ordered = titles.filter { it.first in 0 until documentLength }
+        .sortedBy { it.first }
+        .distinctBy { it.first }
     val index = ordered.indexOfLast { it.first <= position }
     if (index < 0) return null
     val start = ordered[index].first
@@ -46,6 +48,11 @@ fun readerChapterPagesAfter(pageStarts: IntArray, page: Int, chapterOffsets: Lis
     val chapters = chapterOffsets.filter { it in 0 until documentLength }.sorted()
     if (chapters.none { it <= start }) return null
     val end = chapters.firstOrNull { it > start } ?: documentLength
+    // A malformed pagination snapshot must not produce a misleading page estimate.
+    if (pageStarts.isEmpty() || pageStarts[0] < 0 ||
+        pageStarts.last() >= documentLength ||
+        pageStarts.indices.drop(1).any { pageStarts[it] <= pageStarts[it - 1] }
+    ) return null
     val last = pageStarts.binarySearch(end - 1).let { if (it >= 0) it else -it - 2 }
     return (last - page).coerceAtLeast(0)
 }

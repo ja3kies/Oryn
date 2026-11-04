@@ -60,22 +60,33 @@ class PdfPages internal constructor(
     val pageCount: Int = renderer.pageCount
 
     private val lock = ReentrantLock()
-    private val cache = LruCache<Int, Bitmap>(6)
+    // Byte-bounded rather than six unbounded bitmaps; displayed pages retain their own references.
+    private data class RenderKey(val index: Int, val width: Int)
+    private val cache = object : LruCache<RenderKey, Bitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: RenderKey, bitmap: Bitmap): Int = bitmap.byteCount
+    }
     private var closed = false
 
     suspend fun render(index: Int, widthPx: Int = 1080): Bitmap? = withContext(Dispatchers.IO) {
         lock.withLock {
             if (closed || index !in 0 until pageCount) return@withLock null
-            cache.get(index)?.let { return@withLock it }
+            val key = RenderKey(index, widthPx.coerceIn(1, 4096))
+            cache.get(key)?.let { return@withLock it }
             runCatching {
                 renderer.openPage(index).use { page ->
-                    val height = (page.height.toFloat() * widthPx / page.width).toInt().coerceAtLeast(1)
-                    val bitmap = Bitmap.createBitmap(widthPx, height, Bitmap.Config.ARGB_8888)
-                    bitmap.eraseColor(Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    bitmap
+                    val size = pdfRenderSize(page.width, page.height, key.width) ?: return@use null
+                    val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        bitmap.eraseColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bitmap
+                    } catch (error: Throwable) {
+                        // Failed renders never reach Compose/cache, so immediate recycling is safe.
+                        bitmap.recycle()
+                        throw error
+                    }
                 }
-            }.getOrNull()?.also { cache.put(index, it) }
+            }.getOrNull()?.also { cache.put(key, it) }
         }
     }
 
@@ -115,8 +126,8 @@ class BookTextLoader(private val context: Context) {
     }
 
 
-    suspend fun loadBook(filePath: String, format: String): BookLoadResult = withContext(Dispatchers.IO) {
-        if (filePath.isBlank()) return@withContext BookLoadResult.Error("Chemin de fichier invalide.")
+    suspend fun loadBook(filePath: String, format: String): BookLoadResult = loadDocumentWithCleanup(load = load@{
+        if (filePath.isBlank()) return@load BookLoadResult.Error("Chemin de fichier invalide.")
         val uri = Uri.parse(filePath)
 
         runCatching {
@@ -144,7 +155,7 @@ class BookTextLoader(private val context: Context) {
             if (it is CancellationException) throw it
             BookLoadResult.Error(trf("Erreur de chargement : %s", it.localizedMessage))
         }
-    }
+    }, dispose = { (it as? BookLoadResult.Success)?.pdf?.close() })
 
     // ── TXT : UTF-8 strict, repli windows-1252 pour les vieux fichiers ──
     private fun loadTxt(uri: Uri): String? {
@@ -184,8 +195,9 @@ class BookTextLoader(private val context: Context) {
     private fun loadPdf(uri: Uri): BookLoadResult {
         val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
             ?: return BookLoadResult.Error(tr("Impossible d'ouvrir le document PDF."))
+        var acquiredRenderer: PdfRenderer? = null
         return try {
-            val renderer = PdfRenderer(descriptor)
+            val renderer = PdfRenderer(descriptor).also { acquiredRenderer = it }
             if (renderer.pageCount == 0) {
                 renderer.close()
                 descriptor.close()
@@ -193,7 +205,8 @@ class BookTextLoader(private val context: Context) {
             } else {
                 BookLoadResult.Success(emptyList(), PdfPages(descriptor, renderer, PdfTextEngine(context.applicationContext, uri)))
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            runCatching { acquiredRenderer?.close() }
             runCatching { descriptor.close() }
             throw e
         }
@@ -207,7 +220,7 @@ class BookTextLoader(private val context: Context) {
         var entryCount = 0
         var totalBytes = 0L
         context.contentResolver.openInputStream(uri)?.use { input ->
-            ZipInputStream(input.buffered()).use { zip ->
+            EpubArchiveInputStream(input.buffered()).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     if (++entryCount > MAX_EPUB_ENTRIES) throw java.io.IOException(tr("Archive EPUB invalide (trop de fichiers)."))

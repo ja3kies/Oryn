@@ -75,6 +75,10 @@ import com.example.oryn.reader.ui.theme.AppAccentTheme
 import com.example.oryn.reader.ui.theme.pageColor
 import com.example.oryn.reader.ui.theme.textColor
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 val ReaderOpenDyslexicFont: FontFamily? = runCatching {
     FontFamily(Font(R.font.opendyslexic_regular, FontWeight.Normal))
@@ -106,7 +110,7 @@ fun ReaderScreen(
     // Progression « vivante » : mise à jour immédiate (la fiche de lecture ne dépend plus de la base de données)
     var liveProgress by remember(book.id) { mutableStateOf(book.progress) }
 
-    var loadResult by remember { mutableStateOf<BookLoadResult?>(null) }
+    var loadResult by remember(book.id) { mutableStateOf<BookLoadResult?>(null) }
     var controlsState by rememberSaveable(book.id) { mutableStateOf(ReaderControlsState.HIDDEN) }
     var sheetFocus by rememberSaveable(book.id) { mutableStateOf(ReaderSheetFocus.ALL) }
     var activeTool by rememberSaveable(book.id) { mutableStateOf<ReaderTool?>(null) }
@@ -147,7 +151,7 @@ fun ReaderScreen(
             if (newPath != book.filePath) {
                 pathOverride = newPath
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    runCatching { OrynDatabase.getDatabase(context).bookDao().updateBook(book.copy(filePath = newPath)) }
+                    runCatching { OrynDatabase.getDatabase(context).bookDao().updateFilePath(book.id, newPath) }
                 }
             }
             loadResult = null
@@ -155,17 +159,22 @@ fun ReaderScreen(
         }
     }
 
-    LaunchedEffect(book.filePath, reloadKey) {
-        loadResult = BookTextLoader(context).loadBook(pathOverride ?: book.filePath, book.format)
+    LaunchedEffect(book.id, book.filePath, reloadKey) {
+        loadResult = null
+        val loaded = BookTextLoader(context).loadBook(pathOverride ?: book.filePath, book.format)
+        loadResult = loaded
+        try {
+            // This effect owns exactly the document it acquired, including on reload.
+            awaitCancellation()
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) {
+                (loaded as? BookLoadResult.Success)?.pdf?.close()
+            }
+        }
     }
 
     // Marque le livre comme « lu récemment » sans toucher à la progression
     LaunchedEffect(book.id) { onUpdateProgress(book, book.progress) }
-
-    // Ferme le PDF en quittant le lecteur
-    DisposableEffect(book.filePath) {
-        onDispose { (loadResult as? BookLoadResult.Success)?.pdf?.close() }
-    }
 
     // Luminosité manuelle, rétablie en quittant le lecteur
     LaunchedEffect(settings.brightness, settings.autoBrightness, ready) {
@@ -211,7 +220,7 @@ fun ReaderScreen(
     val readerPdf = (loadResult as? BookLoadResult.Success)?.pdf
     val pdfToc by produceState(emptyList<TocEntry>(), readerPdf) { value = readerPdf?.text?.outline().orEmpty() }
     val pdfPageCount = readerPdf?.pageCount ?: 0
-    val pdfCurrentPage = if (pdfPageCount > 0) (Math.round(liveProgress * pdfPageCount) - 1).coerceIn(0, pdfPageCount - 1) else 0
+    val pdfCurrentPage = pdfPageAtProgress(liveProgress, pdfPageCount)
 
     // Mode « texte » d'un PDF : le texte est remis en forme (titres, paragraphes) puis lu comme un livre numérique
     var reflowProgress by remember { mutableStateOf(0f) }
@@ -252,7 +261,7 @@ fun ReaderScreen(
     LaunchedEffect(reflowUnavailable) {
         if (reflowUnavailable) {
             android.widget.Toast.makeText(
-                context, tr("Ce PDF ne contient pas de texte exploitable : affichage en pages."), android.widget.Toast.LENGTH_LONG
+                context, tr("Mode texte indisponible : affichage en pages."), android.widget.Toast.LENGTH_LONG
             ).show()
         }
     }
@@ -455,9 +464,9 @@ fun ReaderScreen(
         if (activeTool == ReaderTool.SEARCH && effectiveRich != null) {
             SearchDialog(
                 text = effectiveRich.text,
+                currentOffset = (liveProgress * effectiveRich.text.length).toInt(),
                 onJump = { offset, length ->
-                    closeTool(false)
-                    controlsEvent(ReaderControlsEvent.HIDE)
+                    // Keep the search dialog open for successive previous/next jumps.
                     jumpRequest = offset to length
                 },
                 onDismiss = { closeTool() }

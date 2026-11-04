@@ -63,26 +63,27 @@ private enum class Stage { MENU, INFO, CONFIRM }
 fun BookActionsHost(book: BookEntity, visible: Boolean, onDismiss: () -> Unit, onSelect: () -> Unit = {}) {
     if (!visible) return
     var stage by remember { mutableStateOf(Stage.MENU) }
-    val viewModel = rememberMainViewModel()
-
     when (stage) {
         Stage.MENU -> ContextCard(
             book = book,
             onDismiss = onDismiss,
             onInfo = { stage = Stage.INFO },
             onDelete = { stage = Stage.CONFIRM },
-            onSelect = onSelect
+            onSelect = { onDismiss(); onSelect() }
         )
         Stage.INFO -> InfoDialog(book = book, onDismiss = onDismiss)
-        Stage.CONFIRM -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(tr("Supprimer ce livre ?")) },
-            text = { Text(trf("« %s » sera retiré de ta bibliothèque. Tes fichiers importés ne sont pas touchés.", book.title)) },
-            confirmButton = {
-                TextButton(onClick = { onDismiss(); viewModel.deleteBook(book) }) { Text(tr("Supprimer")) }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Annuler")) } }
-        )
+        Stage.CONFIRM -> {
+            val viewModel = rememberMainViewModel()
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                title = { Text(tr("Supprimer ce livre ?")) },
+                text = { Text(trf("« %s » sera retiré de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées.", book.title)) },
+                confirmButton = {
+                    TextButton(onClick = { onDismiss(); viewModel.deleteBook(book) }) { Text(tr("Supprimer")) }
+                },
+                dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Annuler")) } }
+            )
+        }
     }
 }
 

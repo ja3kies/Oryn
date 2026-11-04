@@ -10,7 +10,7 @@ class BookRepository(private val dao: BookDao) {
     val allBooks: Flow<List<BookEntity>> = dao.getAllBooks()
     val favoriteBooks: Flow<List<BookEntity>> = dao.getFavoriteBooks()
 
-    suspend fun addBook(book: BookEntity) = dao.insertBook(book)
+    suspend fun addBook(book: BookEntity): Boolean = dao.insertIfAbsent(book)
 
     suspend fun updateBook(book: BookEntity) = dao.updateBook(book)
 
@@ -18,6 +18,10 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun setFavorite(book: BookEntity, favorite: Boolean) =
         dao.updateFavorite(book.id, favorite)
+
+    suspend fun toggleFavorite(bookId: Long) = dao.toggleFavorite(bookId)
+
+    suspend fun coverIsReferenced(path: String): Boolean = dao.countByCoverPath(path) > 0
 
     suspend fun updateProgress(book: BookEntity, progress: Float, timestamp: Long) =
         dao.updateProgress(book.id, progress, timestamp)

@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
+import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -458,53 +459,74 @@ internal object PdfReflowBuilder {
     private const val VERSION = 3
     private const val WINDOW = 3
 
-    private fun cacheFile(context: Context, uri: Uri, pageCount: Int): File {
+    private fun cacheFile(context: Context, uri: Uri, pageCount: Int, sourceFingerprint: String?): File? {
+        val identity = pdfReflowCacheIdentity(uri.toString(), pageCount, sourceFingerprint) ?: return null
         val dir = File(context.cacheDir, "oryn-reflow").apply { mkdirs() }
-        return File(dir, "${uri.toString().hashCode()}-$pageCount-v$VERSION.bin")
+        return File(dir, "$identity-v$VERSION.bin")
     }
 
-    suspend fun load(context: Context, uri: Uri, pageCount: Int): PdfReflowBook? = withContext(Dispatchers.IO) {
-        val f = cacheFile(context, uri, pageCount)
+    private suspend fun load(context: Context, uri: Uri, pageCount: Int, sourceFingerprint: String?): PdfReflowBook? = withContext(Dispatchers.IO) {
+        val f = cacheFile(context, uri, pageCount, sourceFingerprint) ?: return@withContext null
         if (!f.exists()) return@withContext null
         runCatching {
             DataInputStream(f.inputStream().buffered()).use { inp ->
                 if (inp.readInt() != VERSION) return@use null
                 val scanned = inp.readBoolean()
-                val textBytes = ByteArray(inp.readInt())
+                val byteCount = inp.readInt()
+                if (byteCount !in 0..PdfReflowLimits.MAX_CHARACTERS * 4) return@use null
+                val textBytes = ByteArray(byteCount)
                 inp.readFully(textBytes)
                 val text = String(textBytes, Charsets.UTF_8)
-                val offsets = IntArray(inp.readInt()) { inp.readInt() }
+                if (text.length > PdfReflowLimits.MAX_CHARACTERS) return@use null
+                val count = inp.readInt()
+                if (count != pageCount || count !in 1..PdfReflowLimits.MAX_PAGES) return@use null
+                val offsets = IntArray(count) { inp.readInt() }
+                if (offsets.any { it !in 0..text.length } || offsets.asSequence().zipWithNext().any { (a, b) -> a > b }) return@use null
                 val spans = ArrayList<RichSpan>()
-                repeat(inp.readInt()) {
-                    spans += RichSpan(inp.readInt(), inp.readInt(), SpanKind.entries[inp.readInt()], inp.readFloat())
+                val spanCount = inp.readInt()
+                if (spanCount !in 0..PdfReflowLimits.MAX_SPANS) return@use null
+                repeat(spanCount) {
+                    val span = RichSpan(inp.readInt(), inp.readInt(), SpanKind.entries[inp.readInt()], inp.readFloat())
+                    if (span.start !in 0..text.length || span.end !in span.start..text.length || !span.value.isFinite()) return@use null
+                    spans += span
                 }
                 val toc = ArrayList<TocEntry>()
-                repeat(inp.readInt()) { toc += TocEntry(inp.readUTF(), inp.readInt(), inp.readInt()) }
+                val tocCount = inp.readInt()
+                if (tocCount !in 0..300) return@use null
+                repeat(tocCount) {
+                    val entry = TocEntry(inp.readUTF(), inp.readInt(), inp.readInt())
+                    if (entry.offset !in 0..text.length || entry.level !in 0..4) return@use null
+                    toc += entry
+                }
                 PdfReflowBook(RichBook(text, spans, autoLinks(text, emptyList()), toc), offsets, scanned)
             }
         }.getOrNull()
     }
 
-    private fun save(context: Context, uri: Uri, pageCount: Int, book: PdfReflowBook) {
+    private fun save(context: Context, uri: Uri, pageCount: Int, sourceFingerprint: String?, book: PdfReflowBook) {
         runCatching {
-            val f = cacheFile(context, uri, pageCount)
-            DataOutputStream(f.outputStream().buffered()).use { out ->
-                out.writeInt(VERSION)
-                out.writeBoolean(book.scanned)
-                val bytes = book.rich.text.toByteArray(Charsets.UTF_8)
-                out.writeInt(bytes.size)
-                out.write(bytes)
-                out.writeInt(book.pageOffsets.size)
-                book.pageOffsets.forEach { out.writeInt(it) }
-                out.writeInt(book.rich.spans.size)
-                for (s in book.rich.spans) {
-                    out.writeInt(s.start); out.writeInt(s.end); out.writeInt(s.kind.ordinal); out.writeFloat(s.value)
+            val f = cacheFile(context, uri, pageCount, sourceFingerprint) ?: return@runCatching
+            val temporary = File.createTempFile("reflow-", ".tmp", f.parentFile)
+            try {
+                DataOutputStream(temporary.outputStream().buffered()).use { out ->
+                    out.writeInt(VERSION)
+                    out.writeBoolean(book.scanned)
+                    val bytes = book.rich.text.toByteArray(Charsets.UTF_8)
+                    out.writeInt(bytes.size)
+                    out.write(bytes)
+                    out.writeInt(book.pageOffsets.size)
+                    book.pageOffsets.forEach { out.writeInt(it) }
+                    out.writeInt(book.rich.spans.size)
+                    for (s in book.rich.spans) {
+                        out.writeInt(s.start); out.writeInt(s.end); out.writeInt(s.kind.ordinal); out.writeFloat(s.value)
+                    }
+                    out.writeInt(book.rich.toc.size)
+                    for (e in book.rich.toc) {
+                        out.writeUTF(e.title.take(500)); out.writeInt(e.offset); out.writeInt(e.level)
+                    }
                 }
-                out.writeInt(book.rich.toc.size)
-                for (e in book.rich.toc) {
-                    out.writeUTF(e.title.take(500)); out.writeInt(e.offset); out.writeInt(e.level)
-                }
-            }
+                if (!temporary.renameTo(f)) throw IOException("Unable to commit PDF text cache")
+            } finally { temporary.delete() }
         }
     }
 
@@ -515,8 +537,9 @@ internal object PdfReflowBuilder {
         pageCount: Int,
         onProgress: (Float) -> Unit
     ): PdfReflowBook {
-        load(context, uri, pageCount)?.let { return it }
-        return withContext(Dispatchers.Default) { assembleBook(context, uri, engine, pageCount, onProgress) }
+        val sourceFingerprint = engine.sourceFingerprint()
+        load(context, uri, pageCount, sourceFingerprint)?.let { return it }
+        return withContext(Dispatchers.Default) { assembleBook(context, uri, engine, pageCount, sourceFingerprint, onProgress) }
     }
 
     private suspend fun assembleBook(
@@ -524,9 +547,11 @@ internal object PdfReflowBuilder {
         uri: Uri,
         engine: PdfTextEngine,
         pageCount: Int,
+        sourceFingerprint: String?,
         onProgress: (Float) -> Unit
     ): PdfReflowBook {
         val ctx = currentCoroutineContext()
+        if (pageCount !in 1..PdfReflowLimits.MAX_PAGES) throw IOException("Invalid PDF text page count")
 
         // Statistiques du document : quelques pages réparties sur tout le livre
         val sampleIdx = if (pageCount <= 12) (0 until pageCount).toList()
@@ -558,6 +583,9 @@ internal object PdfReflowBuilder {
             val blocks = PdfReflow.analyze(engine.page(i), stats, repeated)
             var first = true
             for (b in blocks) {
+                ctx.ensureActive()
+                // Check before growing StringBuilder or materializing span objects.
+                PdfReflowLimits.checkGrowth(text.length, b.text.length + 2, spans.size, b.spans.size)
                 val base: Int
                 val merge = first && prevOpen && b.heading < 0 && !b.list &&
                     (prevHyphen || b.text.first().isLowerCase())
@@ -600,7 +628,7 @@ internal object PdfReflowBuilder {
             RichBook(text.toString(), spans, autoLinks(text.toString(), emptyList()), finalToc),
             offsets, scanned
         )
-        withContext(Dispatchers.IO) { save(context, uri, pageCount, result) }
+        withContext(Dispatchers.IO) { save(context, uri, pageCount, sourceFingerprint, result) }
         return result
     }
 }

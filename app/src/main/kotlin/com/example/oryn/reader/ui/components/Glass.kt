@@ -18,6 +18,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.MaterialTheme
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.runtime.Composable
@@ -161,9 +165,10 @@ fun GlassSearchField(
     onSearch: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
+    val focusManager = LocalFocusManager.current
     Row(
         modifier
-            .height(52.dp)
+            .heightIn(min = 56.dp)
             .solidSurface(CircleShape)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -189,20 +194,14 @@ fun GlassSearchField(
                 ),
                 cursorBrush = SolidColor(colors.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.fillMaxWidth()
+                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus(); onSearch() }),
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = placeholder }
             )
         }
         if (value.isNotEmpty()) {
-            Icon(
-                OrynIcons.Close, tr("Effacer"),
-                tint = inkSecondary(),
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .clickable { onValueChange("") }
-                    .padding(3.dp)
-            )
+            IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(48.dp)) {
+                Icon(OrynIcons.Close, tr("Effacer"), tint = inkSecondary(), modifier = Modifier.size(18.dp))
+            }
         }
     }
 }

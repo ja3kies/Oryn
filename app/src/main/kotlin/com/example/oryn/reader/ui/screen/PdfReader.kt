@@ -149,7 +149,7 @@ internal fun PdfReader(
 
     var startPage by remember(pdf) {
         mutableIntStateOf(
-            if (initialProgress > 0f && total > 0) ((initialProgress * total).toInt() - 1).coerceIn(0, total - 1) else 0
+            pdfPageAtProgress(initialProgress, total)
         )
     }
     var showIndicator by remember { mutableStateOf(false) }
@@ -215,11 +215,12 @@ internal fun PdfReader(
                 currentPageRef = currentPageRef,
                 lockPaging = selection != null
             ) { page ->
-                val bitmap by produceState<Bitmap?>(null, page, pdf) { value = pdf.render(page) }
+                val renderWidth = maxWidthPx.coerceIn(1, 4096)
+                val bitmap by produceState<Bitmap?>(null, page, pdf, renderWidth) { value = pdf.render(page, renderWidth) }
                 val textPage by produceState(PdfTextPage.EMPTY, page, pdf) { value = pdf.text.page(page) }
-                LaunchedEffect(page) {
-                    pdf.render(page + 1)
-                    pdf.render(page - 1)
+                LaunchedEffect(page, pdf, renderWidth) {
+                    pdf.render(page + 1, renderWidth)
+                    pdf.render(page - 1, renderWidth)
                 }
                 val words = textPage.words
                 var boxSize by remember { mutableStateOf(IntSize.Zero) }

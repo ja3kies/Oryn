@@ -43,8 +43,8 @@ android {
         applicationId = "com.example.oryn.reader"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "COMMUNITY_AUTH_REDIRECT_HOST", communityString("community.auth.redirectHost"))
         buildConfigField("String", "COMMUNITY_AUTH_PROVIDER", communityString("community.auth.provider"))

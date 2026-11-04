@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
@@ -106,7 +108,7 @@ fun BookCover(book: BookEntity, modifier: Modifier = Modifier) {
                 bitmap = image.asImageBitmap(),
                 contentDescription = trf("Couverture de %s", book.title),
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Fit
             )
         } else {
             Box(contentAlignment = Alignment.Center) {
@@ -147,20 +149,23 @@ fun FavoriteButton(
     size: androidx.compose.ui.unit.Dp = 48.dp
 ) {
     val colors = MaterialTheme.colorScheme
-    Box(
-        modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(if (isFavorite) colors.primaryContainer else colors.onSurface.copy(alpha = 0.08f))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+    IconToggleButton(
+        checked = isFavorite,
+        onCheckedChange = { onClick() },
+        modifier = modifier.size(maxOf(size, 48.dp))
     ) {
-        Icon(
-            if (isFavorite) OrynIcons.BookmarkFilled else OrynIcons.Bookmark,
-            contentDescription = if (isFavorite) tr("Retirer des favoris") else tr("Ajouter aux favoris"),
-            tint = if (isFavorite) colors.onPrimaryContainer else colors.onSurface,
-            modifier = Modifier.size(size * 0.55f)
-        )
+        Box(
+            Modifier.size(size).clip(CircleShape)
+                .background(if (isFavorite) colors.primaryContainer else colors.onSurface.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (isFavorite) OrynIcons.BookmarkFilled else OrynIcons.Bookmark,
+                contentDescription = if (isFavorite) tr("Retirer des favoris") else tr("Ajouter aux favoris"),
+                tint = if (isFavorite) colors.onPrimaryContainer else colors.onSurface,
+                modifier = Modifier.size(size * 0.55f)
+            )
+        }
     }
 }
 
@@ -171,7 +176,9 @@ fun BookCard(
     onBookClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSelect: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
     val tint = rememberCoverTint(book)
@@ -189,11 +196,12 @@ fun BookCard(
                 .fillMaxWidth()
                 .height(116.dp)
                 .glass(RoundedCornerShape(28.dp), tint)
+                .semantics { if (isSelectionMode) selected = isSelected }
                 .combinedClickable(
                     onClick = onBookClick,
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        actions = true
+                        if (isSelectionMode) onBookClick() else actions = true
                     }
                 )
                 .padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 14.dp),

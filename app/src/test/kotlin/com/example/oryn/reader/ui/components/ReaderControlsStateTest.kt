@@ -77,6 +77,20 @@ class ReaderControlsStateTest {
         assertNull(readerChapterPagesAfter(intArrayOf(0, 200), 0, listOf(100), 400))
         assertNull(readerChapterPagesAfter(intArrayOf(), 0, toc, 1000))
     }
+    @Test fun duplicateChapterOffsetsDoNotHideTheCurrentChapter() {
+        val toc = listOf(0 to "Introduction", 0 to "Duplicate", 400 to "Chapter two")
+        val first = readerChapterProgress(toc, 200, 800)!!
+        assertEquals("Introduction", first.title)
+        assertEquals(0.5f, first.fraction, 0.00001f)
+        assertEquals("Chapter two", readerChapterProgress(toc, 400, 800)!!.title)
+    }
+    @Test fun malformedPaginationDoesNotReportMisleadingRemainingPages() {
+        val toc = listOf(0, 500)
+        assertNull(readerChapterPagesAfter(intArrayOf(0, 300, 200), 1, toc, 800))
+        assertNull(readerChapterPagesAfter(intArrayOf(0, 200, 200), 1, toc, 800))
+        assertNull(readerChapterPagesAfter(intArrayOf(-1, 200), 1, toc, 800))
+        assertNull(readerChapterPagesAfter(intArrayOf(0, 800), 0, toc, 800))
+    }
     @Test fun readerThemesKeepReadableTextContrast() {
         for (theme in com.example.oryn.reader.data.local.preferences.ReaderThemePreset.entries) {
             val background = theme.pageColor.luminance()

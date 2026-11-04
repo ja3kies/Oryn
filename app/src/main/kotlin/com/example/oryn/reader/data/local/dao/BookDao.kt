@@ -25,6 +25,15 @@ interface BookDao {
     @Query("UPDATE books SET isFavorite = :favorite WHERE id = :id")
     suspend fun updateFavorite(id: Long, favorite: Boolean)
 
+    @Query("UPDATE books SET isFavorite = NOT isFavorite WHERE id = :id")
+    suspend fun toggleFavorite(id: Long)
+
+    @Query("UPDATE books SET filePath = :path WHERE id = :id")
+    suspend fun updateFilePath(id: Long, path: String)
+
+    @Query("SELECT COUNT(*) FROM books WHERE coverPath = :path")
+    suspend fun countByCoverPath(path: String): Int
+
     @Query("UPDATE books SET coverPath = :path WHERE id = :id")
     suspend fun updateCover(id: Long, path: String?)
 
@@ -36,6 +45,14 @@ interface BookDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBook(book: BookEntity)
+
+    /** A check and insert in one transaction prevents overlapping imports duplicating a URI. */
+    @Transaction
+    suspend fun insertIfAbsent(book: BookEntity): Boolean {
+        if (countByPath(book.filePath) > 0) return false
+        insertBook(book)
+        return true
+    }
 
     @Update
     suspend fun updateBook(book: BookEntity)
