@@ -59,13 +59,27 @@ class BookMetadataReader(private val context: Context) {
             else -> return null
         }
 
+        val prefix = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val bytes = ByteArray(BookFileSignature.PREFIX_BYTES)
+                var count = 0
+                while (count < bytes.size) {
+                    val read = input.read(bytes, count, bytes.size - count)
+                    if (read <= 0) break
+                    count += read
+                }
+                bytes.copyOf(count)
+            }
+        }.getOrNull() ?: return null
+        if (!BookFileSignature.matches(format, prefix)) return null
+
         val fallbackTitle = fileName.substringBeforeLast('.')
             .replace('_', ' ')
             .replace('-', ' ')
             .trim()
             .ifBlank { "Livre sans titre" }
 
-        val epub = if (format == "EPUB") readEpub(uri) else null
+        val epub = if (format == "EPUB") readEpub(uri) ?: return null else null
         val html = if (format == "HTML") readHtmlHead(uri) else null
 
         return BookMetadata(
