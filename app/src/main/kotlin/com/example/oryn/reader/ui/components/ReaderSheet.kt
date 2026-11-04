@@ -94,7 +94,7 @@ import com.example.oryn.reader.ui.theme.textColor
 
 /** Fond partagé par la fiche de réglages et la barre du haut (légèrement transparent). */
 val ReaderChromeColor: Color
-    @Composable get() = Color(0xFF0E0E0E).copy(alpha = 0.97f)
+    @Composable get() = MaterialTheme.colorScheme.surface
 
 enum class ReaderSheetFocus { ALL, TYPOGRAPHY, LAYOUT }
 
@@ -129,10 +129,9 @@ fun ReaderControlsSheet(
     modifier: Modifier = Modifier,
     initialFocus: ReaderSheetFocus = ReaderSheetFocus.ALL
 ) {
-    // Panneau toujours sombre (encre) : les commandes ressortent en accent, en clair comme en sombre
-    val panel = remember(currentAccent) {
-        orynColorScheme(true, currentAccent).copy(primary = currentAccent.accentDark, onPrimary = androidx.compose.ui.graphics.Color(0xFF141414))
-    }
+    // Primary text/icons must remain readable even when the user selects a low-contrast
+    // accent (e.g. cherry rose). Use accent only on its matching primaryContainer surface.
+    val panel = remember(currentAccent) { orynColorScheme(true, currentAccent) }
     MaterialTheme(colorScheme = panel, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val scope = rememberCoroutineScope()
@@ -208,7 +207,7 @@ private fun ReaderControlsSheetContent(
         shape = RoundedCornerShape(34.dp),
         color = ReaderChromeColor,
         tonalElevation = 0.dp,
-        shadowElevation = 24.dp
+        shadowElevation = 8.dp
     ) {
         Column(
             modifier = Modifier
@@ -383,15 +382,18 @@ private fun ThemeDot(preset: ReaderThemePreset, selected: Boolean, onClick: () -
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .background(preset.pageColor)
-            .border(if (selected) 2.5.dp else 1.dp, if (selected) colors.primary else colors.outlineVariant, CircleShape)
-            .semantics { contentDescription = trf("Thème %s", preset.name) }
-            .clickable(role = Role.Button, onClick = onClick),
+            .size(48.dp)
+            .clickable(role = Role.RadioButton, onClickLabel = trf("Thème %s", preset.label), onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (selected) Icon(OrynIcons.Check, null, tint = preset.textColor, modifier = Modifier.size(14.dp))
+        Box(
+            Modifier.size(28.dp).clip(CircleShape)
+                .background(preset.pageColor)
+                .border(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.outlineVariant, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) Icon(OrynIcons.Check, null, tint = preset.textColor, modifier = Modifier.size(16.dp))
+        }
     }
 }
 
@@ -632,7 +634,7 @@ private fun IconToggle(
 ) {
     val colors = MaterialTheme.colorScheme
     val tint = when {
-        !enabled -> colors.onSurface.copy(alpha = 0.38f)
+        !enabled -> colors.onSurfaceVariant.copy(alpha = 0.65f)
         selected -> colors.onPrimaryContainer
         else -> colors.onSurfaceVariant
     }
@@ -697,8 +699,9 @@ private fun FontChip(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) colors.primaryContainer else colors.surfaceContainer)
+            .heightIn(min = 56.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .padding(vertical = 6.dp, horizontal = 2.dp),
+            .padding(vertical = 8.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -711,7 +714,7 @@ private fun FontChip(
         )
         Text(
             font.label,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant
@@ -729,6 +732,7 @@ private fun ThemeChip(
     val colors = MaterialTheme.colorScheme
     Column(
         modifier = modifier
+            .heightIn(min = 64.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -752,7 +756,7 @@ private fun ThemeChip(
         }
         Text(
             preset.label,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
