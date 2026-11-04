@@ -36,6 +36,25 @@ class LibraryMutationCoordinatorTest {
         assertTrue(fileExists)
     }
 
+    @Test fun stalledTransferDoesNotBlockAnUnrelatedLibraryMutation() = runTest {
+        val coordinator = LibraryMutationCoordinator()
+        val transferStarted = CompletableDeferred<Unit>()
+        val bytesAvailable = CompletableDeferred<String>()
+        var published = false
+        val download = launch {
+            coordinator.stageThenMutate(
+                stage = { transferStarted.complete(Unit); bytesAvailable.await() },
+                publish = { assertEquals("verified bytes", it); published = true }
+            )
+        }
+        transferStarted.await()
+        assertEquals("deleted unrelated row", coordinator.mutate { "deleted unrelated row" })
+        assertFalse(published)
+        bytesAvailable.complete("verified bytes")
+        download.join()
+        assertTrue(published)
+    }
+
     @Test fun cancelledMutationReleasesTheLockForSubsequentImports() = runTest {
         val coordinator = LibraryMutationCoordinator()
         val started = CompletableDeferred<Unit>()

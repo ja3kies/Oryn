@@ -343,42 +343,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _downloadingIds.update { it + book.id }
         val app = getApplication<Application>()
 
-        launchLibraryMutation {
-            val file = File(File(app.filesDir, "books"), "gutenberg-${book.id}.epub")
+        viewModelScope.launch(Dispatchers.IO) {
+            val directory = File(app.filesDir, "books").apply { mkdirs() }
+            val file = File(directory, "gutenberg-${book.id}.epub")
+            var publishedFile = false
+            var staged: File? = null
             try {
-                val uri = Uri.fromFile(file)
-                if (repository.exists(uri.toString())) {
+                if (repository.exists(Uri.fromFile(file).toString())) {
                     toast(tr("Déjà dans ta bibliothèque"))
-                    return@launchLibraryMutation
+                    return@launch
                 }
-                GutendexClient.download(book.epubUrl, file)
-
-                val hash = computeContentHash(uri)
-                val existingCover = hash?.let(coverStore::findByHash)
-                val coverBytes = if (existingCover == null) {
-                    metadataReader.extractEpubCover(uri)
-                        ?: book.coverUrl?.let { runCatching { GutendexClient.fetchBytes(it) }.getOrNull() }
-                } else null
-                val cover = coverBytes?.let { coverStore.saveBytes(it, hash) }
-
-                repository.addBook(
-                    BookEntity(
-                        title = book.title,
-                        author = book.author,
-                        filePath = uri.toString(),
-                        format = "EPUB",
-                        coverPath = existingCover ?: cover ?: "",
-                        contentHash = hash
-                    )
+                val incoming = File.createTempFile("gutenberg-${book.id}-", ".tmp", directory)
+                staged = incoming
+                libraryMutations.stageThenMutate(
+                    stage = {
+                        GutendexClient.download(book.epubUrl, incoming)
+                        // The staging file is private to this transfer and has no Room references.
+                        metadataReader.extractEpubCover(Uri.fromFile(incoming))
+                            ?: book.coverUrl?.let { runCatching { GutendexClient.fetchBytes(it) }.getOrNull() }
+                    },
+                    publish = { coverBytes ->
+                        val uri = Uri.fromFile(file)
+                        // Recheck after the transfer: another import may have published this book.
+                        if (repository.exists(uri.toString())) {
+                            toast(tr("Déjà dans ta bibliothèque"))
+                        } else {
+                            if (file.exists() || !incoming.renameTo(file)) throw java.io.IOException("Book publication failed")
+                            publishedFile = true
+                            val hash = computeContentHash(uri)
+                            val existingCover = hash?.let(coverStore::findByHash)
+                            val cover = if (existingCover == null) coverBytes?.let { coverStore.saveBytes(it, hash) } else null
+                            repository.addBook(
+                                BookEntity(
+                                    title = book.title, author = book.author, filePath = uri.toString(), format = "EPUB",
+                                    coverPath = existingCover ?: cover ?: "", contentHash = hash
+                                )
+                            )
+                            toast(trf("« %s » ajouté", book.title))
+                        }
+                    }
                 )
-                toast(trf("« %s » ajouté", book.title))
             } catch (cancelled: CancellationException) {
-                deleteUnreferencedDownload(file)
+                if (publishedFile) deleteUnreferencedDownload(file)
                 throw cancelled
             } catch (_: Exception) {
-                deleteUnreferencedDownload(file)
+                if (publishedFile) deleteUnreferencedDownload(file)
                 toast(tr("Téléchargement impossible. Vérifie ta connexion."))
             } finally {
+                staged?.delete()
                 _downloadingIds.update { it - book.id }
             }
         }
@@ -390,41 +402,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _webDownloads.update { it + url }
         val app = getApplication<Application>()
 
-        launchLibraryMutation {
+        viewModelScope.launch(Dispatchers.IO) {
+            var staged: File? = null
             var target: File? = null
             try {
                 val dir = File(app.filesDir, "books").apply { mkdirs() }
                 val safeName = fileName.replace(Regex("[^\\p{L}\\p{N}._ -]"), "_").take(80).ifBlank { "livre.epub" }
-                target = uniqueFile(dir, safeName)
+                val incoming = File.createTempFile("incoming-web-", ".tmp", dir)
+                staged = incoming
                 val headers = buildMap {
                     userAgent?.let { put("User-Agent", it) }
                     cookie?.let { put("Cookie", it) }
                     referer?.let { put("Referer", it) }
                 }
-                GutendexClient.downloadFromWeb(url, target, headers)
-
-                val uri = Uri.fromFile(target)
-                val meta = metadataReader.read(uri)
-                if (meta == null) {
-                    target.delete()
-                    toast(tr("Format non pris en charge (EPUB, PDF ou TXT)."))
-                    return@launchLibraryMutation
-                }
-                val hash = computeContentHash(uri)
-                val existingCover = hash?.let(coverStore::findByHash)
-                val embeddedCover = if (existingCover == null)
-                    meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
-                repository.addBook(
-                    BookEntity(
-                        title = meta.title,
-                        author = meta.author,
-                        filePath = uri.toString(),
-                        format = meta.format,
-                        coverPath = existingCover ?: embeddedCover ?: if (meta.format == "EPUB") "" else null,
-                        contentHash = hash
-                    )
+                libraryMutations.stageThenMutate(
+                    stage = { GutendexClient.downloadFromWeb(url, incoming, headers) },
+                    publish = {
+                        val file = uniqueFile(dir, safeName)
+                        if (!incoming.renameTo(file)) throw java.io.IOException("Book publication failed")
+                        target = file
+                        val uri = Uri.fromFile(file)
+                        val meta = metadataReader.read(uri)
+                        if (meta == null) {
+                            file.delete()
+                            toast(tr("Format non pris en charge (EPUB, PDF ou TXT)."))
+                        } else {
+                            val hash = computeContentHash(uri)
+                            val existingCover = hash?.let(coverStore::findByHash)
+                            val embeddedCover = if (existingCover == null)
+                                meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
+                            repository.addBook(
+                                BookEntity(
+                                    title = meta.title, author = meta.author, filePath = uri.toString(), format = meta.format,
+                                    coverPath = existingCover ?: embeddedCover ?: if (meta.format == "EPUB") "" else null,
+                                    contentHash = hash
+                                )
+                            )
+                            toast(trf("« %s » ajouté à ta bibliothèque", meta.title))
+                        }
+                    }
                 )
-                toast(trf("« %s » ajouté à ta bibliothèque", meta.title))
             } catch (cancelled: CancellationException) {
                 target?.let { deleteUnreferencedDownload(it) }
                 throw cancelled
@@ -432,6 +449,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 target?.let { deleteUnreferencedDownload(it) }
                 toast(tr("Téléchargement impossible. Le site demande peut-être une connexion."))
             } finally {
+                staged?.delete()
                 _webDownloads.update { it - url }
             }
         }
@@ -439,8 +457,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Cancellation can arrive after Room committed: never remove a file that a row now references. */
     private suspend fun deleteUnreferencedDownload(file: File) = withContext(NonCancellable) {
-        if (!repository.exists(Uri.fromFile(file).toString())) {
-            ownedBookFile(file, File(getApplication<Application>().filesDir, "books"))?.delete()
+        libraryMutations.mutate {
+            if (!repository.exists(Uri.fromFile(file).toString())) {
+                ownedBookFile(file, File(getApplication<Application>().filesDir, "books"))?.delete()
+            }
         }
     }
 
