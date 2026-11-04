@@ -457,8 +457,7 @@ fun ReaderScreen(
                 text = effectiveRich.text,
                 currentOffset = (liveProgress * effectiveRich.text.length).toInt(),
                 onJump = { offset, length ->
-                    closeTool(false)
-                    controlsEvent(ReaderControlsEvent.HIDE)
+                    // Keep the search dialog open for successive previous/next jumps.
                     jumpRequest = offset to length
                 },
                 onDismiss = { closeTool() }
