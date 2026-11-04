@@ -25,4 +25,4 @@ internal fun readerSearchStartIndex(matches: List<ReaderSearchMatch>, position: 
 }
 
 internal fun readerSearchStep(index: Int, count: Int, delta: Int): Int =
-    if (count <= 0) -1 else Math.floorMod(index + delta, count)
+    if (count <= 0) -1 else Math.floorMod(index.toLong() + delta.toLong(), count.toLong()).toInt()
