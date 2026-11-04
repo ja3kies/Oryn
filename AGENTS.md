@@ -36,3 +36,11 @@ Lis ce fichier et `DESIGN.md` avant toute modification. En cas de doute, ne chan
 - Cibles tactiles ≥ 48 dp, contrastes AA (texte ≥ 4,5:1), descriptions pour TalkBack sur les icônes seules, respect de « réduire les animations ».
 - Lois d'UX suivies : Hick (peu de choix à la fois), Fitts (grandes cibles à portée du pouce), proximité, Von Restorff (un seul élément en accent par écran), Jakob (conventions iOS/Android connues).
 - Évite les tics « vibecodés » : dégradés violet-bleu, texte en dégradé, emojis dans les titres, cartes en verre, bordures colorées, fondus au scroll, tirets cadratins en rafale, textes marketing creux.
+
+## Compétences spécialisées (Codex / agents)
+- Pour tout chantier UI Compose, consulter `.agents/skills/oryn-ui-craft/SKILL.md`.
+- Pour les sélections de texte, poignées, gestes et annotations, consulter `.agents/skills/oryn-text-selection/SKILL.md`.
+- Pour le logo, les icônes adaptatives et l'identité visuelle, consulter `.agents/skills/oryn-adaptive-logo/SKILL.md`.
+- Les références, les décisions de la mission et les limites sont dans `docs/UI_REFERENCE_RESEARCH.md`.
+- Le thème clair de l'**interface** utilise un blanc doux chaud `#FAFAF8` et des surfaces blanches. Le parchemin `#FEFFDE` reste une couleur **éditoriale/de lecture** ; ne pas réintroduire du jaune ivoire dans le fond de l'application.
+- Aucun agent n'a le droit d'affirmer qu'un geste est validé par un test JVM seul ; la qualification tactile reste à effectuer sur appareil.
