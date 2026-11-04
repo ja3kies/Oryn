@@ -21,7 +21,7 @@ class ReaderSearchIndexTest {
         assertEquals(0, readerSearchStartIndex(matches, 0))
         assertEquals(-1, readerSearchStartIndex(emptyList(), 0))
     }
-    @Test fun previousAndNextWrapAndHandleEmptyResults() {
+    @Test fun searchHandlesOversizedQueryAndOverlappingText() {\n        assertTrue(findReaderMatches("abc", "abcdefgh").isEmpty())\n        assertEquals(listOf(ReaderSearchMatch(0, 2), ReaderSearchMatch(2, 2)), findReaderMatches("aaaa", "aa"))\n    }\n    @Test fun previousAndNextWrapAndHandleEmptyResults() {
         assertEquals(2, readerSearchStep(0, 3, -1))
         assertEquals(0, readerSearchStep(2, 3, 1))
         assertEquals(-1, readerSearchStep(0, 0, 1))
