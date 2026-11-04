@@ -23,10 +23,14 @@ import com.example.oryn.reader.data.local.entity.BookEntity
 import com.example.oryn.reader.data.local.preferences.UserPreferencesRepository
 import com.example.oryn.reader.data.remote.GutendexClient
 import com.example.oryn.reader.data.remote.OnlineBook
+import com.example.oryn.reader.data.repository.ownedBookFile
 import com.example.oryn.reader.data.repository.BookRepository
 import com.example.oryn.reader.ui.components.CoverCache
 import com.example.oryn.reader.ui.theme.AppAccentTheme
 import com.example.oryn.reader.ui.theme.AppThemeMode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -59,16 +63,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val db = OrynDatabase.getDatabase(getApplication<Application>())
             db.bookDao().deleteBooksWithAnnotations(books.map { it.id }.distinct())
-            books.forEach(::deleteOwnedBookFile)
+            books.forEach { deleteOwnedBookFile(it) }
         }
     }
 
 
-    private fun deleteOwnedBookFile(book: BookEntity) {
-        if (!book.filePath.startsWith("file:")) return
+    private suspend fun deleteOwnedBookFile(book: BookEntity) {
+        if (!book.filePath.startsWith("file:") || repository.exists(book.filePath)) return
         val file = Uri.parse(book.filePath).path?.let(::File) ?: return
-        val booksDir = File(getApplication<Application>().filesDir, "books")
-        if (file.parentFile == booksDir) file.delete()
+        ownedBookFile(file, File(getApplication<Application>().filesDir, "books"))?.delete()
     }
 
     val books: StateFlow<List<BookEntity>?> = repository.allBooks
@@ -131,7 +134,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val bytes = runCatching { File(newCoverPath).readBytes() }.getOrNull()
                     val migrated = bytes?.let { coverStore.saveBytes(it, hash) }
                     if (migrated != null) {
-                        coverStore.delete(newCoverPath)
+                        // A different book can still reference this shared cover.
                         newCoverPath = migrated
                     }
                 }
@@ -194,6 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val directory = File(app.filesDir, "books/shared").apply { mkdirs() }
 
             for (uri in uris.distinct()) {
+                currentCoroutineContext().ensureActive()
                 var temp: File? = null
                 try {
                     val name = runCatching {
@@ -241,6 +245,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     copied += Uri.fromFile(destination)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (_: Exception) {
                     failed++
                 } finally {
@@ -264,6 +270,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var failed = 0
 
             for (uri in uris) {
+                currentCoroutineContext().ensureActive()
                 try {
                     val path = uri.toString()
                     if (repository.exists(path)) {
@@ -293,7 +300,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val existingCover = hash?.let(coverStore::findByHash)
                     val embeddedCover = if (existingCover == null)
                         meta.coverBytes?.let { coverStore.saveBytes(it, hash) } else null
-                    repository.addBook(
+                    val inserted = repository.addBook(
                         BookEntity(
                             title = meta.title,
                             author = meta.author,
@@ -304,9 +311,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             contentHash = hash
                         )
                     )
-                    added++
+                    if (inserted) added++ else duplicates++
                 } catch (_: SecurityException) {
                     failed++
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (_: Exception) {
                     failed++
                 }
@@ -448,7 +457,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Invalide aussi le nouveau chemin (hash-based), au cas où il existe déjà
             CoverCache.invalidate(path)
             repository.updateCoverAndHash(book.id, path, hash)
-            if (!oldPath.isNullOrBlank() && oldPath != path) {
+            if (!oldPath.isNullOrBlank() && oldPath != path && !repository.coverIsReferenced(oldPath)) {
                 coverStore.delete(oldPath)
             }
             toast(tr("Couverture enregistrée"))
@@ -465,7 +474,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun removeCover(book: BookEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateCover(book.id, "")
-            coverStore.delete(book.coverPath)
+            book.coverPath?.takeIf { it.isNotBlank() && !repository.coverIsReferenced(it) }
+                ?.let(coverStore::delete)
         }
     }
 
@@ -476,7 +486,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleFavorite(book: BookEntity) {
-        viewModelScope.launch { repository.setFavorite(book, !book.isFavorite) }
+        viewModelScope.launch { repository.toggleFavorite(book.id) }
     }
 
     fun deleteBook(book: BookEntity) {
