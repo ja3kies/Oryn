@@ -127,7 +127,7 @@ class BookMetadataReader(private val context: Context) {
 
     private fun <T> openZip(uri: Uri, block: (ZipInputStream) -> T?): T? =
         context.contentResolver.openInputStream(uri)?.use { input ->
-            ZipInputStream(input).use(block)
+            EpubArchiveInputStream(input).use(block)
         }
 
     private fun findEntry(zip: ZipInputStream, name: String): Boolean {
