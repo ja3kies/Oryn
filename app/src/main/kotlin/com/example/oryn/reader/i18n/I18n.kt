@@ -154,6 +154,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Description du livre" to "Book description",
         "Saisi dans Oryn" to "Edited in Oryn",
         "Ma note : %s/5" to "My rating: %s/5",
+        "Ouvrir %s" to "Open %s",
+        "Options du livre" to "Book options",
         "Ma note : non noté" to "My rating: not rated",
         "Ma note : %s étoiles" to "Rate %s stars",
         "Note Open Library : %s/5 · %s avis" to "Open Library rating: %s/5 · %s reviews",
