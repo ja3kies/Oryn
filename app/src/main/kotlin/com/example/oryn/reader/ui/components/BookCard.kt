@@ -117,15 +117,15 @@ fun BookCover(book: BookEntity, modifier: Modifier = Modifier) {
                 Icon(
                     imageVector = OrynIcons.BookOpen,
                     contentDescription = null,
-                    tint = colors.primary,
+                    tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
                 Text(
                     text = book.format,
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colors.onPrimaryContainer,
+                    color = colors.onSurface,
                     modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
                 )
             }
