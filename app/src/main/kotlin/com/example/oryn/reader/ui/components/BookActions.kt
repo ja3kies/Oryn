@@ -175,7 +175,6 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
     val viewModel = rememberMainViewModel()
-    val tint = rememberCoverTint(book)
     val outside = noRipple()
     val inside = noRipple()
     val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -186,6 +185,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     }
     var expanded by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    var confirmCoverRemoval by remember { mutableStateOf(false) }
     val hasCover = !book.coverPath.isNullOrBlank()
 
     if (editing) {
@@ -193,6 +193,23 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
             viewModel.updateBookInfo(book, t, a)
             editing = false
         }
+        return // Never stack the edit dialog underneath the book details dialog.
+    }
+
+    if (confirmCoverRemoval) {
+        AlertDialog(
+            onDismissRequest = { confirmCoverRemoval = false },
+            title = { Text(tr("Supprimer la couverture ?")) },
+            text = { Text(tr("Tu pourras choisir une autre couverture depuis la fiche du livre.")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeCover(book)
+                    confirmCoverRemoval = false
+                }) { Text(tr("Supprimer")) }
+            },
+            dismissButton = { TextButton(onClick = { confirmCoverRemoval = false }) { Text(tr("Annuler")) } }
+        )
+        return
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -200,14 +217,16 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
             Modifier.fillMaxSize().padding(16.dp).clickable(interactionSource = outside, indication = null, onClick = onDismiss),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                Modifier
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .heightIn(max = 680.dp)
-                    .glass(RoundedCornerShape(32.dp), tint, frosted = true)
-                    .clickable(interactionSource = inside, indication = null, onClick = {})
+            androidx.compose.material3.Surface(
+                modifier = Modifier
+                    .widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 680.dp)
+                    .clickable(interactionSource = inside, indication = null, onClick = {}),
+                shape = RoundedCornerShape(32.dp),
+                color = colors.surface,
+                contentColor = colors.onSurface,
+                shadowElevation = 8.dp
             ) {
+                Box {
                 Column(
                     Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -221,7 +240,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CoverAction(OrynIcons.Image, tr("Changer"), modifier = Modifier.weight(1f)) { pickCover.launch(arrayOf("image/*")) }
                             if (hasCover) {
-                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { viewModel.removeCover(book) }
+                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { confirmCoverRemoval = true }
                             }
                         }
                         Text(
@@ -247,7 +266,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
                             InfoStat(tr("Progression"), if (book.progress < 0.01f) "0 %" else "${(book.progress * 100).toInt()} %", Modifier.weight(1f))
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
-                            InfoStat(tr("Année"), info?.year?.toString() ?: "—", Modifier.weight(1f))
+                            InfoStat(tr("Année (catalogue)"), info?.year?.toString() ?: "—", Modifier.weight(1f))
                         }
                         LinearProgressIndicator(
                             progress = { book.progress.coerceIn(0f, 1f) },
@@ -261,7 +280,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                                 .clip(CircleShape)
                                 .background(colors.onSurface.copy(alpha = 0.08f))
                                 .clickable { editing = true }
-                                .heightIn(min = 44.dp)
+                                .heightIn(min = 48.dp)
                                 .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -324,6 +343,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(OrynIcons.Close, tr("Fermer"), tint = colors.onSurface, modifier = Modifier.size(18.dp))
+                }
                 }
             }
         }

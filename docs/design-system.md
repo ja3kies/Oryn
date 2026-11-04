@@ -1,13 +1,13 @@
 # Oryn Design System — Hybrid color model
 
-Two layers, one source of truth. Chrome and editorial never mix in a single component.
+Two layers, one source of truth. Chrome and editorial have distinct roles; the reader's parchment preset must not tint the light app background.
 
 ## 1. Chrome layer — UI controls, navigation, surfaces
 
 Backed by Material 3 `ColorScheme`. Access via `OrynColors.chrome.*` or `MaterialTheme.colorScheme.*`.
 
-- **Light**: `#EFEFEC` + ink `#111111` + user accent (chartreuse `#C8F135` default)
-- **Dark**: `#121212` + `#F2F2EF` + lighter accent
+- **Light**: warm soft-white `#FAFAF8` canvas + white `#FFFFFF` cards + Deep Teal `#0F3A3A` ink + configured user accent (`#D0E86E` default)
+- **Dark**: deep teal `#081C1C` canvas + `#0D2727` cards + parchment `#FEFFDE` text + configured accent
 - **Rule**: accent = `primaryContainer`. `primary` = text.
 
 ## 2. Editorial layer — book identity, progression, favorites, reader

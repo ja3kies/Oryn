@@ -22,6 +22,8 @@ import androidx.core.view.WindowCompat
 
 private val DeepTeal = Color(0xFF0F3A3A)
 private val LightYellow = Color(0xFFFEFFDE)
+// Soft warm white belongs to app chrome; parchment stays a separate reader preset.
+private val SoftWhite = Color(0xFFFAFAF8)
 private val CherryRose = Color(0xFFB5185F)
 private val LimeCream = Color(0xFFD0E86E)
 private val StrongCyan = Color(0xFF35C1C2)
@@ -60,19 +62,19 @@ private val LightScheme = lightColorScheme(
     onTertiary = LightYellow,
     tertiaryContainer = Color(0xFFF6DCE7),
     onTertiaryContainer = DeepTeal,
-    background = LightYellow,
+    background = SoftWhite,
     onBackground = DeepTeal,
-    surface = Color(0xFFFFFFEE),
+    surface = Color.White,
     onSurface = DeepTeal,
-    surfaceVariant = Color(0xFFF0F2DD),
+    surfaceVariant = Color(0xFFF1F2F0),
     onSurfaceVariant = Color(0xFF405E59),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFFFFEE),
-    surfaceContainer = Color(0xFFF3F5E4),
-    surfaceContainerHigh = Color(0xFFE9EDD5),
-    surfaceContainerHighest = Color(0xFFDEE5C8),
+    surfaceContainerLow = Color(0xFFFCFCFA),
+    surfaceContainer = Color(0xFFF1F2F0),
+    surfaceContainerHigh = Color(0xFFE9EBE8),
+    surfaceContainerHighest = Color(0xFFE1E4DF),
     outline = Color(0xFF607A72),
-    outlineVariant = Color(0xFFC7D2B9),
+    outlineVariant = Color(0xFFCBD2CC),
     inverseSurface = DeepTeal,
     inverseOnSurface = LightYellow,
     inversePrimary = LimeCream,

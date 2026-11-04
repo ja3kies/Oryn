@@ -91,46 +91,48 @@ internal fun SelectionBar(
     modifier: Modifier = Modifier,
     onExtend: (() -> Unit)? = null
 ) {
-    val colors = MaterialTheme.colorScheme
-    val ink = Color(0xFFF2F2EF)
+    val ink = Color(0xFFF4F0E8)
     Surface(
         modifier = modifier.width(272.dp),
         shape = RoundedCornerShape(26.dp),
-        color = Color(0xFF0E0E0E),
+        color = Color(0xFF292725),
         contentColor = ink,
-        shadowElevation = 14.dp
+        shadowElevation = 6.dp
     ) {
-        Column(Modifier.padding(8.dp)) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Separate color choices from actions: the old 4x44dp + note row overflowed
+            // the 272dp popover on narrow screens and violated 48dp touch targets.
             Row(
-                Modifier.fillMaxWidth().padding(start = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 HighlightColors.forEachIndexed { i, c ->
                     val selected = existing != null && existing.kind == "HIGHLIGHT" && existing.color == i
                     Box(
-                        Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = tr("Surligner"), onClick = { onColor(i) }),
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .clickable(onClickLabel = tr("Surligner"), onClick = { onColor(i) }),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
-                            Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(c)
+                            Modifier.size(28.dp).clip(CircleShape).background(c)
                                 .then(if (selected) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
                         )
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.width(60.dp))
             }
-            Box(Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
             Row(Modifier.fillMaxWidth()) {
+                BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.weight(1f))
                 BarAction(OrynIcons.Pages, tr("Copier"), false, ink, onCopy, Modifier.weight(1f))
                 BarAction(OrynIcons.Highlighter, tr("Souligner"), existing != null && existing.kind == "UNDERLINE", ink, onUnderline, Modifier.weight(1f))
-                onExtend?.let { BarAction(OrynIcons.Select, tr("Étendre"), false, ink, it, Modifier.weight(1f)) }
-                onDefine?.let { BarAction(OrynIcons.BookOpen, tr("Définir"), false, ink, it, Modifier.weight(1f)) }
-                onTranslate?.let { BarAction(OrynIcons.Globe, tr("Traduire"), false, ink, it, Modifier.weight(1f)) }
+            }
+            if (onExtend != null || onDefine != null || onTranslate != null) {
+                Row(Modifier.fillMaxWidth()) {
+                    onExtend?.let { BarAction(OrynIcons.Select, tr("Étendre"), false, ink, it, Modifier.weight(1f)) }
+                    onDefine?.let { BarAction(OrynIcons.BookOpen, tr("Définir"), false, ink, it, Modifier.weight(1f)) }
+                    onTranslate?.let { BarAction(OrynIcons.Globe, tr("Traduire"), false, ink, it, Modifier.weight(1f)) }
+                }
             }
             onDelete?.let {
                 Box(Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
@@ -202,6 +204,7 @@ internal fun SelectionHandle(anchor: Offset, color: Color, onDrag: (Offset) -> U
     val currentDone by rememberUpdatedState(onDone)
     val half = with(LocalDensity.current) { 24.dp.toPx() }
     val lift = with(LocalDensity.current) { 6.dp.toPx() }
+    val touchLift = with(LocalDensity.current) { 30.dp.toPx() }
     Box(
         Modifier
             .offset { IntOffset((anchor.x - half).roundToInt(), (anchor.y - lift).roundToInt()) }
@@ -215,7 +218,7 @@ internal fun SelectionHandle(anchor: Offset, color: Color, onDrag: (Offset) -> U
                         change.consume()
                         pos += change.positionChange()
                         // on vise la ligne juste au-dessus du doigt
-                        currentDrag(Offset(pos.x, pos.y - 30f))
+                        currentDrag(Offset(pos.x, pos.y - touchLift))
                     }
                     currentDone()
                 }

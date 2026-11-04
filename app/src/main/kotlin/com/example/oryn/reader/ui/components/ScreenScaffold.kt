@@ -26,7 +26,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-val navBarClearance: Dp = 88.dp
+// Reserve the whole floating bar plus its top fade and system-gesture clearance.
+val navBarClearance: Dp = FloatingNavBarHeight + 48.dp
 
 /** Écran vide : carte de verre, icône arrondie et bouton d'action. */
 @Composable
