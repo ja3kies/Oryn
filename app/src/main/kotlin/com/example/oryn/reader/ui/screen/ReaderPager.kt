@@ -827,7 +827,8 @@ internal fun ReflowReader(
                                 val above = anchorRect.top - barSize.height - gap
                                 // pas de place au-dessus : sous le passage, sous les poignées
                                 val y = if (above >= padTopPx) above else anchorRect.bottom + gap + 36.dp.roundToPx()
-                                IntOffset(x, y.roundToInt())
+                                val maxY = (constraints.maxHeight - barSize.height - margin).coerceAtLeast(margin)
+                                IntOffset(x, y.roundToInt().coerceIn(margin, maxY))
                             }
                         }
                 )
