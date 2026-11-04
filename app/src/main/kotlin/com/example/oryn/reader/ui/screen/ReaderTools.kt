@@ -118,6 +118,7 @@ internal fun SearchDialog(
     val colors = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
+    val resultsListState = rememberLazyListState()
     var selectedHit by remember(query, text) { mutableStateOf(-1) }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
@@ -174,6 +175,9 @@ internal fun SearchDialog(
                 if (!list.isNullOrEmpty()) {
                     val activeIndex = selectedHit.takeIf { it in list.indices }
                         ?: readerSearchStartIndex(list.map { ReaderSearchMatch(it.offset, it.length) }, currentOffset)
+                    LaunchedEffect(activeIndex, list.size) {
+                        if (activeIndex >= 0) resultsListState.animateScrollToItem(activeIndex)
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(trf("%s / %s", activeIndex + 1, list.size), style = MaterialTheme.typography.labelMedium)
                         Row {
@@ -188,7 +192,7 @@ internal fun SearchDialog(
                         }
                     }
                 }
-                LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyColumn(Modifier.weight(1f, fill = false), state = resultsListState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     itemsIndexed(list.orEmpty()) { index, hit ->
                         Text(
                             hit.snippet,
@@ -198,7 +202,8 @@ internal fun SearchDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(colors.onSurface.copy(alpha = 0.06f))
+                                .background(if (index == selectedHit) colors.primary.copy(alpha = 0.12f) else colors.onSurface.copy(alpha = 0.06f))
+                                .semantics { selected = index == selectedHit }
                                 .clickable { selectedHit = index; onJump(hit.offset, hit.length) }
                                 .padding(12.dp)
                         )
