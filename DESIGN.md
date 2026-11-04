@@ -18,32 +18,33 @@ Oryn is a personal reading space. The interface should feel calm, editorial, tac
 
 ## 2. Brand palette
 
-The five colours below are the approved Oryn palette. Light Yellow is an approximate value sampled from the supplied reference; preserve the chosen value unless the original source asset is provided.
+The five colours below are the approved Oryn palette. Light Yellow is the approved editorial parchment colour. App chrome uses a distinct warm soft white (#FAFAF8) selected by the owner; do not use parchment as a full-screen chrome canvas.
 
 | Token | Hex | Intended role |
 |---|---|---|
 | Deep Teal | `#0F3A3A` | Core identity, primary text and actions in light mode |
-| Light Yellow | `#FEFFDE` | Warm canvas, negative space and inverse text |
+| Light Yellow | `#FEFFDE` | Editorial parchment, reader preset and inverse text (not the app chrome background) |
 | Cherry Rose | `#B5185F` | Signature accent and occasional expressive moments |
 | Lime Cream | `#D0E86E` | Reading progress, selection and primary accent surfaces |
 | Strong Cyan | `#35C1C2` | Interactive feedback and secondary emphasis |
 
 ### Colour hierarchy
 
-- Deep Teal + Light Yellow define the app.
+- Deep Teal + Light Yellow define the brand identity, while warm soft white (#FAFAF8) is the app's light-mode chrome.
 - Lime Cream carries progress and selection.
 - Strong Cyan communicates interactive/secondary states.
 - Cherry Rose is rare and deliberate.
 - Do not put all three accents at full strength on one screen.
 - The black background used to present the reference swatches is not an Oryn brand token.
+- The supplied pink-and-ivory book-leaf mark is the approved launcher/icon shape; keep its adaptive monochrome companion.
 
 ### Contrast and semantic use
 
-- Deep Teal on Light Yellow: primary text and controls.
+- Deep Teal on warm soft white: primary app text. Deep Teal on Light Yellow: editorial and inverse contexts.
 - Deep Teal on Lime Cream: readable progress/selection labels.
 - Light Yellow on Cherry Rose: readable text on a Cherry Rose surface.
 - Deep Teal on Strong Cyan: readable labels on a cyan surface.
-- Never use Cherry Rose or Strong Cyan as small text on Light Yellow.
+- Never use Cherry Rose or Strong Cyan as small text on Light Yellow or soft white.
 - Never use colour alone for reading state, source type, errors, or selection.
 - Verify actual foreground/background pairs after alpha, overlays and gradients. Target WCAG AA: 4.5:1 for normal text, 3:1 for large text and meaningful UI graphics.
 
@@ -55,8 +56,8 @@ Use `MaterialTheme.colorScheme` for standard UI and `OrynColors.editorial` for b
 
 | Semantic token | Value |
 |---|---|
-| Background | Light Yellow `#FEFFDE` |
-| Surface | Warm near-white `#FFFFEE` |
+| Background | Warm soft white `#FAFAF8` |
+| Surface | Clean white `#FFFFFF` |
 | Primary / onPrimary | Deep Teal / Light Yellow |
 | Secondary / onSecondary | Strong Cyan / Deep Teal |
 | Tertiary / onTertiary | Cherry Rose / Light Yellow |
