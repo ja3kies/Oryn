@@ -9,19 +9,45 @@ internal fun findReaderMatches(
     val needle = query.trim()
     if (needle.length > text.length) return emptyList()
     if (needle.length < 2 || limit <= 0 || text.isEmpty()) return emptyList()
+    // KMP compares simple Unicode case folds without rebuilding/normalizing the book.
+    // One scan block is bounded in codepoints, not potentially huge regionMatches calls.
+    fun fold(codePoint: Int): Int = Character.toLowerCase(Character.toUpperCase(codePoint))
+    val pattern = IntArray(needle.codePointCount(0, needle.length))
+    var source = 0
+    for (i in pattern.indices) {
+        if (i % 1024 == 0) checkCancellation()
+        val point = needle.codePointAt(source)
+        pattern[i] = fold(point)
+        source += Character.charCount(point)
+    }
+    val prefix = IntArray(pattern.size)
+    for (i in 1 until pattern.size) {
+        if (i % 1024 == 0) checkCancellation()
+        var matched = prefix[i - 1]
+        while (matched > 0 && pattern[i] != pattern[matched]) matched = prefix[matched - 1]
+        if (pattern[i] == pattern[matched]) matched++
+        prefix[i] = matched
+    }
     val matches = ArrayList<ReaderSearchMatch>()
-    var from = 0
-    while (from <= text.length - needle.length && matches.size < limit) {
-        // Unlike String.indexOf, this bounded scan can abandon obsolete queries even
-        // when a multi-megabyte document contains no match. Offsets remain UTF-16.
-        if (from % 1024 == 0) checkCancellation()
-        if (text.regionMatches(from, needle, 0, needle.length, ignoreCase = true)) {
-            matches.add(ReaderSearchMatch(from, needle.length))
-            from += needle.length
-            checkCancellation()
-        } else {
-            from++
+    val offsets = IntArray(pattern.size)
+    var cursor = 0
+    var scanned = 0
+    var matched = 0
+    while (cursor < text.length && matches.size < limit) {
+        if (scanned % 1024 == 0) checkCancellation()
+        offsets[scanned % offsets.size] = cursor
+        val point = text.codePointAt(cursor)
+        val folded = fold(point)
+        while (matched > 0 && folded != pattern[matched]) matched = prefix[matched - 1]
+        if (folded == pattern[matched]) matched++
+        cursor += Character.charCount(point)
+        if (matched == pattern.size) {
+            val start = offsets[(scanned - pattern.size + 1) % offsets.size]
+            // Keep persisted offsets and match lengths in the original UTF-16 document.
+            matches.add(ReaderSearchMatch(start, cursor - start))
+            matched = 0 // Existing search semantics do not materialize overlapping hits.
         }
+        scanned++
     }
     return matches
 }

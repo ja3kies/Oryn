@@ -51,4 +51,21 @@ class ReaderSearchIndexTest {
         org.junit.Assert.assertEquals(2, checks)
     }
 
+    @Test fun supplementaryCasePairsKeepTheirOriginalUtf16Offsets() {
+        assertEquals(listOf(ReaderSearchMatch(2, 2)), findReaderMatches("x \uD801\uDC00 end", "\uD801\uDC28"))
+    }
+    @Test fun repetitiveLongQueryCanBeCancelledDuringPreprocessing() {
+        var checks = 0
+        try {
+            findReaderMatches("a".repeat(2_000_000), "a".repeat(8192) + "b", checkCancellation = {
+                if (++checks == 3) throw java.util.concurrent.CancellationException()
+            })
+            fail("Search preprocessing ignored cancellation")
+        } catch (_: java.util.concurrent.CancellationException) { }
+        assertEquals(3, checks)
+    }
+    @Test fun repetitiveLongQueryWithNoMatchCompletesWithoutChangingOffsets() {
+        assertTrue(findReaderMatches("a".repeat(200_000), "a".repeat(8192) + "b").isEmpty())
+    }
+
 }
