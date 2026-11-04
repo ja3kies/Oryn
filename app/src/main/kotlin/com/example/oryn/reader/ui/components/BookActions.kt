@@ -192,6 +192,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
             viewModel.updateBookInfo(book, t, a)
             editing = false
         }
+        return // Never stack the edit dialog underneath the book details dialog.
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
