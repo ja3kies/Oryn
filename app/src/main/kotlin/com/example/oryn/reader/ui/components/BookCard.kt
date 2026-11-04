@@ -100,7 +100,9 @@ fun BookCover(book: BookEntity, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = colors.primaryContainer
+        // A fitted cover must never expose the selected accent as side gutters.
+        // Neutral backing preserves the whole artwork without cropping it.
+        color = colors.surfaceContainerLowest
     ) {
         val image = bitmap
         if (image != null) {
