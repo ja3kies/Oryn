@@ -147,6 +147,11 @@ fun Text(
 private val Dictionary: Map<String, String> by lazy {
     mapOf(
         "Conseil de lecture" to "Reading tip",
+        "Supprimer la couverture" to "Remove cover",
+        "Ma note : %s/5" to "My rating: %s/5",
+        "Ma note : non noté" to "My rating: not rated",
+        "Ma note : %s étoiles" to "Rate %s stars",
+        "Note Open Library : %s/5 · %s avis" to "Open Library rating: %s/5 · %s reviews",
         "Année (catalogue)" to "Catalog year",
         "Supprimer la couverture ?" to "Remove this cover?",
         "Tu pourras choisir une autre couverture depuis la fiche du livre." to "You can choose another cover from the book details.",
