@@ -166,7 +166,8 @@ object GutendexClient {
     ) = withContext(Dispatchers.IO) {
         val parent = destination.parentFile ?: throw IOException("Dossier de destination invalide")
         parent.mkdirs()
-        var current = URL(url)
+        val initial = URL(url)
+        var current = initial
         val temp = File(parent, destination.name + ".part")
         try {
             repeat(6) { attempt ->
@@ -179,10 +180,8 @@ object GutendexClient {
                 connection.readTimeout = 45_000
                 connection.instanceFollowRedirects = false
                 connection.setRequestProperty("User-Agent", USER_AGENT)
-                headers.forEach { (name, value) ->
-                    if (name.matches(Regex("[A-Za-z0-9-]{1,64}")) &&
-                        value.length <= 4096 && !value.contains('\r') && !value.contains('\n')
-                    ) connection.setRequestProperty(name, value)
+                WebDownloadHeaders.forOrigin(initial, current, headers).forEach { (name, value) ->
+                    connection.setRequestProperty(name, value)
                 }
 
                 try {
