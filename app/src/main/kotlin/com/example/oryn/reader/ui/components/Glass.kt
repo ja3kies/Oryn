@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -100,14 +102,14 @@ fun GlassIconButton(
     val colors = MaterialTheme.colorScheme
     Box(
         modifier
-            .size(size)
+            .size(maxOf(size, 48.dp))
             .solidSurface(CircleShape)
             .then(if (active) Modifier.background(colors.primary) else Modifier)
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            icon, description,
+            icon, null,
             tint = if (active) colors.onPrimary else inkPrimary(),
             modifier = Modifier.size(size * 0.5f)
         )
@@ -122,7 +124,7 @@ fun GlassChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: M
         modifier
             .solidSurface(CircleShape)
             .then(if (selected) Modifier.background(colors.primary) else Modifier)
-            .clickable(onClick = onClick)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .heightIn(min = 48.dp)
             .padding(horizontal = 16.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center
