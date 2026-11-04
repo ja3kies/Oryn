@@ -146,10 +146,10 @@ fun ReaderCompactControls(
                     ) {
                         Column(Modifier.padding(horizontal = 14.dp, vertical = 3.dp), verticalArrangement = Arrangement.Center) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(trf("Livre : %s %%", (bookProgress.coerceIn(0f, 1f) * 100).roundToInt()),
+                                Text(trf("Livre : %s %", (bookProgress.coerceIn(0f, 1f) * 100).roundToInt()),
                                     modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 chapterProgress?.let { fraction ->
-                                    Text(trf("Chapitre : %s %%", (fraction * 100).roundToInt()),
+                                    Text(trf("Chapitre : %s %", (fraction * 100).roundToInt()),
                                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
