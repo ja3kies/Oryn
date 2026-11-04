@@ -53,7 +53,7 @@ internal class EpubArchiveInputStream(
     }
 
     private fun safeName(name: String): Boolean {
-        if (name.isEmpty() || name.startsWith('/') || name.any { it == '\\' || it == ':' || it.isISOControl() }) return false
+        if (name.length !in 1..1024 || name.startsWith('/') || name.any { it == '\\' || it == ':' || it.isISOControl() }) return false
         val segments = name.removeSuffix("/").split('/')
         return segments.all { it.isNotEmpty() && it != "." && it != ".." }
     }
