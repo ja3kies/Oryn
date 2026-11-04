@@ -15,6 +15,9 @@ import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOut
 import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.text.TextPosition
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -62,8 +65,9 @@ class PdfTextEngine(private val context: Context, private val uri: Uri) : AutoCl
     private var copy: File? = null
     private var closed = false
     private var outlineCache: List<TocEntry>? = null
+    private var sourceFingerprint: String? = null
 
-    private fun open(): PDDocument? {
+    private fun open(checkCancellation: () -> Unit = {}): PDDocument? {
         document?.let { return it }
         if (closed) return null
         return runCatching {
@@ -71,35 +75,39 @@ class PdfTextEngine(private val context: Context, private val uri: Uri) : AutoCl
             // Copie temporaire unique et bornée : évite collisions et copies illimitées.
             val file = File.createTempFile("oryn-text-", ".pdf", context.cacheDir)
             try {
-                context.contentResolver.openInputStream(uri)?.use { input ->
+                val fingerprint = context.contentResolver.openInputStream(uri)?.use { input ->
                     file.outputStream().use { out ->
-                        val buffer = ByteArray(16 * 1024)
-                        var total = 0L
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            total += count
-                            if (total > MAX_PDF_BYTES) throw IOException("PDF exceeds 100 MiB limit")
-                            out.write(buffer, 0, count)
-                        }
+                        copyPdfSnapshot(input, out, MAX_PDF_BYTES, checkCancellation)
                     }
                 } ?: run {
                     file.delete()
                     return@runCatching null
                 }
                 copy = file
-                PDDocument.load(file)
+                PDDocument.load(file).also { sourceFingerprint = fingerprint }
             } catch (error: Exception) {
                 file.delete()
                 throw error
             }
-        }.getOrNull().also { document = it }
+        }.getOrElse {
+            if (it is CancellationException) throw it
+            null
+        }.also { document = it }
+    }
+
+    /** Identity of the already-open private snapshot, never a second URI read. */
+    suspend fun sourceFingerprint(): String? = withContext(Dispatchers.IO) {
+        val owner = currentCoroutineContext()
+        lock.withLock {
+            if (open { owner.ensureActive() } == null) null else sourceFingerprint
+        }
     }
 
     suspend fun page(index: Int): PdfTextPage = withContext(Dispatchers.IO) {
+        val owner = currentCoroutineContext()
         lock.withLock {
             cache.get(index)?.let { return@withLock it }
-            val doc = open() ?: return@withLock PdfTextPage.EMPTY
+            val doc = open { owner.ensureActive() } ?: return@withLock PdfTextPage.EMPTY
             if (index !in 0 until doc.numberOfPages) return@withLock PdfTextPage.EMPTY
             val words = ArrayList<PdfWord>()
             var sw = 0f
@@ -119,9 +127,10 @@ class PdfTextEngine(private val context: Context, private val uri: Uri) : AutoCl
 
     /** Sommaire du PDF (signets) ; [TocEntry.offset] = page × [PDF_STRIDE]. */
     suspend fun outline(): List<TocEntry> = withContext(Dispatchers.IO) {
+        val owner = currentCoroutineContext()
         lock.withLock {
             outlineCache?.let { return@withLock it }
-            val doc = open() ?: return@withLock emptyList()
+            val doc = open { owner.ensureActive() } ?: return@withLock emptyList()
             val out = ArrayList<TocEntry>()
             runCatching {
                 val root = doc.documentCatalog.documentOutline

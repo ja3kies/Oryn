@@ -10,7 +10,6 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -460,15 +459,14 @@ internal object PdfReflowBuilder {
     private const val VERSION = 3
     private const val WINDOW = 3
 
-    private fun cacheFile(context: Context, uri: Uri, pageCount: Int): File {
+    private fun cacheFile(context: Context, uri: Uri, pageCount: Int, sourceFingerprint: String?): File? {
+        val identity = pdfReflowCacheIdentity(uri.toString(), pageCount, sourceFingerprint) ?: return null
         val dir = File(context.cacheDir, "oryn-reflow").apply { mkdirs() }
-        val identity = MessageDigest.getInstance("SHA-256").digest(uri.toString().toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-        return File(dir, "$identity-$pageCount-v$VERSION.bin")
+        return File(dir, "$identity-v$VERSION.bin")
     }
 
-    suspend fun load(context: Context, uri: Uri, pageCount: Int): PdfReflowBook? = withContext(Dispatchers.IO) {
-        val f = cacheFile(context, uri, pageCount)
+    private suspend fun load(context: Context, uri: Uri, pageCount: Int, sourceFingerprint: String?): PdfReflowBook? = withContext(Dispatchers.IO) {
+        val f = cacheFile(context, uri, pageCount, sourceFingerprint) ?: return@withContext null
         if (!f.exists()) return@withContext null
         runCatching {
             DataInputStream(f.inputStream().buffered()).use { inp ->
@@ -505,9 +503,9 @@ internal object PdfReflowBuilder {
         }.getOrNull()
     }
 
-    private fun save(context: Context, uri: Uri, pageCount: Int, book: PdfReflowBook) {
+    private fun save(context: Context, uri: Uri, pageCount: Int, sourceFingerprint: String?, book: PdfReflowBook) {
         runCatching {
-            val f = cacheFile(context, uri, pageCount)
+            val f = cacheFile(context, uri, pageCount, sourceFingerprint) ?: return@runCatching
             val temporary = File.createTempFile("reflow-", ".tmp", f.parentFile)
             try {
                 DataOutputStream(temporary.outputStream().buffered()).use { out ->
@@ -539,8 +537,9 @@ internal object PdfReflowBuilder {
         pageCount: Int,
         onProgress: (Float) -> Unit
     ): PdfReflowBook {
-        load(context, uri, pageCount)?.let { return it }
-        return withContext(Dispatchers.Default) { assembleBook(context, uri, engine, pageCount, onProgress) }
+        val sourceFingerprint = engine.sourceFingerprint()
+        load(context, uri, pageCount, sourceFingerprint)?.let { return it }
+        return withContext(Dispatchers.Default) { assembleBook(context, uri, engine, pageCount, sourceFingerprint, onProgress) }
     }
 
     private suspend fun assembleBook(
@@ -548,6 +547,7 @@ internal object PdfReflowBuilder {
         uri: Uri,
         engine: PdfTextEngine,
         pageCount: Int,
+        sourceFingerprint: String?,
         onProgress: (Float) -> Unit
     ): PdfReflowBook {
         val ctx = currentCoroutineContext()
@@ -628,7 +628,7 @@ internal object PdfReflowBuilder {
             RichBook(text.toString(), spans, autoLinks(text.toString(), emptyList()), finalToc),
             offsets, scanned
         )
-        withContext(Dispatchers.IO) { save(context, uri, pageCount, result) }
+        withContext(Dispatchers.IO) { save(context, uri, pageCount, sourceFingerprint, result) }
         return result
     }
 }
