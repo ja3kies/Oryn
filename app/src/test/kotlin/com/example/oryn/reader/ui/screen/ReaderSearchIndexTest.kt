@@ -21,6 +21,10 @@ class ReaderSearchIndexTest {
         assertEquals(0, readerSearchStartIndex(matches, 0))
         assertEquals(-1, readerSearchStartIndex(emptyList(), 0))
     }
+    @Test fun navigationDoesNotOverflowAtIntegerBounds() {
+        assertEquals(0, readerSearchStep(Int.MAX_VALUE, 2, Int.MAX_VALUE))
+        assertEquals(0, readerSearchStep(Int.MIN_VALUE, 2, Int.MIN_VALUE))
+    }
     @Test fun previousAndNextWrapAndHandleEmptyResults() {
         assertEquals(2, readerSearchStep(0, 3, -1))
         assertEquals(0, readerSearchStep(2, 3, 1))

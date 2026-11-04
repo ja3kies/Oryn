@@ -5,6 +5,7 @@ internal data class ReaderSearchMatch(val offset: Int, val length: Int)
 
 internal fun findReaderMatches(text: String, query: String, limit: Int = 200): List<ReaderSearchMatch> {
     val needle = query.trim()
+    if (needle.length > text.length) return emptyList()
     if (needle.length < 2 || limit <= 0 || text.isEmpty()) return emptyList()
     val matches = ArrayList<ReaderSearchMatch>()
     var from = 0
@@ -25,4 +26,4 @@ internal fun readerSearchStartIndex(matches: List<ReaderSearchMatch>, position: 
 }
 
 internal fun readerSearchStep(index: Int, count: Int, delta: Int): Int =
-    if (count <= 0) -1 else Math.floorMod(index + delta, count)
+    if (count <= 0) -1 else Math.floorMod(index.toLong() + delta.toLong(), count.toLong()).toInt()
