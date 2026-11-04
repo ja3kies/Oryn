@@ -76,9 +76,15 @@ class PdfPages internal constructor(
                 renderer.openPage(index).use { page ->
                     val size = pdfRenderSize(page.width, page.height, key.width) ?: return@use null
                     val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
-                    bitmap.eraseColor(Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    bitmap
+                    try {
+                        bitmap.eraseColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bitmap
+                    } catch (error: Throwable) {
+                        // Failed renders never reach Compose/cache, so immediate recycling is safe.
+                        bitmap.recycle()
+                        throw error
+                    }
                 }
             }.getOrNull()?.also { cache.put(key, it) }
         }
@@ -189,8 +195,9 @@ class BookTextLoader(private val context: Context) {
     private fun loadPdf(uri: Uri): BookLoadResult {
         val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
             ?: return BookLoadResult.Error(tr("Impossible d'ouvrir le document PDF."))
+        var acquiredRenderer: PdfRenderer? = null
         return try {
-            val renderer = PdfRenderer(descriptor)
+            val renderer = PdfRenderer(descriptor).also { acquiredRenderer = it }
             if (renderer.pageCount == 0) {
                 renderer.close()
                 descriptor.close()
@@ -198,7 +205,8 @@ class BookTextLoader(private val context: Context) {
             } else {
                 BookLoadResult.Success(emptyList(), PdfPages(descriptor, renderer, PdfTextEngine(context.applicationContext, uri)))
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            runCatching { acquiredRenderer?.close() }
             runCatching { descriptor.close() }
             throw e
         }
