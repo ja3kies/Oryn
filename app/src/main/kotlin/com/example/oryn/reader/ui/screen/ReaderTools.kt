@@ -56,7 +56,7 @@ internal fun TocDialog(
 ) {
     val colors = MaterialTheme.colorScheme
     val currentIndex = remember(entries, currentOffset) {
-        entries.indices.filter { entries[it].offset <= currentOffset }.maxByOrNull { entries[it].offset } ?: 0
+        entries.indices.asSequence().filter { entries[it].offset <= currentOffset }.maxByOrNull { entries[it].offset } ?: 0
     }
     val listState = rememberLazyListState()
     LaunchedEffect(entries, currentIndex) {
