@@ -240,7 +240,19 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CoverAction(OrynIcons.Image, tr("Changer"), modifier = Modifier.weight(1f)) { pickCover.launch(arrayOf("image/*")) }
                             if (hasCover) {
-                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { confirmCoverRemoval = true }
+                                androidx.compose.material3.IconButton(
+                                    onClick = { confirmCoverRemoval = true },
+                                    modifier = Modifier.size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.errorContainer)
+                                ) {
+                                    Icon(
+                                        OrynIcons.Trash,
+                                        contentDescription = tr("Supprimer la couverture"),
+                                        tint = colors.onErrorContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
                         }
                         Text(
