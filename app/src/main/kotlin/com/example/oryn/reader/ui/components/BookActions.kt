@@ -185,6 +185,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     }
     var expanded by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    var confirmCoverRemoval by remember { mutableStateOf(false) }
     val hasCover = !book.coverPath.isNullOrBlank()
 
     if (editing) {
@@ -193,6 +194,22 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
             editing = false
         }
         return // Never stack the edit dialog underneath the book details dialog.
+    }
+
+    if (confirmCoverRemoval) {
+        AlertDialog(
+            onDismissRequest = { confirmCoverRemoval = false },
+            title = { Text(tr("Supprimer la couverture ?")) },
+            text = { Text(tr("Tu pourras choisir une autre couverture depuis la fiche du livre.")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeCover(book)
+                    confirmCoverRemoval = false
+                }) { Text(tr("Supprimer")) }
+            },
+            dismissButton = { TextButton(onClick = { confirmCoverRemoval = false }) { Text(tr("Annuler")) } }
+        )
+        return
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -223,7 +240,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CoverAction(OrynIcons.Image, tr("Changer"), modifier = Modifier.weight(1f)) { pickCover.launch(arrayOf("image/*")) }
                             if (hasCover) {
-                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { viewModel.removeCover(book) }
+                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { confirmCoverRemoval = true }
                             }
                         }
                         Text(
