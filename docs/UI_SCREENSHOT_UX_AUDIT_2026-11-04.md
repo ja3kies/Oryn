@@ -45,3 +45,45 @@
 7. Rotation, mise à l'échelle du texte et TalkBack, si disponibles.
 
 **Rollback :** fermer la PR #6 ou revenir au commit de base de `feat/oryn-reader-150`, sans réinitialisation forcée de la branche stable ni désinstallation de l'application.
+
+## Second pass — reader pill, reader sheet, cover and book metadata
+
+**Scope:** Static inspection of all **46 Kotlin files** under `app/src/main/kotlin/com/example/oryn/reader/ui/`: 18 components, 24 screen/reader files and 4 theme files. This is a code audit, **not** a complete live TalkBack or contrast sweep of every runtime state. The screenshots and code provided the following reproducible findings:
+
+| Area | Root cause | Fix / check |
+|---|---|---|
+| Book-cover accent stripes | `BookCover` uses `ContentScale.Fit` (correctly avoiding crop) on `primaryContainer` (bright accent) | Set neutral `surfaceContainerLowest` for letterboxing; preserve full illustration and the existing 3D cover |
+| Cover fallback in dark mode | Fallback text used `onPrimaryContainer` despite neutral surface | Use `onSurface`, icon `onSurfaceVariant`, increase tiny text from 9sp to 11sp |
+| Destructive cover action | Two wide CTAs `Changer`/`Supprimer` made deletion overly prominent | Keep labelled `Changer`, replace delete with an accessible 48dp trash icon and confirmation |
+| Noninteractive stars | `RatingRow` painted Open Library stars but exposed no onClick | Store a separate local personal rating 0–5, five accessible 48dp star buttons; tapping the same rating clears it. Show external rating separately and only when sourced |
+| Missing bibliographic data | EPUB may lack metadata; remote search can also return no match | Retain verified Open Library enrichment (date, description, publisher, pages) and permit user edits stored locally; never fabricate unknown values |
+| Reader pill | Tiny progress line and an unnecessary horizontal scroll hiding tool affordances | Fixed five 48dp actions with no hidden scroll; thicker progress bar and scalable progress header |
+| Reader sheet | Tiny text labels; icon-only tab navigation; some accent combinations unreadable; 3-margin + 2-scroll buttons did not fit a half-width card | Label two sections; keep accessible light-on-dark primary; enlarge labels/swatch targets; stack margin and scroll groups; opaque dark sheet |
+| Common controls | Custom filter chips lacked selected semantics and icon CTAs lacked button roles | `selectable` and button action names applied in `Glass.kt`; book taps/long-press affordances described |
+| Screenshots/high-value metadata | Edition year wrongly implied as exact year of imported file | Clarify that catalogue info can refer to a different edition and expose manual correction |
+
+### Contrast source calculations
+
+Computed **WCAG relative luminance contrast**, not inferred from palette names:
+
+- Light app text `#0F3A3A` on soft-white `#FAFAF8`: **11.91:1**.
+- Light book-card text `#0F3A3A` on white: **12.45:1**.
+- Light variant text `#405E59` on `#F1F2F0`: **6.31:1**.
+- Selected lime `#D0E86E` with deep teal `#0F3A3A`: **9.16:1**.
+- Selected rose `#B5185F` with ivory `#FEFFDE`: **6.31:1**.
+- Selected cyan `#35C1C2` with deep teal: **5.67:1**.
+- Night surface `#0D2727` with ivory: **15.39:1**.
+
+A new JVM test verifies the live `orynColorScheme` semantic foreground/background pairings over all accent choices and both themes. Local artwork overlaid on screenshots, disabled/transparent combinations and user-supplied cover art still require **runtime** checks.
+
+### Native-skill selection
+
+Read [AgenticSkills Design category](https://agenticskills.io/category/design), favoring:
+- [Platform Design Skills / Android guidelines](https://agenticskills.io/skills/platform-design-skills), native Android Material 3 + WCAG 2.2.
+- [UI/UX Pro Max](https://agenticskills.io/skills/ui-ux-pro-max), mobile pre-delivery QA and semantic control principles.
+
+Integrated an **original Android-specific adaptation** at `.agents/skills/oryn-native-accessibility/SKILL.md` and routed `AGENTS.md` to it. Web-only shadcn/Tailwind styling has not been imported into Jetpack Compose.
+
+### Quality gate and remaining limits
+
+PR #7 builds from the UI branch; the parent UI PR #6 and main remain unaffected. Automated checks need to complete at the final SHA: JVM, debug/release lint, APK signing, debug/release builds, instrumented-test **compilation**. Test scripts are not a substitute for on-device interaction. On Pixel 9 verify: edge-gutter behavior across odd cover ratios; modal text and stars with TalkBack; saved manual year/description/pages/publisher across restart; reader pill on text scales 100%/200%, sheet scroll and tabs, selection gestures and return. Community Auth/catalog/transfers remain locked.
