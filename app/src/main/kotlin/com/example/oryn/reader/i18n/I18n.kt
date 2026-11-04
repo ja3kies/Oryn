@@ -148,6 +148,11 @@ private val Dictionary: Map<String, String> by lazy {
     mapOf(
         "Conseil de lecture" to "Reading tip",
         "Supprimer la couverture" to "Remove cover",
+        "Modifier les informations" to "Edit book details",
+        "Année de publication" to "Publication year",
+        "Année invalide" to "Invalid year",
+        "Description du livre" to "Book description",
+        "Saisi dans Oryn" to "Edited in Oryn",
         "Ma note : %s/5" to "My rating: %s/5",
         "Ma note : non noté" to "My rating: not rated",
         "Ma note : %s étoiles" to "Rate %s stars",
