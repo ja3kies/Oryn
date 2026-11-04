@@ -249,7 +249,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
                             InfoStat(tr("Progression"), if (book.progress < 0.01f) "0 %" else "${(book.progress * 100).toInt()} %", Modifier.weight(1f))
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
-                            InfoStat(tr("1re édition"), info?.year?.toString() ?: "—", Modifier.weight(1f))
+                            InfoStat(tr("Année (catalogue)"), info?.year?.toString() ?: "—", Modifier.weight(1f))
                         }
                         LinearProgressIndicator(
                             progress = { book.progress.coerceIn(0f, 1f) },
