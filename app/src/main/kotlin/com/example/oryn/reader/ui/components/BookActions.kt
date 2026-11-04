@@ -53,6 +53,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.oryn.reader.data.local.entity.BookEntity
 import com.example.oryn.reader.data.remote.BookInfo
+import com.example.oryn.reader.data.remote.BookInfoOverrides
 import com.example.oryn.reader.data.remote.BookInfoClient
 import com.example.oryn.reader.rememberMainViewModel
 import java.util.Locale
@@ -180,7 +181,8 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.setCover(book, uri)
     }
-    val info by produceState<BookInfo?>(initialValue = null, book.id) {
+    var metadataRefresh by remember(book.id) { androidx.compose.runtime.mutableIntStateOf(0) }
+    val info by produceState<BookInfo?>(initialValue = null, book.id, metadataRefresh) {
         value = runCatching { BookInfoClient.load(context, book) }.getOrDefault(BookInfo())
     }
     var expanded by remember { mutableStateOf(false) }
@@ -189,8 +191,10 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     val hasCover = !book.coverPath.isNullOrBlank()
 
     if (editing) {
-        EditInfoDialog(book, onDismiss = { editing = false }) { t, a ->
+        EditInfoDialog(book, info, onDismiss = { editing = false }) { t, a, description, year ->
+            BookInfoOverrides.save(context, book.id, description, year)
             viewModel.updateBookInfo(book, t, a)
+            metadataRefresh++
             editing = false
         }
         return // Never stack the edit dialog underneath the book details dialog.
@@ -363,14 +367,26 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun EditInfoDialog(book: BookEntity, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
-    var title by remember { mutableStateOf(book.title) }
-    var author by remember { mutableStateOf(book.author) }
+private fun EditInfoDialog(
+    book: BookEntity,
+    info: BookInfo?,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, Int?) -> Unit
+) {
+    var title by remember(book.id) { mutableStateOf(book.title) }
+    var author by remember(book.id) { mutableStateOf(book.author) }
+    var description by remember(book.id, info?.description) { mutableStateOf(info?.description.orEmpty()) }
+    var year by remember(book.id, info?.year) { mutableStateOf(info?.year?.toString().orEmpty()) }
+    val parsedYear = year.trim().toIntOrNull()
+    val yearError = year.isNotBlank() && (parsedYear == null || parsedYear !in 1..2100)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(tr("Modifier le livre")) },
+        title = { Text(tr("Modifier les informations")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -385,9 +401,34 @@ private fun EditInfoDialog(book: BookEntity, onDismiss: () -> Unit, onSave: (Str
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = year,
+                    onValueChange = { year = it.filter { ch -> ch.isDigit() }.take(4) },
+                    label = { Text(tr("Année de publication")) },
+                    isError = yearError,
+                    supportingText = if (yearError) ({ Text(tr("Année invalide")) }) else null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it.take(12_000) },
+                    label = { Text(tr("Description du livre")) },
+                    minLines = 3,
+                    maxLines = 6,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(title, author) }) { Text(tr("Enregistrer")) } },
+        confirmButton = {
+            TextButton(
+                enabled = !yearError && title.isNotBlank() && author.isNotBlank(),
+                onClick = { onSave(title.trim(), author.trim(), description, parsedYear) }
+            ) { Text(tr("Enregistrer")) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Annuler")) } }
     )
 }
