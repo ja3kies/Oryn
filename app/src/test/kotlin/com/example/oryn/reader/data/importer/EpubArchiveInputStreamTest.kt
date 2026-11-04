@@ -23,8 +23,8 @@ class EpubArchiveInputStreamTest {
     @Test fun nestedUnicodeEntriesAndDirectoriesAreReadable() {
         val content = "<p>Résumé 📚</p>".toByteArray()
         EpubArchiveInputStream(ByteArrayInputStream(archive("OEBPS/" to byteArrayOf(), "OEBPS/école.xhtml" to content))).use { zip ->
-            assertTrue(zip.nextEntry.isDirectory)
-            assertEquals("OEBPS/école.xhtml", zip.nextEntry.name)
+            assertTrue(requireNotNull(zip.nextEntry).isDirectory)
+            assertEquals("OEBPS/école.xhtml", requireNotNull(zip.nextEntry).name)
             assertArrayEquals(content, zip.readBytes())
             assertNull(zip.nextEntry)
         }
