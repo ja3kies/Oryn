@@ -192,8 +192,8 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     val hasCover = !book.coverPath.isNullOrBlank()
 
     if (editing) {
-        EditInfoDialog(book, info, onDismiss = { editing = false }) { t, a, description, year ->
-            BookInfoOverrides.save(context, book.id, description, year)
+        EditInfoDialog(book, info, onDismiss = { editing = false }) { t, a, description, year, publisher, pages ->
+            BookInfoOverrides.save(context, book.id, description, year, publisher, pages)
             viewModel.updateBookInfo(book, t, a)
             metadataRefresh++
             editing = false
@@ -283,8 +283,21 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
                             InfoStat(tr("Progression"), if (book.progress < 0.01f) "0 %" else "${(book.progress * 100).toInt()} %", Modifier.weight(1f))
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
-                            InfoStat(tr("Année (catalogue)"), info?.year?.toString() ?: "—", Modifier.weight(1f))
+                            InfoStat(tr("Année"), info?.year?.toString() ?: "—", Modifier.weight(1f))
                         }
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            InfoStat(tr("Pages"), info?.pages?.toString() ?: "—", Modifier.weight(1f))
+                            InfoStat(tr("Éditeur"), info?.publisher ?: "—", Modifier.weight(2f))
+                        }
+                        Text(
+                            tr("Données du catalogue ou saisies dans Oryn ; l’édition locale peut différer."),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
                         LinearProgressIndicator(
                             progress = { book.progress.coerceIn(0f, 1f) },
                             modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(CircleShape),
@@ -372,14 +385,18 @@ private fun EditInfoDialog(
     book: BookEntity,
     info: BookInfo?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, Int?) -> Unit
+    onSave: (String, String, String, Int?, String, Int?) -> Unit
 ) {
     var title by remember(book.id) { mutableStateOf(book.title) }
     var author by remember(book.id) { mutableStateOf(book.author) }
     var description by remember(book.id, info?.description) { mutableStateOf(info?.description.orEmpty()) }
     var year by remember(book.id, info?.year) { mutableStateOf(info?.year?.toString().orEmpty()) }
+    var publisher by remember(book.id, info?.publisher) { mutableStateOf(info?.publisher.orEmpty()) }
+    var pages by remember(book.id, info?.pages) { mutableStateOf(info?.pages?.toString().orEmpty()) }
     val parsedYear = year.trim().toIntOrNull()
     val yearError = year.isNotBlank() && (parsedYear == null || parsedYear !in 1..2100)
+    val parsedPages = pages.trim().toIntOrNull()
+    val pagesError = pages.isNotBlank() && (parsedPages == null || parsedPages !in 1..200_000)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr("Modifier les informations")) },
@@ -415,6 +432,25 @@ private fun EditInfoDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
+                    value = publisher,
+                    onValueChange = { publisher = it.take(160) },
+                    label = { Text(tr("Éditeur")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = pages,
+                    onValueChange = { pages = it.filter { ch -> ch.isDigit() }.take(6) },
+                    label = { Text(tr("Nombre de pages")) },
+                    isError = pagesError,
+                    supportingText = if (pagesError) ({ Text(tr("Nombre de pages invalide")) }) else null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
                     value = description,
                     onValueChange = { description = it.take(12_000) },
                     label = { Text(tr("Description du livre")) },
@@ -426,8 +462,8 @@ private fun EditInfoDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = !yearError && title.isNotBlank() && author.isNotBlank(),
-                onClick = { onSave(title.trim(), author.trim(), description, parsedYear) }
+                enabled = !yearError && !pagesError && title.isNotBlank() && author.isNotBlank(),
+                onClick = { onSave(title.trim(), author.trim(), description, parsedYear, publisher, parsedPages) }
             ) { Text(tr("Enregistrer")) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Annuler")) } }
@@ -515,6 +551,6 @@ private fun RatingRow(bookId: Long, info: BookInfo?) {
 private fun InfoStat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = inkSecondary(), maxLines = 1)
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
