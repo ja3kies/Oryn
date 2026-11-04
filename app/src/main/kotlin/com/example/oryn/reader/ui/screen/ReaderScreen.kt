@@ -455,6 +455,7 @@ fun ReaderScreen(
         if (activeTool == ReaderTool.SEARCH && effectiveRich != null) {
             SearchDialog(
                 text = effectiveRich.text,
+                currentOffset = (liveProgress * effectiveRich.text.length).toInt(),
                 onJump = { offset, length ->
                     closeTool(false)
                     controlsEvent(ReaderControlsEvent.HIDE)
