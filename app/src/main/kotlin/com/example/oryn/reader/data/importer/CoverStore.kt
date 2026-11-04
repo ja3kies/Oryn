@@ -35,33 +35,41 @@ class CoverStore(private val context: Context) {
             bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }
         ) ?: return@runCatching null
 
-        val ratio = MAX_SIDE.toFloat() / maxOf(decoded.width, decoded.height)
-        val resized = if (ratio < 1f) {
-            Bitmap.createScaledBitmap(
-                decoded, (decoded.width * ratio).toInt().coerceAtLeast(1),
-                (decoded.height * ratio).toInt().coerceAtLeast(1), true
-            )
-        } else decoded
+        var resized = decoded
+        var flat: Bitmap? = null
+        var temporary: File? = null
+        try {
+            val ratio = MAX_SIDE.toFloat() / maxOf(decoded.width, decoded.height)
+            if (ratio < 1f) {
+                resized = Bitmap.createScaledBitmap(
+                    decoded, (decoded.width * ratio).toInt().coerceAtLeast(1),
+                    (decoded.height * ratio).toInt().coerceAtLeast(1), true
+                )
+            }
 
-        // Fond blanc : une image transparente ne devient pas noire en JPEG
-        val flat = Bitmap.createBitmap(resized.width, resized.height, Bitmap.Config.ARGB_8888)
-        Canvas(flat).apply {
-            drawColor(Color.WHITE)
-            drawBitmap(resized, 0f, 0f, null)
+            // Flatten transparency, then release all native bitmap buffers even on write failure.
+            val outputBitmap = Bitmap.createBitmap(resized.width, resized.height, Bitmap.Config.ARGB_8888)
+            flat = outputBitmap
+            Canvas(outputBitmap).apply {
+                drawColor(Color.WHITE)
+                drawBitmap(resized, 0f, 0f, null)
+            }
+            val hashPart = stableHash?.takeIf { it.matches(Regex("[a-fA-F0-9]{1,64}")) }?.take(40)
+            val prefix = if (hashPart == null) "cover_" else "cover_${hashPart}_"
+            val staged = File.createTempFile(prefix, ".tmp", dir)
+            temporary = staged
+            staged.outputStream().use {
+                if (!outputBitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) return@runCatching null
+            }
+            val file = File(dir, staged.nameWithoutExtension + ".jpg")
+            if (file.exists() || !staged.renameTo(file)) return@runCatching null
+            file.absolutePath
+        } finally {
+            temporary?.delete()
+            flat?.recycle()
+            if (resized !== decoded) resized.recycle()
+            decoded.recycle()
         }
-
-        val name = if (stableHash != null) {
-            // Timestamp dans le nom : chaque save crée un chemin unique.
-            // Conséquence : BookEntity.coverPath change → Room émet un
-            // nouveau livre → key(books) recompose → tiles rafraîchies
-            // immédiatement, sans scroll-out.
-            "cover_${stableHash.take(40)}_${System.currentTimeMillis()}.jpg"
-        } else {
-            "cover_${System.currentTimeMillis()}_${(0..9999).random()}.jpg"
-        }
-        val file = File(dir, name)
-        file.outputStream().use { flat.compress(Bitmap.CompressFormat.JPEG, 88, it) }
-        file.absolutePath
     }.getOrNull()
 
     fun saveUri(uri: Uri, stableHash: String? = null): String? = runCatching {
@@ -88,10 +96,10 @@ class CoverStore(private val context: Context) {
      */
     fun findByHash(stableHash: String): String? {
         val hashPart = stableHash.take(40)
-        File(dir, "cover_$hashPart.jpg").takeIf { it.exists() }?.let { return it.absolutePath }
+        val legacyName = "cover_$hashPart.jpg"
         val prefix = "cover_${hashPart}_"
         return dir.listFiles()
-            ?.filter { it.name.startsWith(prefix) }
+            ?.filter { it.isFile && it.extension == "jpg" && (it.name == legacyName || it.name.startsWith(prefix)) }
             ?.maxByOrNull { it.lastModified() }
             ?.absolutePath
     }
