@@ -74,4 +74,23 @@ class LibraryMutationCoordinatorTest {
         }.awaitAll()
         assertEquals(30, references)
     }
+    @Test fun separateActivityCoordinatorsCannotReclaimAnUnpublishedSharedFile() = runTest {
+        val firstActivity = LibraryMutationCoordinator()
+        val secondActivity = LibraryMutationCoordinator()
+        val started = CompletableDeferred<Unit>()
+        val publish = CompletableDeferred<Unit>()
+        val secondEntered = CompletableDeferred<Unit>()
+        val importer = launch {
+            firstActivity.mutate { started.complete(Unit); publish.await() }
+        }
+        started.await()
+        val deletion = launch { secondActivity.mutate { secondEntered.complete(Unit) } }
+        yield()
+        assertFalse(secondEntered.isCompleted)
+        publish.complete(Unit)
+        importer.join()
+        deletion.join()
+        assertTrue(secondEntered.isCompleted)
+    }
+
 }
