@@ -149,7 +149,7 @@ internal fun LibraryContent(
         AlertDialog(
             onDismissRequest = { pendingDeleteIds = longArrayOf() },
             title = { Text(tr("Supprimer la sélection ?")) },
-            text = { Text(trf("%s livres seront retirés de ta bibliothèque. Tes fichiers importés ne sont pas touchés.", pendingDeleteBooks.size)) },
+            text = { Text(trf("%s livres seront retirés de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées.", pendingDeleteBooks.size)) },
             confirmButton = { TextButton(onClick = {
                 onDeleteBooks(pendingDeleteBooks)
                 pendingDeleteIds = longArrayOf()
@@ -344,7 +344,7 @@ internal fun LibraryContent(
                                 onSelect = handleSelect,
                                 onToggleFavorite = { onToggleFavorite(book) },
                                 isSelectionMode = isSelectionMode,
-                                modifier = Modifier.semantics { if (isSelectionMode) selected = isSelected }
+                                isSelected = isSelected
                             )
                             if (isSelectionMode) {
                                 Icon(

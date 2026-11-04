@@ -77,7 +77,7 @@ fun BookActionsHost(book: BookEntity, visible: Boolean, onDismiss: () -> Unit, o
             AlertDialog(
                 onDismissRequest = onDismiss,
                 title = { Text(tr("Supprimer ce livre ?")) },
-                text = { Text(trf("« %s » sera retiré de ta bibliothèque. Tes fichiers importés ne sont pas touchés.", book.title)) },
+                text = { Text(trf("« %s » sera retiré de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées.", book.title)) },
                 confirmButton = {
                     TextButton(onClick = { onDismiss(); viewModel.deleteBook(book) }) { Text(tr("Supprimer")) }
                 },
