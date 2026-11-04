@@ -518,17 +518,18 @@ private fun RatingRow(bookId: Long, info: BookInfo?) {
             horizontalArrangement = Arrangement.Center
         ) {
             (1..5).forEach { score ->
-                androidx.compose.material3.IconButton(
+                androidx.compose.material3.IconToggleButton(
                     modifier = Modifier.size(48.dp),
-                    onClick = {
-                        val next = if (personalRating == score) 0 else score
+                    checked = personalRating == score,
+                    onCheckedChange = { checked ->
+                        val next = if (checked) score else 0
                         personalRating = next
                         prefs.edit().putInt("book_$bookId", next).apply()
                     }
                 ) {
                     Icon(
                         OrynIcons.Star,
-                        contentDescription = trf("Ma note : %s étoiles", score),
+                        contentDescription = if (personalRating == score) trf("Effacer ma note de %s étoiles", score) else trf("Noter %s étoiles", score),
                         tint = if (score <= personalRating) starColor else colors.onSurfaceVariant,
                         modifier = Modifier.size(26.dp),
                     )
