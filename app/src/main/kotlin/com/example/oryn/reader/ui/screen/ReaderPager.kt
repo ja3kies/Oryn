@@ -205,13 +205,6 @@ internal fun BookPager(
 
 private class PageLayout(val key: String, val starts: IntArray, val style: TextStyle)
 
-/** Mémorise les mises en page déjà calculées (même livre, mêmes réglages, même écran). */
-private object PaginationCache {
-    private val cache = LruCache<String, IntArray>(12)
-    fun get(key: String): IntArray? = cache.get(key)
-    fun put(key: String, starts: IntArray) { cache.put(key, starts) }
-}
-
 /**
  * Coupe [text] en pages qui tiennent exactement dans [heightPx]. Chaque page se termine à la
  * dernière ligne ENTIÈRE visible : aucun mot n'est coupé, le suivant passe sur la page d'après.
@@ -329,9 +322,14 @@ internal fun ReflowReader(
     val text = book.text
 
     // Texte stylé (couleur des liens selon le thème), préparé hors de l'interface
-    val rich by produceState<AnnotatedString?>(null, book, linkColor) {
-        value = withContext(Dispatchers.Default) { book.toAnnotatedString(linkColor) }
+    val prepared by produceState<Pair<RichBook, AnnotatedString>?>(null, book, linkColor) {
+        value = withContext(Dispatchers.Default) { book to book.toAnnotatedString(linkColor) }
     }
+    // produceState retains its previous value until the new producer finishes.
+    val rich = prepared?.takeIf { it.first === book }?.second
+    // Scope cached boundaries to this document instance: a reselected/replaced file
+    // may retain its database id while having completely different text and spans.
+    val paginationCache = remember(book) { LruCache<String, IntArray>(4) }
     val sortedLinks = remember(book) { book.links.sortedBy { it.start } }
 
     var pendingUrl by remember { mutableStateOf<String?>(null) }
@@ -389,13 +387,13 @@ internal fun ReflowReader(
                 hyphens = Hyphens.None
             )
         }
-        val layoutKey = "$bookId|$widthPx|$heightPx|${settings.fontFamily}|${settings.fontSizePt}|${settings.lineSpacing}|${settings.textAlign}"
+        val layoutKey = "$bookId|$widthPx|$heightPx|${density.density}|${density.fontScale}|$layoutDirection|${settings.fontFamily}|${settings.fontSizePt}|${settings.lineSpacing}|${settings.textAlign}"
 
-        var layout by remember { mutableStateOf<PageLayout?>(null) }
+        var layout by remember(book) { mutableStateOf<PageLayout?>(null) }
         var progress by remember { mutableFloatStateOf(0f) }
         var computing by remember { mutableStateOf(true) }
         // Position de lecture (début de la page courante), conservée quand la mise en page change
-        val anchor = remember(bookId) {
+        val anchor = remember(bookId, book) {
             intArrayOf(((initialProgress * text.length).toInt() - 1).coerceIn(0, max(0, text.length - 1)))
         }
 
@@ -404,9 +402,9 @@ internal fun ReflowReader(
             val styled = rich ?: return@LaunchedEffect
             computing = true
             if (layout != null) kotlinx.coroutines.delay(200) // attend la fin des clics sur +/−
-            val cached = PaginationCache.get(layoutKey)
+            val cached = paginationCache.get(layoutKey)
             val starts = cached ?: paginateText(styled, measureStyle, fontResolver, density, layoutDirection, widthPx, heightPx) { progress = it }
-                .also { PaginationCache.put(layoutKey, it) }
+                .also { paginationCache.put(layoutKey, it) }
             layout = PageLayout(layoutKey, starts, measureStyle)
             computing = false
         }
@@ -544,7 +542,6 @@ internal fun ReflowReader(
                         val a = rng.first
                         val b = rng.second
                         if (b <= a) return@start
-                        println("ORYN_SEL: abs=$absolute range=$a..$b text='" + text.substring(a, b) + "'")
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         activeId = null
                         val cur = selection
