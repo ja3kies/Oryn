@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import com.example.oryn.reader.i18n.tr
+import com.example.oryn.reader.i18n.trf
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,6 +61,8 @@ fun BookTile(
             .aspectRatio(0.70f)
             .glass(RoundedCornerShape(22.dp), tint)
             .combinedClickable(
+                onClickLabel = trf("Ouvrir %s", book.title),
+                onLongClickLabel = tr("Options du livre"),
                 onClick = onClick,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)

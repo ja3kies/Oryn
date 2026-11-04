@@ -470,9 +470,9 @@ private fun OnlineBookRow(
                 if (book.language.isNotBlank()) {
                     Text(
                         book.language.uppercase(),
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.primary
+                        color = colors.onSurface
                     )
                 }
             }

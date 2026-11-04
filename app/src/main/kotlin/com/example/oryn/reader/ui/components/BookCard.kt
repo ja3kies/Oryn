@@ -100,7 +100,9 @@ fun BookCover(book: BookEntity, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = colors.primaryContainer
+        // A fitted cover must never expose the selected accent as side gutters.
+        // Neutral backing preserves the whole artwork without cropping it.
+        color = colors.surfaceContainerLowest
     ) {
         val image = bitmap
         if (image != null) {
@@ -115,15 +117,15 @@ fun BookCover(book: BookEntity, modifier: Modifier = Modifier) {
                 Icon(
                     imageVector = OrynIcons.BookOpen,
                     contentDescription = null,
-                    tint = colors.primary,
+                    tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
                 Text(
                     text = book.format,
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colors.onPrimaryContainer,
+                    color = colors.onSurface,
                     modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
                 )
             }
@@ -198,6 +200,8 @@ fun BookCard(
                 .glass(RoundedCornerShape(28.dp), tint)
                 .semantics { if (isSelectionMode) selected = isSelected }
                 .combinedClickable(
+                    onClickLabel = trf("Ouvrir %s", book.title),
+                    onLongClickLabel = tr("Options du livre"),
                     onClick = onBookClick,
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)

@@ -19,7 +19,9 @@ data class BookInfo(
     val descriptionSource: String? = null,
     val rating: Float? = null,
     val ratingCount: Int = 0,
-    val year: Int? = null
+    val year: Int? = null,
+    val publisher: String? = null,
+    val pages: Int? = null
 )
 
 /**
@@ -32,8 +34,8 @@ object BookInfoClient {
     private const val MAX_CACHE_BYTES = 256 * 1024
 
     suspend fun load(context: Context, book: BookEntity): BookInfo = withContext(Dispatchers.IO) {
-        val cacheFile = File(File(context.filesDir, "info").apply { mkdirs() }, "v2-${book.id}.json")
-        readCache(cacheFile)?.let { return@withContext it }
+        val cacheFile = File(File(context.filesDir, "info").apply { mkdirs() }, "v3-${book.id}.json")
+        readCache(cacheFile)?.let { return@withContext it.withOverrides(BookInfoOverrides.get(context, book.id)) }
 
         // 1. Résumé intégré à l'EPUB
         var description: String? = null
@@ -47,16 +49,17 @@ object BookInfoClient {
         var rating: Float? = null
         var count = 0
         var year: Int? = null
-        var reachable = false
+        var publisher: String? = null
+        var pages: Int? = null
+        var matchedCatalogueWork = false
         runCatching {
             val title = URLEncoder.encode(book.title, "UTF-8")
             val author = book.author.takeIf { !it.equals("Auteur inconnu", true) }
                 ?.let { "&author=" + URLEncoder.encode(it, "UTF-8") }.orEmpty()
             val search = JSONObject(
-                get("https://openlibrary.org/search.json?title=$title$author&limit=3" +
-                    "&fields=key,title,author_name,first_publish_year,ratings_average,ratings_count")
+                get("https://openlibrary.org/search.json?title=$title$author&limit=10" +
+                    "&fields=key,title,author_name,first_publish_year,ratings_average,ratings_count,publisher,number_of_pages_median")
             )
-            reachable = true
             val docs = search.optJSONArray("docs")
             if (docs != null) {
                 for (i in 0 until docs.length()) {
@@ -71,11 +74,15 @@ object BookInfoClient {
                             sameOpenLibraryAuthor(expectedAuthor, authors.optString(index))
                         }
                     ) continue
+                    matchedCatalogueWork = true
                     count = doc.optInt("ratings_count", 0).coerceAtLeast(0)
                     rating = doc.optDouble("ratings_average", Double.NaN).toFloat()
                         .takeIf { it.isFinite() && it in 0.1f..5f && count > 0 }
                     year = doc.optInt("first_publish_year", 0)
                         .takeIf { it in 1450..java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
+                    publisher = doc.optJSONArray("publisher")
+                        ?.optString(0)?.trim()?.take(160)?.takeIf { it.isNotBlank() }
+                    pages = doc.optInt("number_of_pages_median", 0).takeIf { it in 1..200_000 }
                     if (description == null) {
                         val key = doc.optString("key")
                         if (key.isNotBlank()) {
@@ -94,10 +101,10 @@ object BookInfoClient {
             }
         }
 
-        val info = BookInfo(description, source, rating?.takeIf { it > 0f }, count, year)
-        // On ne garde en cache que si le réseau a répondu (sinon on réessaiera la prochaine fois)
-        if (reachable || description != null) writeCache(cacheFile, info)
-        info
+        val info = BookInfo(description, source, rating?.takeIf { it > 0f }, count, year, publisher, pages)
+        // Do not cache catalogue misses as empty book data for thirty days.
+        if (matchedCatalogueWork || description != null) writeCache(cacheFile, info)
+        info.withOverrides(BookInfoOverrides.get(context, book.id))
     }
 
     private fun get(url: String): String {
@@ -137,7 +144,9 @@ object BookInfoClient {
             descriptionSource = j.optString("s").takeIf { it.isNotBlank() },
             rating = if (j.has("r")) j.optDouble("r").toFloat() else null,
             ratingCount = j.optInt("c", 0),
-            year = if (j.has("y")) j.optInt("y") else null
+            year = if (j.has("y")) j.optInt("y") else null,
+            publisher = j.optString("u").takeIf { it.isNotBlank() },
+            pages = if (j.has("p")) j.optInt("p").takeIf { it in 1..200_000 } else null
         )
     }.getOrNull()
 
@@ -149,6 +158,8 @@ object BookInfoClient {
             info.rating?.let { j.put("r", it.toDouble()) }
             j.put("c", info.ratingCount)
             info.year?.let { j.put("y", it) }
+            info.publisher?.let { j.put("u", it) }
+            info.pages?.let { j.put("p", it) }
             file.writeText(j.toString())
         }
     }

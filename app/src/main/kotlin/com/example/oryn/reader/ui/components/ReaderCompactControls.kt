@@ -8,8 +8,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -46,7 +44,7 @@ data class ReaderChromeMetrics(val top: Dp, val progress: Dp) {
     val bottom: Dp get() = progress + 64.dp
 }
 fun readerChromeMetrics(fontScale: Float, chapterDetail: Boolean = false) = ReaderChromeMetrics(
-    maxOf(56.dp, ((if (chapterDetail) 36 else 20) * fontScale + 8).dp), maxOf(28.dp, (18 * fontScale + 8).dp)
+    maxOf(56.dp, ((if (chapterDetail) 36 else 20) * fontScale + 8).dp), maxOf(36.dp, (22 * fontScale + 8).dp)
 )
 
 /** A bottom-most input sibling catches gutters without intercepting document gestures or buttons. */
@@ -153,14 +151,19 @@ fun ReaderCompactControls(
                                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            LinearProgressIndicator(progress = { bookProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(2.dp))
+                            LinearProgressIndicator(progress = { bookProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp))
                         }
                     }
                     Surface(
                         modifier = Modifier.height(56.dp).pointerInput(Unit) { detectTapGestures { } },
                         shape = CircleShape, color = colors.surface
                     ) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Five existing actions fit into the compact pill without a hidden scroll gesture.
+                        Row(
+                            Modifier.padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
                             ChromeAction(OrynIcons.Toc, tr("Sommaire"), { onContents?.invoke() }, enabled = onContents != null)
                             ChromeAction(OrynIcons.Highlighter, tr("Annotations"), { onAnnotations?.invoke() }, enabled = onAnnotations != null)
                             ChromeAction(OrynIcons.Pages, tr("Mise en page"), { onExpand(ReaderSheetFocus.LAYOUT) })

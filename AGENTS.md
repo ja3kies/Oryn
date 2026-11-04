@@ -41,6 +41,7 @@ Lis ce fichier et `DESIGN.md` avant toute modification. En cas de doute, ne chan
 - Pour tout chantier UI Compose, consulter `.agents/skills/oryn-ui-craft/SKILL.md`.
 - Pour les sélections de texte, poignées, gestes et annotations, consulter `.agents/skills/oryn-text-selection/SKILL.md`.
 - Pour le logo, les icônes adaptatives et l'identité visuelle, consulter `.agents/skills/oryn-adaptive-logo/SKILL.md`.
+- Pour les audits de contraste, TalkBack, gestes, cibles tactiles et fenêtres Compose, consulter `.agents/skills/oryn-native-accessibility/SKILL.md` (principes adaptés de Platform Design Skills et UI/UX Pro Max).
 - Les références, les décisions de la mission et les limites sont dans `docs/UI_REFERENCE_RESEARCH.md`.
 - Le thème clair de l'**interface** utilise un blanc doux chaud `#FAFAF8` et des surfaces blanches. Le parchemin `#FEFFDE` reste une couleur **éditoriale/de lecture** ; ne pas réintroduire du jaune ivoire dans le fond de l'application.
 - Aucun agent n'a le droit d'affirmer qu'un geste est validé par un test JVM seul ; la qualification tactile reste à effectuer sur appareil.

@@ -6,6 +6,7 @@ import com.example.oryn.reader.i18n.trf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +54,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.oryn.reader.data.local.entity.BookEntity
 import com.example.oryn.reader.data.remote.BookInfo
+import com.example.oryn.reader.data.remote.BookInfoOverrides
 import com.example.oryn.reader.data.remote.BookInfoClient
 import com.example.oryn.reader.rememberMainViewModel
 import java.util.Locale
@@ -161,7 +163,7 @@ private fun ActionRow(
 ) {
     val color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 15.dp),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClickLabel = label, onClick = onClick).padding(horizontal = 18.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -180,7 +182,8 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.setCover(book, uri)
     }
-    val info by produceState<BookInfo?>(initialValue = null, book.id) {
+    var metadataRefresh by remember(book.id) { androidx.compose.runtime.mutableIntStateOf(0) }
+    val info by produceState<BookInfo?>(initialValue = null, book.id, metadataRefresh) {
         value = runCatching { BookInfoClient.load(context, book) }.getOrDefault(BookInfo())
     }
     var expanded by remember { mutableStateOf(false) }
@@ -189,8 +192,10 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     val hasCover = !book.coverPath.isNullOrBlank()
 
     if (editing) {
-        EditInfoDialog(book, onDismiss = { editing = false }) { t, a ->
+        EditInfoDialog(book, info, onDismiss = { editing = false }) { t, a, description, year, publisher, pages ->
+            BookInfoOverrides.save(context, book.id, description, year, publisher, pages)
             viewModel.updateBookInfo(book, t, a)
+            metadataRefresh++
             editing = false
         }
         return // Never stack the edit dialog underneath the book details dialog.
@@ -240,7 +245,19 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CoverAction(OrynIcons.Image, tr("Changer"), modifier = Modifier.weight(1f)) { pickCover.launch(arrayOf("image/*")) }
                             if (hasCover) {
-                                CoverAction(OrynIcons.Trash, tr("Supprimer"), danger = true, modifier = Modifier.weight(1f)) { confirmCoverRemoval = true }
+                                androidx.compose.material3.IconButton(
+                                    onClick = { confirmCoverRemoval = true },
+                                    modifier = Modifier.size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.errorContainer)
+                                ) {
+                                    Icon(
+                                        OrynIcons.Trash,
+                                        contentDescription = tr("Supprimer la couverture"),
+                                        tint = colors.onErrorContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
                         }
                         Text(
@@ -257,7 +274,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             color = inkSecondary(),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-                        RatingRow(info)
+                        RatingRow(book.id, info)
                         Row(
                             Modifier.padding(top = 10.dp).fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -266,8 +283,21 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
                             InfoStat(tr("Progression"), if (book.progress < 0.01f) "0 %" else "${(book.progress * 100).toInt()} %", Modifier.weight(1f))
                             Box(Modifier.width(1.dp).height(30.dp).background(colors.onSurface.copy(alpha = 0.12f)))
-                            InfoStat(tr("Année (catalogue)"), info?.year?.toString() ?: "—", Modifier.weight(1f))
+                            InfoStat(tr("Année"), info?.year?.toString() ?: "—", Modifier.weight(1f))
                         }
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            InfoStat(tr("Pages"), info?.pages?.toString() ?: "—", Modifier.weight(1f))
+                            InfoStat(tr("Éditeur"), info?.publisher ?: "—", Modifier.weight(2f))
+                        }
+                        Text(
+                            tr("Données du catalogue ou saisies dans Oryn ; l’édition locale peut différer."),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
                         LinearProgressIndicator(
                             progress = { book.progress.coerceIn(0f, 1f) },
                             modifier = Modifier.padding(top = 4.dp).fillMaxWidth().height(5.dp).clip(CircleShape),
@@ -351,14 +381,30 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun EditInfoDialog(book: BookEntity, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
-    var title by remember { mutableStateOf(book.title) }
-    var author by remember { mutableStateOf(book.author) }
+private fun EditInfoDialog(
+    book: BookEntity,
+    info: BookInfo?,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, Int?, String, Int?) -> Unit
+) {
+    var title by remember(book.id) { mutableStateOf(book.title) }
+    var author by remember(book.id) { mutableStateOf(book.author) }
+    var description by remember(book.id, info?.description) { mutableStateOf(info?.description.orEmpty()) }
+    var year by remember(book.id, info?.year) { mutableStateOf(info?.year?.toString().orEmpty()) }
+    var publisher by remember(book.id, info?.publisher) { mutableStateOf(info?.publisher.orEmpty()) }
+    var pages by remember(book.id, info?.pages) { mutableStateOf(info?.pages?.toString().orEmpty()) }
+    val parsedYear = year.trim().toIntOrNull()
+    val yearError = year.isNotBlank() && (parsedYear == null || parsedYear !in 1..2100)
+    val parsedPages = pages.trim().toIntOrNull()
+    val pagesError = pages.isNotBlank() && (parsedPages == null || parsedPages !in 1..200_000)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(tr("Modifier le livre")) },
+        title = { Text(tr("Modifier les informations")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -373,9 +419,53 @@ private fun EditInfoDialog(book: BookEntity, onDismiss: () -> Unit, onSave: (Str
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = year,
+                    onValueChange = { year = it.filter { ch -> ch.isDigit() }.take(4) },
+                    label = { Text(tr("Année de publication")) },
+                    isError = yearError,
+                    supportingText = if (yearError) ({ Text(tr("Année invalide")) }) else null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = publisher,
+                    onValueChange = { publisher = it.take(160) },
+                    label = { Text(tr("Éditeur")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = pages,
+                    onValueChange = { pages = it.filter { ch -> ch.isDigit() }.take(6) },
+                    label = { Text(tr("Nombre de pages")) },
+                    isError = pagesError,
+                    supportingText = if (pagesError) ({ Text(tr("Nombre de pages invalide")) }) else null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it.take(12_000) },
+                    label = { Text(tr("Description du livre")) },
+                    minLines = 3,
+                    maxLines = 6,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(title, author) }) { Text(tr("Enregistrer")) } },
+        confirmButton = {
+            TextButton(
+                enabled = !yearError && !pagesError && title.isNotBlank() && author.isNotBlank(),
+                onClick = { onSave(title.trim(), author.trim(), description, parsedYear, publisher, parsedPages) }
+            ) { Text(tr("Enregistrer")) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Annuler")) } }
     )
 }
@@ -394,7 +484,8 @@ private fun CoverAction(
         modifier
             .clip(CircleShape)
             .background(tone.copy(alpha = 0.10f))
-            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -404,29 +495,55 @@ private fun CoverAction(
     }
 }
 
+/** The reader's personal rating is local and editable; online community ratings are read-only. */
 @Composable
-private fun RatingRow(info: BookInfo?) {
+private fun RatingRow(bookId: Long, info: BookInfo?) {
     val colors = MaterialTheme.colorScheme
-    val amber = Color(0xFFF5A524)
-    val rating = info?.rating
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        repeat(5) { i ->
-            Icon(
-                OrynIcons.Star, null,
-                tint = if (rating != null && i < Math.round(rating)) amber else colors.onSurface.copy(alpha = 0.18f),
-                modifier = Modifier.size(18.dp)
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("oryn_book_ratings", android.content.Context.MODE_PRIVATE) }
+    var personalRating by remember(bookId) { androidx.compose.runtime.mutableIntStateOf(prefs.getInt("book_$bookId", 0).coerceIn(0, 5)) }
+    val starColor = if (colors.background.luminance() < 0.5f) Color(0xFFFFD27C) else Color(0xFF935000)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            if (personalRating > 0) trf("Ma note : %s/5", personalRating) else tr("Ma note : non noté"),
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.onSurface
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            (1..5).forEach { score ->
+                androidx.compose.material3.IconToggleButton(
+                    modifier = Modifier.size(48.dp),
+                    checked = personalRating == score,
+                    onCheckedChange = { checked ->
+                        val next = if (checked) score else 0
+                        personalRating = next
+                        prefs.edit().putInt("book_$bookId", next).apply()
+                    }
+                ) {
+                    Icon(
+                        OrynIcons.Star,
+                        contentDescription = if (personalRating == score) trf("Effacer ma note de %s étoiles", score) else trf("Noter %s étoiles", score),
+                        tint = if (score <= personalRating) starColor else colors.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+        }
+        if (info?.rating != null && info.ratingCount > 0) {
+            Text(
+                trf("Note Open Library : %s/5 · %s avis",
+                    String.format(Lang.locale, "%.1f", info.rating), info.ratingCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant
             )
         }
-        Text(
-            when {
-                info == null -> "  …"
-                rating == null -> tr("  Pas encore noté")
-                else -> "  " + String.format(Lang.locale, "%.1f", rating) +
-                    if (info.ratingCount > 0) trf(" · %s avis", info.ratingCount) else ""
-            },
-            style = MaterialTheme.typography.labelMedium,
-            color = inkSecondary()
-        )
     }
 }
 
@@ -435,6 +552,6 @@ private fun RatingRow(info: BookInfo?) {
 private fun InfoStat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = inkSecondary(), maxLines = 1)
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }

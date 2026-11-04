@@ -94,7 +94,7 @@ import com.example.oryn.reader.ui.theme.textColor
 
 /** Fond partagé par la fiche de réglages et la barre du haut (légèrement transparent). */
 val ReaderChromeColor: Color
-    @Composable get() = Color(0xFF0E0E0E).copy(alpha = 0.97f)
+    @Composable get() = MaterialTheme.colorScheme.surface
 
 enum class ReaderSheetFocus { ALL, TYPOGRAPHY, LAYOUT }
 
@@ -129,10 +129,9 @@ fun ReaderControlsSheet(
     modifier: Modifier = Modifier,
     initialFocus: ReaderSheetFocus = ReaderSheetFocus.ALL
 ) {
-    // Panneau toujours sombre (encre) : les commandes ressortent en accent, en clair comme en sombre
-    val panel = remember(currentAccent) {
-        orynColorScheme(true, currentAccent).copy(primary = currentAccent.accentDark, onPrimary = androidx.compose.ui.graphics.Color(0xFF141414))
-    }
+    // Primary text/icons must remain readable even when the user selects a low-contrast
+    // accent (e.g. cherry rose). Use accent only on its matching primaryContainer surface.
+    val panel = remember(currentAccent) { orynColorScheme(true, currentAccent) }
     MaterialTheme(colorScheme = panel, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val scope = rememberCoroutineScope()
@@ -208,7 +207,7 @@ private fun ReaderControlsSheetContent(
         shape = RoundedCornerShape(34.dp),
         color = ReaderChromeColor,
         tonalElevation = 0.dp,
-        shadowElevation = 24.dp
+        shadowElevation = 8.dp
     ) {
         Column(
             modifier = Modifier
@@ -304,32 +303,48 @@ private fun ReaderControlsSheetContent(
                 }
             }
 
+            Text(
+                tr("Réglages de lecture"),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onSurface,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+            )
+            // Two labelled tabs are easier to discover than icon-only segmented options.
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(CircleShape)
+                    .background(colors.surfaceContainerLow)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        tr("Réglages de lecture"),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onSurface
-                    )
-                }
-                Row(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(colors.surfaceContainerLow)
-                        .padding(2.dp)
-                ) {
-                    ReaderSettingsTab.entries.forEach { t ->
-                        IconToggle(
-                            icon = t.icon,
-                            description = tr(t.label),
-                            selected = tab == t,
-                            shape = CircleShape,
-                            onClick = { tab = t }
+                ReaderSettingsTab.entries.forEach { section ->
+                    val active = tab == section
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(CircleShape)
+                            .background(if (active) colors.primaryContainer else Color.Transparent)
+                            .selectable(selected = active, role = Role.Tab, onClick = { tab = section })
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            section.icon, contentDescription = null,
+                            tint = if (active) colors.onPrimaryContainer else colors.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            tr(section.label),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (active) colors.onPrimaryContainer else colors.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -383,15 +398,18 @@ private fun ThemeDot(preset: ReaderThemePreset, selected: Boolean, onClick: () -
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .background(preset.pageColor)
-            .border(if (selected) 2.5.dp else 1.dp, if (selected) colors.primary else colors.outlineVariant, CircleShape)
-            .semantics { contentDescription = trf("Thème %s", preset.name) }
-            .clickable(role = Role.Button, onClick = onClick),
+            .size(48.dp)
+            .clickable(role = Role.RadioButton, onClickLabel = trf("Thème %s", preset.label), onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (selected) Icon(OrynIcons.Check, null, tint = preset.textColor, modifier = Modifier.size(14.dp))
+        Box(
+            Modifier.size(28.dp).clip(CircleShape)
+                .background(preset.pageColor)
+                .border(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.outlineVariant, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) Icon(OrynIcons.Check, null, tint = preset.textColor, modifier = Modifier.size(16.dp))
+        }
     }
 }
 
@@ -469,43 +487,35 @@ private fun ColumnScope.EssentialsPage(
             }
         }
         MiniCard(Modifier.weight(1f)) {
+            // Standard stacked groups avoid a 3-button + 2-button row overflowing
+            // half-width cards at large text scale or on narrow Android screens.
+            CardTitle(OrynIcons.MarginNormal, tr("Marges"))
             Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Moitié gauche : marges
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CardTitle(OrynIcons.MarginNormal, tr("Marges"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        listOf(
-                            Triple(ReaderMarginSize.NARROW, OrynIcons.MarginNarrow, tr("Marges étroites")),
-                            Triple(ReaderMarginSize.NORMAL, OrynIcons.MarginNormal, tr("Marges normales")),
-                            Triple(ReaderMarginSize.WIDE, OrynIcons.MarginWide, tr("Marges larges"))
-                        ).forEach { (margin, icon, description) ->
-                            IconToggle(icon, description, settings.marginSize == margin, size = 28.dp) {
-                                onSettingsChange { it.copy(marginSize = margin) }
-                            }
-                        }
+                listOf(
+                    Triple(ReaderMarginSize.NARROW, OrynIcons.MarginNarrow, tr("Marges étroites")),
+                    Triple(ReaderMarginSize.NORMAL, OrynIcons.MarginNormal, tr("Marges normales")),
+                    Triple(ReaderMarginSize.WIDE, OrynIcons.MarginWide, tr("Marges larges"))
+                ).forEach { (margin, icon, description) ->
+                    IconToggle(icon, description, settings.marginSize == margin, size = 48.dp) {
+                        onSettingsChange { it.copy(marginSize = margin) }
                     }
                 }
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.outlineVariant)
-                )
-                // Moitié droite : défilement
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CardTitle(OrynIcons.ScrollVertical, tr("Défilement"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        IconToggle(OrynIcons.Pages, tr("Mode pages"), settings.scrollMode == ReaderScrollMode.PAGES, size = 28.dp) {
-                            onSettingsChange { it.copy(scrollMode = ReaderScrollMode.PAGES) }
-                        }
-                        IconToggle(OrynIcons.ScrollVertical, tr("Mode défilement"), settings.scrollMode == ReaderScrollMode.SCROLL, size = 28.dp) {
-                            onSettingsChange { it.copy(scrollMode = ReaderScrollMode.SCROLL) }
-                        }
-                    }
+            }
+            CardTitle(OrynIcons.ScrollVertical, tr("Défilement"))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconToggle(OrynIcons.Pages, tr("Mode pages"), settings.scrollMode == ReaderScrollMode.PAGES, size = 48.dp) {
+                    onSettingsChange { it.copy(scrollMode = ReaderScrollMode.PAGES) }
+                }
+                IconToggle(OrynIcons.ScrollVertical, tr("Mode défilement"), settings.scrollMode == ReaderScrollMode.SCROLL, size = 48.dp) {
+                    onSettingsChange { it.copy(scrollMode = ReaderScrollMode.SCROLL) }
                 }
             }
         }
@@ -632,7 +642,7 @@ private fun IconToggle(
 ) {
     val colors = MaterialTheme.colorScheme
     val tint = when {
-        !enabled -> colors.onSurface.copy(alpha = 0.38f)
+        !enabled -> colors.onSurfaceVariant.copy(alpha = 0.65f)
         selected -> colors.onPrimaryContainer
         else -> colors.onSurfaceVariant
     }
@@ -697,8 +707,9 @@ private fun FontChip(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) colors.primaryContainer else colors.surfaceContainer)
+            .heightIn(min = 56.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .padding(vertical = 6.dp, horizontal = 2.dp),
+            .padding(vertical = 8.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -711,7 +722,7 @@ private fun FontChip(
         )
         Text(
             font.label,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant
@@ -729,6 +740,7 @@ private fun ThemeChip(
     val colors = MaterialTheme.colorScheme
     Column(
         modifier = modifier
+            .heightIn(min = 64.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -752,7 +764,7 @@ private fun ThemeChip(
         }
         Text(
             preset.label,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
