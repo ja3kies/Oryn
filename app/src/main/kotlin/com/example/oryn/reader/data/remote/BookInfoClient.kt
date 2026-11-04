@@ -51,16 +51,15 @@ object BookInfoClient {
         var year: Int? = null
         var publisher: String? = null
         var pages: Int? = null
-        var reachable = false
+        var matchedCatalogueWork = false
         runCatching {
             val title = URLEncoder.encode(book.title, "UTF-8")
             val author = book.author.takeIf { !it.equals("Auteur inconnu", true) }
                 ?.let { "&author=" + URLEncoder.encode(it, "UTF-8") }.orEmpty()
             val search = JSONObject(
-                get("https://openlibrary.org/search.json?title=$title$author&limit=3" +
+                get("https://openlibrary.org/search.json?title=$title$author&limit=10" +
                     "&fields=key,title,author_name,first_publish_year,ratings_average,ratings_count,publisher,number_of_pages_median")
             )
-            reachable = true
             val docs = search.optJSONArray("docs")
             if (docs != null) {
                 for (i in 0 until docs.length()) {
@@ -75,6 +74,7 @@ object BookInfoClient {
                             sameOpenLibraryAuthor(expectedAuthor, authors.optString(index))
                         }
                     ) continue
+                    matchedCatalogueWork = true
                     count = doc.optInt("ratings_count", 0).coerceAtLeast(0)
                     rating = doc.optDouble("ratings_average", Double.NaN).toFloat()
                         .takeIf { it.isFinite() && it in 0.1f..5f && count > 0 }
@@ -102,8 +102,8 @@ object BookInfoClient {
         }
 
         val info = BookInfo(description, source, rating?.takeIf { it > 0f }, count, year, publisher, pages)
-        // On ne garde en cache que si le réseau a répondu (sinon on réessaiera la prochaine fois)
-        if (reachable || description != null) writeCache(cacheFile, info)
+        // Do not cache catalogue misses as empty book data for thirty days.
+        if (matchedCatalogueWork || description != null) writeCache(cacheFile, info)
         info.withOverrides(BookInfoOverrides.get(context, book.id))
     }
 
