@@ -487,43 +487,35 @@ private fun ColumnScope.EssentialsPage(
             }
         }
         MiniCard(Modifier.weight(1f)) {
+            // Standard stacked groups avoid a 3-button + 2-button row overflowing
+            // half-width cards at large text scale or on narrow Android screens.
+            CardTitle(OrynIcons.MarginNormal, tr("Marges"))
             Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Moitié gauche : marges
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CardTitle(OrynIcons.MarginNormal, tr("Marges"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        listOf(
-                            Triple(ReaderMarginSize.NARROW, OrynIcons.MarginNarrow, tr("Marges étroites")),
-                            Triple(ReaderMarginSize.NORMAL, OrynIcons.MarginNormal, tr("Marges normales")),
-                            Triple(ReaderMarginSize.WIDE, OrynIcons.MarginWide, tr("Marges larges"))
-                        ).forEach { (margin, icon, description) ->
-                            IconToggle(icon, description, settings.marginSize == margin, size = 28.dp) {
-                                onSettingsChange { it.copy(marginSize = margin) }
-                            }
-                        }
+                listOf(
+                    Triple(ReaderMarginSize.NARROW, OrynIcons.MarginNarrow, tr("Marges étroites")),
+                    Triple(ReaderMarginSize.NORMAL, OrynIcons.MarginNormal, tr("Marges normales")),
+                    Triple(ReaderMarginSize.WIDE, OrynIcons.MarginWide, tr("Marges larges"))
+                ).forEach { (margin, icon, description) ->
+                    IconToggle(icon, description, settings.marginSize == margin, size = 48.dp) {
+                        onSettingsChange { it.copy(marginSize = margin) }
                     }
                 }
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.outlineVariant)
-                )
-                // Moitié droite : défilement
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CardTitle(OrynIcons.ScrollVertical, tr("Défilement"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        IconToggle(OrynIcons.Pages, tr("Mode pages"), settings.scrollMode == ReaderScrollMode.PAGES, size = 28.dp) {
-                            onSettingsChange { it.copy(scrollMode = ReaderScrollMode.PAGES) }
-                        }
-                        IconToggle(OrynIcons.ScrollVertical, tr("Mode défilement"), settings.scrollMode == ReaderScrollMode.SCROLL, size = 28.dp) {
-                            onSettingsChange { it.copy(scrollMode = ReaderScrollMode.SCROLL) }
-                        }
-                    }
+            }
+            CardTitle(OrynIcons.ScrollVertical, tr("Défilement"))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconToggle(OrynIcons.Pages, tr("Mode pages"), settings.scrollMode == ReaderScrollMode.PAGES, size = 48.dp) {
+                    onSettingsChange { it.copy(scrollMode = ReaderScrollMode.PAGES) }
+                }
+                IconToggle(OrynIcons.ScrollVertical, tr("Mode défilement"), settings.scrollMode == ReaderScrollMode.SCROLL, size = 48.dp) {
+                    onSettingsChange { it.copy(scrollMode = ReaderScrollMode.SCROLL) }
                 }
             }
         }
