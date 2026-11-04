@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +59,9 @@ internal fun TocDialog(
         entries.indices.filter { entries[it].offset <= currentOffset }.maxByOrNull { entries[it].offset } ?: 0
     }
     val listState = rememberLazyListState()
-    LaunchedEffect(Unit) { if (entries.isNotEmpty()) listState.scrollToItem((currentIndex - 2).coerceAtLeast(0)) }
+    LaunchedEffect(entries, currentIndex) {
+        if (entries.isNotEmpty()) listState.scrollToItem((currentIndex - 2).coerceAtLeast(0))
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -89,6 +93,7 @@ internal fun TocDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (current) colors.primary.copy(alpha = 0.12f) else colors.surface)
+                                .semantics { selected = current }
                                 .clickable { onJump(entry.offset) }
                                 .padding(start = (12 + entry.level.coerceAtMost(4) * 16).dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
                         )
