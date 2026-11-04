@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# PR and push events for the same source branch validate the same commit once.
+concurrency:
+  group: android-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Validate Android and build test APK
