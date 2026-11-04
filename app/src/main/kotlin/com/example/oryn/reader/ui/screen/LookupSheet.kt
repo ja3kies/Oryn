@@ -3,6 +3,8 @@ package com.example.oryn.reader.ui.screen
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -122,7 +124,7 @@ private fun LookupTab(label: String, selected: Boolean, onClick: () -> Unit) {
         Modifier
             .clip(CircleShape)
             .background(if (selected) colors.accent else colors.onSurface.copy(alpha = 0.08f))
-            .clickable(onClick = onClick)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .heightIn(min = 48.dp)
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
@@ -146,7 +148,7 @@ private fun StatusLine(text: String, actionLabel: String? = null, onAction: () -
                 Modifier
                     .clip(CircleShape)
                     .background(colors.onSurface.copy(alpha = 0.08f))
-                    .clickable(onClick = onAction)
+                    .clickable(role = Role.Button, onClickLabel = actionLabel, onClick = onAction)
                     .heightIn(min = 48.dp)
                     .padding(horizontal = 18.dp),
                 contentAlignment = Alignment.Center
