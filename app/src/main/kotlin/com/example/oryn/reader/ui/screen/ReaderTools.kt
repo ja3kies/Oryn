@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -111,12 +112,14 @@ private class SearchHit(val offset: Int, val length: Int, val snippet: androidx.
 @Composable
 internal fun SearchDialog(
     text: String,
+    currentOffset: Int,
     onJump: (offset: Int, length: Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
+    var selectedHit by remember(query, currentOffset) { mutableStateOf(-1) }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     val hits by produceState<List<SearchHit>?>(emptyList(), query) {
@@ -128,24 +131,19 @@ internal fun SearchDialog(
         value = null // recherche en cours
         delay(250) // attend la fin de la saisie
         value = withContext(Dispatchers.Default) {
-            val found = ArrayList<SearchHit>()
-            var from = 0
-            while (found.size < 200) {
-                val i = text.indexOf(q, from, ignoreCase = true)
-                if (i < 0) break
+            findReaderMatches(text, q).map { match ->
+                val i = match.offset
                 val a = (i - 40).coerceAtLeast(0)
-                val b = (i + q.length + 60).coerceAtMost(text.length)
+                val b = (i + match.length + 60).coerceAtMost(text.length)
                 val snippet = buildAnnotatedString {
                     append((if (a > 0) "…" else "") + text.substring(a, i).replace('\n', ' '))
                     withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = colors.primary)) {
-                        append(text.substring(i, i + q.length).replace('\n', ' '))
+                        append(text.substring(i, i + match.length).replace('\n', ' '))
                     }
-                    append(text.substring(i + q.length, b).replace('\n', ' ') + (if (b < text.length) "…" else ""))
+                    append(text.substring(i + match.length, b).replace('\n', ' ') + (if (b < text.length) "…" else ""))
                 }
-                found += SearchHit(i, q.length, snippet)
-                from = i + q.length
+                SearchHit(i, match.length, snippet)
             }
-            found
         }
     }
 
@@ -174,8 +172,25 @@ internal fun SearchDialog(
                     else -> trf("%s résultat(s)", list.size)
                 }
                 Text(label, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                if (!list.isNullOrEmpty()) {
+                    val activeIndex = selectedHit.takeIf { it in list.indices }
+                        ?: readerSearchStartIndex(list.map { ReaderSearchMatch(it.offset, it.length) }, currentOffset)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(trf("%s / %s", activeIndex + 1, list.size), style = MaterialTheme.typography.labelMedium)
+                        Row {
+                            TextButton(onClick = {
+                                selectedHit = readerSearchStep(activeIndex, list.size, -1)
+                                list[selectedHit].let { onJump(it.offset, it.length) }
+                            }) { Text(tr("Précédent")) }
+                            TextButton(onClick = {
+                                selectedHit = readerSearchStep(activeIndex, list.size, 1)
+                                list[selectedHit].let { onJump(it.offset, it.length) }
+                            }) { Text(tr("Suivant")) }
+                        }
+                    }
+                }
                 LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    itemsIndexed(list.orEmpty()) { _, hit ->
+                    itemsIndexed(list.orEmpty()) { index, hit ->
                         Text(
                             hit.snippet,
                             style = MaterialTheme.typography.bodyMedium,
@@ -185,7 +200,7 @@ internal fun SearchDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(colors.onSurface.copy(alpha = 0.06f))
-                                .clickable { onJump(hit.offset, hit.length) }
+                                .clickable { selectedHit = index; onJump(hit.offset, hit.length) }
                                 .padding(12.dp)
                         )
                     }
