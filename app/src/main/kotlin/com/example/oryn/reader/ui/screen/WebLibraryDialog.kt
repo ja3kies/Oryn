@@ -16,6 +16,8 @@ import android.webkit.WebResourceError
 import android.webkit.WebSettings
 import android.webkit.WebResourceResponse
 import android.webkit.WebResourceRequest
+import android.webkit.WebViewRenderProcess
+import android.os.Build
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -216,6 +218,12 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                             settings.allowContentAccess = false
                             settings.setSupportMultipleWindows(false)
                             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            settings.javaScriptCanOpenWindowsAutomatically = false
+                            settings.allowUniversalAccessFromFileURLs = false
+                            settings.allowFileAccessFromFileURLs = false
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                settings.safeBrowsingEnabled = true
+                            }
 
                             webChromeClient = object : WebChromeClient() {
                                 override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -243,6 +251,15 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                         return true
                                     }
                                     return false
+                                }
+
+                                override fun onRenderProcessGone(
+                                    view: WebView,
+                                    detail: android.webkit.RenderProcessGoneDetail
+                                ): Boolean {
+                                    errorMessage = tr("Le navigateur intégré s’est arrêté. Rouvre ce catalogue.")
+                                    webView = null
+                                    return true
                                 }
 
                                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -354,7 +371,7 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        tr("Fichier détecté"),
+                                        tr("Lien de fichier détecté · pas encore téléchargé"),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colors.onSurfaceVariant
                                     )
@@ -399,7 +416,7 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                         Icon(OrynIcons.Plus, null, modifier = Modifier.size(18.dp))
                                     }
                                     Text(
-                                        if (busy) tr("  Ajout…") else tr("  Ajouter à la bibliothèque")
+                                        if (busy) tr("  Téléchargement et import…") else tr("  Télécharger et ajouter")
                                     )
                                 }
                             }
