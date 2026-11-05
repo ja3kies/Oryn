@@ -444,7 +444,14 @@ fun ReaderScreen(
         if (activeTool == null && lookup == null) ReaderCompactControls(
             state = controlsState, metrics = chromeMetrics, chapterTitle = chromeTitle,
             chapterRemaining = chapterRemaining, bookProgress = liveProgress, chapterProgress = chapter?.fraction,
-            bookmarked = book.isFavorite, currentAccent = currentAccent, onBack = onBack,
+            bookmarked = book.isFavorite, currentAccent = currentAccent,
+            scrollMode = settings.scrollMode,
+            onToggleScrollMode = {
+                updateReaderSettings { it.copy(scrollMode = if (it.scrollMode == com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES)
+                    com.example.oryn.reader.data.local.preferences.ReaderScrollMode.SCROLL
+                    else com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES) }
+            },
+            onBack = onBack,
             onTimer = { openTool(ReaderTool.TIMER) }, onBookmark = { onToggleBookmark(book) },
             onContents = chromeToc.takeIf { it.isNotEmpty() }?.let { { openTool(ReaderTool.CONTENTS) } },
             onAnnotations = if (effectiveRich != null || chromeIsPdf) ({ openTool(ReaderTool.ANNOTATIONS) }) else null,
