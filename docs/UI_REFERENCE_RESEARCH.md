@@ -11,6 +11,8 @@
 - **Dark UI:** dark warm-neutral contextual selection surfaces; do not introduce global glass effects or permanent reader chrome.
 - **Unchanged:** three existing floating navigation tabs, import action, routes, application data, EPUB/PDF engines and community security gates.
 
+> **Historical snapshot (04/11/2026):** the three-tab navigation recorded below was superseded by the owner's explicit four-tab Discover decision on **05/11/2026**. See `docs/UI_CROSS_SCREEN_DISCOVER_AUDIT_2026-11-05.md`; old reference decisions are retained for traceability.
+
 ## Owner-provided visual references
 
 | Reference image | Pattern to borrow | Oryn implementation priority |
