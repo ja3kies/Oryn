@@ -26,7 +26,8 @@
 - [Android Compose accessibility defaults](https://developer.android.com/develop/ui/compose/accessibility/api-defaults) : cibles tactiles de 48 dp, noms accessibles et composants natifs.
 - [Android accessibility guidance](https://developer.android.com/guide/topics/ui/accessibility/apps) : actions non ambiguës, états et qualification manuelle.
 - [Now in Android](https://github.com/android/nowinandroid) : patterns Compose/Material 3 accessibles et maintenance native ; inspiration architecturale, pas de reprise directe de code.
-- [Open-source Termux/Readium context, research already documented](UI_REFERENCE_RESEARCH.md) : préserver le moteur natif/annotations/positions d'Oryn plutôt que le remplacer par un composant web.
+- [KOReader — code FOSS du navigateur de couvertures](https://github.com/koreader/koreader/blob/master/plugins/coverbrowser.koplugin/mosaicmenu.lua) : consultation des modes de grille et gestion de couvertures ; inspiration de comportement uniquement, aucun code AGPL importé.
+- [Recherche Oryn déjà documentée](UI_REFERENCE_RESEARCH.md) : conserver l'architecture native Compose, les annotations et les positions de lecture existantes.
 - Les guides locaux `.agents/skills/oryn-ui-craft/SKILL.md` et `.agents/skills/oryn-native-accessibility/SKILL.md` précisent les garde-fous.
 
 ## Critères de sortie vérifiables
