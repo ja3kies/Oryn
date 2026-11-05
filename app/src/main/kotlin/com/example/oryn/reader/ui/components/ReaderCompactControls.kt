@@ -121,7 +121,7 @@ fun ReaderCompactControls(
         exit = if (motion) fadeOut(tween(90)) else ExitTransition.None,
         modifier = modifier
     ) {
-        MaterialTheme(colorScheme = orynColorScheme(chromeDark, currentAccent)) {
+        MaterialTheme(colorScheme = chromeScheme) {
             val colors = MaterialTheme.colorScheme
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
                 Surface(
