@@ -56,6 +56,13 @@ object OrynIcons {
         )
     }
 
+    val Underline: ImageVector by lazy {
+        lucide("Underline", false,
+            "M6 4v6a6 6 0 0 0 12 0V4",
+            "M4 20h16"
+        )
+    }
+
     val Highlighter: ImageVector by lazy {
         lucide("Highlighter", false,
             "m9 11-6 6v3h9l3-3",
