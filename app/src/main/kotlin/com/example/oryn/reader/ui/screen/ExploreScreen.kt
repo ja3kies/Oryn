@@ -7,11 +7,7 @@ import com.example.oryn.reader.ui.components.GlassChip
 import com.example.oryn.reader.ui.components.GlassIconButton
 import com.example.oryn.reader.ui.components.OrynIcons
 import com.example.oryn.reader.ui.components.solidSurface
-import android.content.ActivityNotFoundException
-import android.content.Intent
 import android.graphics.Bitmap
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -97,8 +93,7 @@ import kotlinx.coroutines.withContext
 private class LibrarySource(
     val name: String,
     val description: String,
-    val url: String,
-    val externalBrowserOnly: Boolean = false
+    val url: String
 )
 
 /** Livres récents : accès ouvert, licences libres, ou prêt en ligne. */
@@ -109,14 +104,14 @@ private val recentSources = listOf(
     LibrarySource("Open Library", "Millions de titres ; seuls les livres du domaine public sont téléchargeables", "https://openlibrary.org")
 )
 
-// Distinct from openly licensed catalogues. The official mirror was checked
-// on 2026-11-05; app-side scraping and downloading are NOT verified.
+// Distinct from openly licensed catalogues. Opens in the SAME hardened
+// embedded browser as every other source; search and downloads are not guaranteed
+// on sites with anti-bot protections or changing domains.
 private val externalIndexes = listOf(
     LibrarySource(
         "Anna’s Archive",
-        "Index externe : vérifier les droits et ouvrir dans le navigateur",
-        "https://annas-archive.gl",
-        externalBrowserOnly = true
+        "Index externe : vérifier les droits des ouvrages",
+        "https://annas-archive.gl"
     )
 )
 
@@ -247,22 +242,7 @@ fun ExploreScreen(
             item { SourceRow(classicSources) { openSource = it } }
             item { SectionTitle(tr("Index externes · droits à vérifier")) }
             item {
-                SourceRow(externalIndexes) { source ->
-                    // Never pass untrusted shadow-library pages to our embedded
-                    // WebView/download interceptor as an allegedly tested flow.
-                    if (source.externalBrowserOnly) {
-                        try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(source.url))
-                                    .addCategory(Intent.CATEGORY_BROWSABLE)
-                            )
-                        } catch (_: ActivityNotFoundException) {
-                            Toast.makeText(context, tr("Aucun navigateur disponible"), Toast.LENGTH_LONG).show()
-                        }
-                    } else {
-                        openSource = source
-                    }
-                }
+                SourceRow(externalIndexes) { openSource = it }
             }
         }
 
