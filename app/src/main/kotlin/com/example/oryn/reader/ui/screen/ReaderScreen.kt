@@ -105,7 +105,20 @@ fun ReaderScreen(
     // null tant que les réglages ne sont pas lus : évite le flash du thème par défaut
     val loadedSettings by preferencesRepo.readerSettingsFlow.collectAsState(initial = null)
     val ready = loadedSettings != null
-    val settings = loadedSettings ?: ReaderSettings()
+    // Apply each reader control to Compose immediately. DataStore remains the
+    // source of truth once it acknowledges the latest value.
+    var optimisticSettings by remember(book.id) { mutableStateOf<ReaderSettings?>(null) }
+    val settings = optimisticSettings ?: loadedSettings ?: ReaderSettings()
+    LaunchedEffect(loadedSettings, optimisticSettings) {
+        if (optimisticSettings != null && loadedSettings == optimisticSettings) {
+            optimisticSettings = null
+        }
+    }
+    fun updateReaderSettings(transform: (ReaderSettings) -> ReaderSettings) {
+        val updated = transform(settings)
+        optimisticSettings = updated
+        scope.launch { preferencesRepo.updateSettings { updated } }
+    }
 
     // Progression « vivante » : mise à jour immédiate (la fiche de lecture ne dépend plus de la base de données)
     var liveProgress by remember(book.id) { mutableStateOf(book.progress) }
@@ -502,9 +515,7 @@ fun ReaderScreen(
             ReaderControlsSheet(
                 settings = settings,
                 initialFocus = sheetFocus,
-                onSettingsChange = { updater ->
-                    scope.launch { preferencesRepo.updateSettings(updater) }
-                },
+                onSettingsChange = ::updateReaderSettings,
                 currentChapterTitle = chapterTitle,
                 pdfReflow = settings.pdfReflow,
                 onTogglePdfReflow = if (readerPdf != null) {
@@ -518,7 +529,7 @@ fun ReaderScreen(
                         } else {
                             switchPage = pdfCurrentPage
                         }
-                        scope.launch { preferencesRepo.updateSettings { it.copy(pdfReflow = !it.pdfReflow) } }
+                        updateReaderSettings { it.copy(pdfReflow = !it.pdfReflow) }
                     }
                 } else null,
                 currentAccent = currentAccent,
