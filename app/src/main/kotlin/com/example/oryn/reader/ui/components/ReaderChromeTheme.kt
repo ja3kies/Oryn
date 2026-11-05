@@ -16,8 +16,11 @@ import com.example.oryn.reader.ui.theme.orynColorScheme
  */
 internal fun isDarkReaderChrome(background: Color): Boolean = background.luminance() < 0.5f
 
+internal fun readerChromeSchemeFor(background: Color, accent: AppAccentTheme): ColorScheme =
+    orynColorScheme(isDarkReaderChrome(background), accent)
+
 @Composable
 internal fun readerChromeScheme(accent: AppAccentTheme): ColorScheme {
-    val dark = isDarkReaderChrome(MaterialTheme.colorScheme.background)
-    return remember(dark, accent) { orynColorScheme(dark, accent) }
+    val appBackground = MaterialTheme.colorScheme.background
+    return remember(appBackground, accent) { readerChromeSchemeFor(appBackground, accent) }
 }
