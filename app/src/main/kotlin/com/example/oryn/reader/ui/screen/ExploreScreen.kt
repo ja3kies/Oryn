@@ -197,7 +197,7 @@ fun ExploreScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    tr("Explorer"),
+                    tr("Découvrir"),
                     style = MaterialTheme.typography.headlineLarge,
                     color = colors.onBackground,
                     modifier = Modifier.weight(1f).padding(start = 4.dp)
