@@ -313,7 +313,7 @@ private fun Dashboard(
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
                         .solidSurface(CircleShape)
-                        .clickable(onClickLabel = tr("Catalogues en ligne")) { OrynNav.open("online_search") }
+                        .clickable(onClickLabel = tr("Catalogues en ligne")) { OrynNav.open("discover") }
                         .padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
