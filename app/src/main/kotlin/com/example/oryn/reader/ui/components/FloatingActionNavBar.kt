@@ -150,7 +150,7 @@ fun FloatingActionNavBar(
             modifier = Modifier.height(BarHeight),
             shape = CircleShape,
             color = if (dark) colors.surfaceContainerHigh.copy(alpha = 0.97f) else colors.surfaceContainerLowest.copy(alpha = 0.97f),
-            shadowElevation = 10.dp
+            shadowElevation = if (dark) 0.dp else 10.dp
         ) {
             Row(
                 Modifier.padding(horizontal = 8.dp),
@@ -238,6 +238,7 @@ private fun NavItem(
 @Composable
 private fun AddButton(onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < 0.5f
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -249,7 +250,9 @@ private fun AddButton(onClick: () -> Unit) {
         Modifier
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
+            .shadow(if (dark) 0.dp else 10.dp, CircleShape,
+                ambientColor = Color.Black.copy(alpha = 0.25f),
+                spotColor = Color.Black.copy(alpha = 0.25f))
             .clip(CircleShape)
             .background(colors.primary)
             .clickable(
