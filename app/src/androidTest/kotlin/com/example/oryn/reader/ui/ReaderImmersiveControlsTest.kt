@@ -71,6 +71,14 @@ class ReaderImmersiveControlsTest {
                     ReaderCompactControls(
                         state = state, metrics = metrics, chapterTitle = "Test chapter", chapterRemaining = "3 pages after this page",
                         bookProgress = 0.4f, chapterProgress = 0.2f, bookmarked = bookmarked, currentAccent = AppAccentTheme.ORANGE,
+                        scrollMode = settings.scrollMode,
+                        onToggleScrollMode = {
+                            settings = settings.copy(
+                                scrollMode = if (settings.scrollMode == com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES)
+                                    com.example.oryn.reader.data.local.preferences.ReaderScrollMode.SCROLL
+                                else com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES
+                            )
+                        },
                         onBack = { exits.incrementAndGet() }, onTimer = { timerRequests.incrementAndGet() },
                         onBookmark = { bookmarked = !bookmarked; bookmarkChanges.incrementAndGet() }, onContents = {}, onAnnotations = {},
                         onExpand = { focus = it; dispatch(ReaderControlsEvent.EXPAND) }, modifier = Modifier.fillMaxSize()
@@ -134,15 +142,15 @@ class ReaderImmersiveControlsTest {
         }
         rule.onNodeWithContentDescription(tr("Tous les réglages")).assertIsDisplayed()
     }
-    @Test fun typographyAndLayoutShortcutsOpenTheirSettingsAndRemainDismissible() {
+    @Test fun typographyShortcutAndDirectReaderModeSwitchRemainAvailable() {
         show(); reveal()
         rule.onNodeWithContentDescription(tr("Typographie")).performClick()
         rule.onNodeWithText(tr("Police")).assertIsDisplayed()
         pressBack()
-        rule.onNodeWithContentDescription(tr("Mise en page")).performClick()
+        rule.onNodeWithContentDescription(tr("Passer en mode défilement")).performClick()
+        rule.onNodeWithContentDescription(tr("Passer en mode pages")).assertIsDisplayed()
+        rule.onNodeWithContentDescription(tr("Tous les réglages")).performClick()
         rule.onNodeWithText(tr("Marges")).assertIsDisplayed()
-        pressBack()
-        rule.onNodeWithContentDescription(tr("Tous les réglages")).assertIsDisplayed()
     }
     @Test fun tabsKeepTypographySeparateFromAppearanceAndPreserveAllFiveThemes() {
         show(); reveal()
