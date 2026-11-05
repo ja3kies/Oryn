@@ -535,7 +535,7 @@ private fun RatingRow(bookId: Long, info: BookInfo?) {
                     }
                 ) {
                     Icon(
-                        OrynIcons.Star,
+                        if (score <= personalRating) OrynIcons.StarFilled else OrynIcons.Star,
                         contentDescription = if (personalRating == score) trf("Effacer ma note de %s étoiles", score) else trf("Noter %s étoiles", score),
                         tint = if (score <= personalRating) starColor else colors.onSurfaceVariant,
                         modifier = Modifier.size(26.dp),
