@@ -110,7 +110,7 @@ fun ReaderCompactControls(
     modifier: Modifier = Modifier
 ) {
     val motion = systemAnimationsEnabled(LocalContext.current)
-    val chromeDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val chromeScheme = readerChromeScheme(currentAccent)
     // No outgoing compact panel underneath the modal sheet, including during its animation.
     if (state == ReaderControlsState.EXPANDED) return
     AnimatedVisibility(
