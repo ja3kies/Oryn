@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.core.spring
-import androidx.compose.ui.graphics.luminance
 import com.example.oryn.reader.data.local.preferences.ReaderScrollMode
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
@@ -40,11 +39,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.oryn.reader.i18n.Text
 import com.example.oryn.reader.i18n.tr
-import com.example.oryn.reader.i18n.trf
 import com.example.oryn.reader.ui.theme.AppAccentTheme
 import com.example.oryn.reader.ui.theme.OrynShape
-import com.example.oryn.reader.ui.theme.orynColorScheme
-import kotlin.math.roundToInt
 
 /** Stable gutters: toggling chrome must never change the pagination viewport. */
 data class ReaderChromeMetrics(val top: Dp, val progress: Dp) {
