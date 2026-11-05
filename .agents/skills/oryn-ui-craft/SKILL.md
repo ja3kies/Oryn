@@ -8,7 +8,7 @@ description: Design, implement, or audit Oryn's Android Jetpack Compose UI, Mate
 Use for UI changes, not for unrelated repository work.
 
 1. Read `AGENTS.md`, `DESIGN.md`, `docs/design-system.md` and `docs/UI_REFERENCE_RESEARCH.md` before editing. Inspect the actual Compose screen and existing components before introducing new dependencies.
-2. Retain app routes, three-tab floating navigation, import action, selection/deletion semantics, FR/EN translations, persisted DataStore enums, offline usage and disabled community networking.
+2. Retain app routes, four-tab floating navigation (Home, Library, Discover, Favorites; owner-approved 2026-11-05), separate import action, selection/deletion semantics, FR/EN translations, persisted DataStore enums, offline usage and disabled community networking.
 3. Separate **chrome** (`MaterialTheme.colorScheme`) from **editorial reader** (user's chosen page preset). Light chrome background is warm soft white `#FAFAF8`; do not replace the reader's sepia/parchment presets.
 4. Translate the supplied reference set into patterns, not pixel-for-pixel iOS cloning: prominent book covers; quiet metadata; a clear resume-reading CTA; native Android back navigation; bottom-sheet reading preferences; contextual text actions.
 5. Reuse `OrynSpace`, `OrynShape`, existing `OrynIcons`/`HugeIcons` and Material 3. Only propose new icon packs or component libraries after checking licenses, current dependencies, application size and Android interoperability.
