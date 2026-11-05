@@ -90,14 +90,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private class LibrarySource(
+internal class LibrarySource(
     val name: String,
     val description: String,
     val url: String
 )
 
 /** Livres récents : accès ouvert, licences libres, ou prêt en ligne. */
-private val recentSources = listOf(
+internal val recentSources = listOf(
     LibrarySource("DOAB", "Plus de 88 000 livres académiques en accès ouvert", "https://www.doabooks.org"),
     LibrarySource("OAPEN", "Livres scientifiques récents, PDF libres", "https://library.oapen.org"),
     LibrarySource("Des livres en communs", "Essais, BD et fictions sous licence libre (Framasoft)", "https://deslivresencommuns.org"),
@@ -107,7 +107,7 @@ private val recentSources = listOf(
 // Distinct from openly licensed catalogues. Opens in the SAME hardened
 // embedded browser as every other source; search and downloads are not guaranteed
 // on sites with anti-bot protections or changing domains.
-private val externalIndexes = listOf(
+internal val externalIndexes = listOf(
     LibrarySource(
         "Anna’s Archive",
         "Index externe : vérifier les droits des ouvrages",
@@ -116,7 +116,7 @@ private val externalIndexes = listOf(
 )
 
 /** Classiques du domaine public, mis à jour régulièrement. */
-private val classicSources = listOf(
+internal val classicSources = listOf(
     LibrarySource("Standard Ebooks", "Classiques soigneusement relus et mis en forme", "https://standardebooks.org/ebooks"),
     LibrarySource("Gallica (BnF)", "La bibliothèque numérique de la BnF", "https://gallica.bnf.fr"),
     LibrarySource("Wikisource", "Textes du domaine public en français", "https://fr.wikisource.org"),
