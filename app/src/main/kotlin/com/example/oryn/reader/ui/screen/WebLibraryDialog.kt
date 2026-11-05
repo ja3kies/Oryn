@@ -21,6 +21,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -81,6 +83,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.oryn.reader.rememberMainViewModel
+import com.example.oryn.reader.WebImportPhase
+import com.example.oryn.reader.ui.components.OrynNav
+import com.example.oryn.reader.ui.components.systemAnimationsEnabled
 
 private class DetectedFile(val url: String, val name: String, val userAgent: String?)
 
@@ -108,8 +113,9 @@ private fun isSupportedDownload(name: String, mime: String?): Boolean {
 fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
     val context = LocalContext.current
     val viewModel = rememberMainViewModel()
-    val downloading by viewModel.webDownloads.collectAsState()
+    val importPhases by viewModel.webImportPhases.collectAsState()
     val colors = MaterialTheme.colorScheme
+    val motionEnabled = systemAnimationsEnabled(context)
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -125,15 +131,6 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
         while (cooldown > 0) {
             delay(1_000)
             cooldown--
-        }
-    }
-
-    // Le fichier a fini d'être ajouté : on retire la bannière
-    LaunchedEffect(downloading) {
-        val file = detected
-        if (started && file != null && file.url !in downloading) {
-            detected = null
-            started = false
         }
     }
 
@@ -347,10 +344,12 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
 
                 AnimatedVisibility(
                     visible = detected != null,
-                    enter = slideInVertically { it },
-                    exit = slideOutVertically { it }
+                    enter = if (motionEnabled) slideInVertically { it } else EnterTransition.None,
+                    exit = if (motionEnabled) slideOutVertically { it } else ExitTransition.None
                 ) {
                     val file = detected
+                    val phase = if (started && file != null) importPhases[file.url] else null
+                    val busy = started && (phase == null || phase.inProgress)
                     Surface(
                         color = colors.surfaceContainerHighest,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -374,23 +373,36 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        tr("Lien de fichier détecté · pas encore téléchargé"),
+                                        tr(when (phase) {
+                                            WebImportPhase.DOWNLOADING -> "Téléchargement du livre…"
+                                            WebImportPhase.IMPORTING -> "Vérification et ajout à la bibliothèque…"
+                                            WebImportPhase.SUCCEEDED -> "Livre ajouté à la bibliothèque"
+                                            WebImportPhase.FAILED -> "Échec de l’import. Réessaie ou choisis un autre lien."
+                                            null -> "Lien de fichier détecté · pas encore téléchargé"
+                                        }),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colors.onSurfaceVariant
                                     )
                                 }
                             }
-                            val busy = file != null && file.url in downloading
                             Row(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                TextButton(onClick = { detected = null }, enabled = !busy) { Text(tr("Annuler")) }
+                                TextButton(onClick = {
+                                    detected = null
+                                    started = false
+                                }, enabled = !busy) {
+                                    Text(tr(if (phase == WebImportPhase.SUCCEEDED) "Fermer" else "Annuler"))
+                                }
                                 Button(
                                     enabled = !busy && file != null,
                                     onClick = {
-                                        if (file != null) {
+                                        if (phase == WebImportPhase.SUCCEEDED) {
+                                            onClose()
+                                            OrynNav.openLibrary()
+                                        } else if (file != null) {
                                             started = true
                                             // Le referer ne fuit que si le host du fichier
                                             // est le même que celui de la page (jamais vers un CDN tiers)
@@ -419,7 +431,12 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                         Icon(OrynIcons.Plus, null, modifier = Modifier.size(18.dp))
                                     }
                                     Text(
-                                        if (busy) tr("  Téléchargement et import…") else tr("  Télécharger et ajouter")
+                                        when {
+                                            phase == WebImportPhase.SUCCEEDED -> tr("  Voir la bibliothèque")
+                                            phase == WebImportPhase.FAILED -> tr("  Réessayer l’import")
+                                            busy -> tr("  Traitement…")
+                                            else -> tr("  Télécharger et ajouter")
+                                        }
                                     )
                                 }
                             }
