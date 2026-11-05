@@ -1,7 +1,6 @@
 package com.example.oryn.reader.ui.components
 
 import com.example.oryn.reader.i18n.tr
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
