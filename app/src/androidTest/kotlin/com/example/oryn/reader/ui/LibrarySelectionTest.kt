@@ -66,6 +66,17 @@ class LibrarySelectionTest {
         rule.runOnIdle { assertEquals(listOf(updated), deleted) }
     }
 
+    @Test fun selectionModeHidesFavoriteActionsAndDisablesEmptyDeletion() {
+        show()
+        selectBook()
+        // Selecting a book must not accidentally toggle the unrelated favorite action.
+        rule.onNodeWithContentDescription(tr("Ajouter aux favoris")).assertDoesNotExist()
+        rule.onNodeWithContentDescription(tr("Retirer des favoris")).assertDoesNotExist()
+        rule.onNodeWithText(original.title).performClick() // Deselect the only item.
+        rule.onNodeWithContentDescription(tr("Supprimer la sélection")).assertIsNotEnabled()
+        rule.runOnIdle { assertTrue(deleted.isEmpty()) }
+    }
+
     @Test fun backCancelsSelectionWithoutDeleting() {
         show()
         selectBook()
