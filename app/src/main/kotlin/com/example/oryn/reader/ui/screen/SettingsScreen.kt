@@ -8,6 +8,11 @@ import com.example.oryn.reader.ui.components.inkSecondary
 import androidx.compose.ui.graphics.Color
 import com.example.oryn.reader.ui.components.solidSurface
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -59,6 +64,8 @@ import com.example.oryn.reader.ui.theme.onAccent
 import com.example.oryn.reader.ui.theme.AppThemeMode
 import kotlinx.coroutines.launch
 
+private enum class SettingsSection { ROOT, APPEARANCE, LANGUAGE, READING, ABOUT }
+
 @Composable
 fun SettingsScreen(
     themeMode: AppThemeMode,
@@ -74,6 +81,8 @@ fun SettingsScreen(
     val readerSettings by readerPrefs.readerSettingsFlow.collectAsState(initial = ReaderSettings())
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < 0.5f
+    var section by rememberSaveable { mutableStateOf(SettingsSection.ROOT) }
+    BackHandler(section != SettingsSection.ROOT) { section = SettingsSection.ROOT }
 
     Column(
         modifier = modifier
@@ -84,12 +93,38 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            text = tr("Réglages"),
+            text = tr(when (section) {
+                SettingsSection.ROOT -> "Réglages"
+                SettingsSection.APPEARANCE -> "Apparence"
+                SettingsSection.LANGUAGE -> "Langue"
+                SettingsSection.READING -> "Lecture"
+                SettingsSection.ABOUT -> "Découvrir Oryn"
+            }),
             style = MaterialTheme.typography.headlineLarge,
             color = colors.onBackground,
             modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 8.dp)
         )
 
+        if (section != SettingsSection.ROOT) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable(onClickLabel = tr("Retour")) { section = SettingsSection.ROOT }
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(OrynIcons.ArrowLeft, contentDescription = null, modifier = Modifier.size(20.dp))
+                Text(tr("Retour"), style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        if (section == SettingsSection.ROOT) {
+            SettingsNavigationRow("Apparence", OrynIcons.Palette) { section = SettingsSection.APPEARANCE }
+            SettingsNavigationRow("Langue", OrynIcons.Globe) { section = SettingsSection.LANGUAGE }
+            SettingsNavigationRow("Lecture", OrynIcons.BookOpen) { section = SettingsSection.READING }
+            SettingsNavigationRow("Découvrir Oryn", OrynIcons.Sparkle) { section = SettingsSection.ABOUT }
+        }
+        if (section == SettingsSection.APPEARANCE) {
         // Thème : trois cartes-icônes
         SettingsCard(title = tr("Thème de l'application"), icon = OrynIcons.Palette) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -127,6 +162,8 @@ fun SettingsScreen(
             }
         }
 
+        }
+        if (section == SettingsSection.LANGUAGE) {
         // Langue : suit le système, ou force le français / l'anglais
         SettingsCard(title = "Langue", icon = OrynIcons.Globe) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -150,6 +187,8 @@ fun SettingsScreen(
             }
         }
 
+        }
+        if (section == SettingsSection.READING) {
         // Lecture : barre d'état
         SettingsCard(title = tr("Lecture"), icon = OrynIcons.BookOpen) {
             Row(
@@ -162,7 +201,8 @@ fun SettingsScreen(
                     Text(
                         tr("Masquer la barre d'état"),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface
                     )
                     Text(
                         tr("Pendant la lecture, pour un affichage plein écran."),
@@ -179,10 +219,37 @@ fun SettingsScreen(
             }
         }
 
+        }
+        if (section == SettingsSection.ABOUT) {
         SettingsCard(title = tr("Découvrir Oryn"), icon = OrynIcons.Sparkle) {
             TextButton(onClick = onReplayOnboarding, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(tr("Revoir la présentation"), style = MaterialTheme.typography.labelLarge)
             }
+        }
+        }
+    }
+}
+
+@Composable
+private fun SettingsNavigationRow(title: String, icon: ImageVector, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(role = Role.Button, onClickLabel = tr(title), onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        color = colors.surfaceContainerHigh
+    ) {
+        Row(
+            Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.onSurface, modifier = Modifier.size(22.dp))
+            Text(tr(title), style = MaterialTheme.typography.titleMedium,
+                color = colors.onSurface, modifier = Modifier.weight(1f))
+            Icon(OrynIcons.Chevron, contentDescription = null,
+                tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
 }

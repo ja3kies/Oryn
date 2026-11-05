@@ -199,7 +199,6 @@ private fun Dashboard(
                     }
                     RoundedMenu { DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         MenuItem(OrynIcons.Settings, tr("Réglages")) { menuOpen = false; OrynNav.open("settings") }
-                        MenuItem(OrynIcons.Globe, tr("Catalogues en ligne")) { menuOpen = false; OrynNav.open("online_search") }
                         MenuItem(OrynIcons.Plus, tr("Importer un livre")) { menuOpen = false; onImportClick() }
                     } }
                 }

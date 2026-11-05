@@ -91,11 +91,12 @@ internal fun SelectionBar(
     modifier: Modifier = Modifier,
     onExtend: (() -> Unit)? = null
 ) {
-    val ink = Color(0xFFF4F0E8)
+    val colors = MaterialTheme.colorScheme
+    val ink = colors.onSurface
     Surface(
         modifier = modifier.width(272.dp),
         shape = RoundedCornerShape(26.dp),
-        color = Color(0xFF292725),
+        color = colors.surfaceContainerHigh,
         contentColor = ink,
         shadowElevation = 6.dp
     ) {
@@ -116,7 +117,7 @@ internal fun SelectionBar(
                     ) {
                         Box(
                             Modifier.size(28.dp).clip(CircleShape).background(c)
-                                .then(if (selected) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
+                                .then(if (selected) Modifier.border(2.dp, colors.onSurface, CircleShape) else Modifier)
                         )
                     }
                 }
@@ -125,7 +126,7 @@ internal fun SelectionBar(
             Row(Modifier.fillMaxWidth()) {
                 BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.weight(1f))
                 BarAction(OrynIcons.Pages, tr("Copier"), false, ink, onCopy, Modifier.weight(1f))
-                BarAction(OrynIcons.Highlighter, tr("Souligner"), existing != null && existing.kind == "UNDERLINE", ink, onUnderline, Modifier.weight(1f))
+                BarAction(OrynIcons.Underline, tr("Souligner"), existing != null && existing.kind == "UNDERLINE", ink, onUnderline, Modifier.weight(1f))
             }
             if (onExtend != null || onDefine != null || onTranslate != null) {
                 Row(Modifier.fillMaxWidth()) {
@@ -146,8 +147,8 @@ internal fun SelectionBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(OrynIcons.Trash, null, tint = Color(0xFFFF8F72), modifier = Modifier.size(20.dp))
-                    Text(tr("Supprimer"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Color(0xFFFF8F72))
+                    Icon(OrynIcons.Trash, null, tint = colors.error, modifier = Modifier.size(20.dp))
+                    Text(tr("Supprimer"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = colors.error)
                 }
             }
         }

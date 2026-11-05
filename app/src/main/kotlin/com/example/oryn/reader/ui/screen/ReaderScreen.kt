@@ -105,7 +105,20 @@ fun ReaderScreen(
     // null tant que les réglages ne sont pas lus : évite le flash du thème par défaut
     val loadedSettings by preferencesRepo.readerSettingsFlow.collectAsState(initial = null)
     val ready = loadedSettings != null
-    val settings = loadedSettings ?: ReaderSettings()
+    // Apply each reader control to Compose immediately. DataStore remains the
+    // source of truth once it acknowledges the latest value.
+    var optimisticSettings by remember(book.id) { mutableStateOf<ReaderSettings?>(null) }
+    val settings = optimisticSettings ?: loadedSettings ?: ReaderSettings()
+    LaunchedEffect(loadedSettings, optimisticSettings) {
+        if (optimisticSettings != null && loadedSettings == optimisticSettings) {
+            optimisticSettings = null
+        }
+    }
+    fun updateReaderSettings(transform: (ReaderSettings) -> ReaderSettings) {
+        val updated = transform(settings)
+        optimisticSettings = updated
+        scope.launch { preferencesRepo.updateSettings { updated } }
+    }
 
     // Progression « vivante » : mise à jour immédiate (la fiche de lecture ne dépend plus de la base de données)
     var liveProgress by remember(book.id) { mutableStateOf(book.progress) }
@@ -431,7 +444,14 @@ fun ReaderScreen(
         if (activeTool == null && lookup == null) ReaderCompactControls(
             state = controlsState, metrics = chromeMetrics, chapterTitle = chromeTitle,
             chapterRemaining = chapterRemaining, bookProgress = liveProgress, chapterProgress = chapter?.fraction,
-            bookmarked = book.isFavorite, currentAccent = currentAccent, onBack = onBack,
+            bookmarked = book.isFavorite, currentAccent = currentAccent,
+            scrollMode = settings.scrollMode,
+            onToggleScrollMode = {
+                updateReaderSettings { it.copy(scrollMode = if (it.scrollMode == com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES)
+                    com.example.oryn.reader.data.local.preferences.ReaderScrollMode.SCROLL
+                    else com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES) }
+            },
+            onBack = onBack,
             onTimer = { openTool(ReaderTool.TIMER) }, onBookmark = { onToggleBookmark(book) },
             onContents = chromeToc.takeIf { it.isNotEmpty() }?.let { { openTool(ReaderTool.CONTENTS) } },
             onAnnotations = if (effectiveRich != null || chromeIsPdf) ({ openTool(ReaderTool.ANNOTATIONS) }) else null,
@@ -502,9 +522,7 @@ fun ReaderScreen(
             ReaderControlsSheet(
                 settings = settings,
                 initialFocus = sheetFocus,
-                onSettingsChange = { updater ->
-                    scope.launch { preferencesRepo.updateSettings(updater) }
-                },
+                onSettingsChange = ::updateReaderSettings,
                 currentChapterTitle = chapterTitle,
                 pdfReflow = settings.pdfReflow,
                 onTogglePdfReflow = if (readerPdf != null) {
@@ -518,7 +536,7 @@ fun ReaderScreen(
                         } else {
                             switchPage = pdfCurrentPage
                         }
-                        scope.launch { preferencesRepo.updateSettings { it.copy(pdfReflow = !it.pdfReflow) } }
+                        updateReaderSettings { it.copy(pdfReflow = !it.pdfReflow) }
                     }
                 } else null,
                 currentAccent = currentAccent,
