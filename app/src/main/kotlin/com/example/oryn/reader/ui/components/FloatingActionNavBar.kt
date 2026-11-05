@@ -58,8 +58,8 @@ private val OuterVertical = 12.dp
 val FloatingNavBarHeight: Dp = BarHeight + OuterVertical * 2
 
 /**
- * Onglets d'origine conservés pour l'hôte de navigation : seuls Accueil, Bibliothèque et Favoris
- * apparaissent dans la barre. Les Réglages s'ouvrent depuis le menu « hamburger » de l'accueil.
+ * Quatre destinations : Accueil, Bibliothèque, Découvrir et Favoris.
+ * Les Réglages restent dans le menu de l'accueil ; le bouton import est indépendant.
  */
 enum class ReaderTab(
     val route: String,
@@ -102,7 +102,7 @@ object OrynNav {
 internal val visibleTabs = listOf(ReaderTab.Home, ReaderTab.Explore, ReaderTab.Discover, ReaderTab.Favorites)
 
 /**
- * Barre flottante : pastille de verre (onglet actif déployé avec son libellé, les autres en icônes)
+ * Barre flottante : pastille opaque tonale (onglet actif avec libellé si la largeur le permet)
  * + bouton « + » rond et lumineux, à part, à droite.
  */
 @Composable
@@ -202,7 +202,7 @@ private fun NavItem(
                 role = Role.Tab,
                 onClick = onClick
             )
-            // L'onglet actif se déploie avec un petit rebond
+            // L'onglet actif s'étend sans rebond ; aucun mouvement si les animations sont réduites
             .then(if (motion) Modifier.animateContentSize(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) else Modifier)
             .padding(horizontal = if (selected && showActiveLabel) 12.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically
