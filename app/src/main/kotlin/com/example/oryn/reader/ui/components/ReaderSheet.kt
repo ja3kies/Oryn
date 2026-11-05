@@ -71,9 +71,11 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -204,7 +206,7 @@ private fun ReaderControlsSheetContent(
                     true
                 } else false
             },
-        shape = RoundedCornerShape(34.dp),
+        shape = RoundedCornerShape(com.example.oryn.reader.ui.theme.OrynShape.sheet),
         color = ReaderChromeColor,
         tonalElevation = 0.dp,
         shadowElevation = 8.dp
@@ -426,6 +428,8 @@ private fun ColumnScope.EssentialsPage(
     val columns = if (LocalConfiguration.current.screenWidthDp < 380) 1 else 2
     val size = settings.fontSizePt.coerceIn(10, 36)
     val spacing = settings.lineSpacing.coerceIn(1f, 2.5f)
+    val narrowChoices = LocalConfiguration.current.screenWidthDp < 380 ||
+        LocalDensity.current.fontScale >= 1.3f
 
     // Taille + interligne côte à côte
     FlowRow(Modifier.fillMaxWidth().bringIntoViewRequester(typographyTarget), maxItemsInEachRow = columns, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -458,7 +462,12 @@ private fun ColumnScope.EssentialsPage(
     // Police : 4 puces sur une ligne
     MiniCard {
         CardTitle(OrynIcons.Font, tr("Police"))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(
+            Modifier.fillMaxWidth(),
+            maxItemsInEachRow = if (narrowChoices) 2 else 4,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             ReaderFontFamily.entries.forEach { font ->
                 FontChip(
                     font = font,
@@ -522,6 +531,7 @@ private fun ColumnScope.EssentialsPage(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ColumnScope.AppearancePage(
     settings: ReaderSettings,
@@ -531,11 +541,18 @@ private fun ColumnScope.AppearancePage(
 ) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < 0.5f
+    val narrowChoices = LocalConfiguration.current.screenWidthDp < 380 ||
+        LocalDensity.current.fontScale >= 1.3f
 
     // Thèmes de lecture : 4 mini-cartes sur une ligne
     MiniCard {
         CardTitle(OrynIcons.Palette, tr("Thème de lecture"))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            Modifier.fillMaxWidth(),
+            maxItemsInEachRow = if (narrowChoices) 2 else 3,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             ReaderThemePreset.entries.forEach { preset ->
                 ThemeChip(
                     preset = preset,
@@ -651,7 +668,8 @@ private fun IconToggle(
             .size(maxOf(size, 48.dp))
             .clip(shape)
             .background(if (selected) colors.primaryContainer else container)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { if (selected) this.selected = true },
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(if (size < 34.dp) 18.dp else 20.dp))
