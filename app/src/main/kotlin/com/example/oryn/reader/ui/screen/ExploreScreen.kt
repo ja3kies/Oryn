@@ -100,7 +100,10 @@ private val recentSources = listOf(
     LibrarySource("DOAB", "Plus de 88 000 livres académiques en accès ouvert", "https://www.doabooks.org"),
     LibrarySource("OAPEN", "Livres scientifiques récents, PDF libres", "https://library.oapen.org"),
     LibrarySource("Des livres en communs", "Essais, BD et fictions sous licence libre (Framasoft)", "https://deslivresencommuns.org"),
-    LibrarySource("Open Library", "Millions de titres ; seuls les livres du domaine public sont téléchargeables", "https://openlibrary.org")
+    LibrarySource("Open Library", "Millions de titres ; seuls les livres du domaine public sont téléchargeables", "https://openlibrary.org"),
+    // External index only: Oryn never starts an Anna's Archive download.
+    // Copyright/licence and the authenticity of mirrors must be checked by the reader.
+    LibrarySource("Anna’s Archive", "Index externe : vérifie les droits des ouvrages avant toute consultation", "https://annas-archive.gl")
 )
 
 /** Classiques du domaine public, mis à jour régulièrement. */
