@@ -385,6 +385,8 @@ private val Dictionary: Map<String, String> by lazy {
         "« %s » sera retiré de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées." to "“%s” will be removed from your library. External files remain unchanged; unused local copies may be deleted.",
         "Infos" to "Info",
         "Sélectionner" to "Select",
+        "Sélectionner %s" to "Select %s",
+        "Désélectionner %s" to "Deselect %s",
         "Supprimer de la bibliothèque" to "Remove from library",
         "Changer" to "Change",
         "Pas encore commencé" to "Not started yet",

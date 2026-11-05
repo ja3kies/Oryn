@@ -186,6 +186,9 @@ fun BookCard(
     val tint = rememberCoverTint(book)
     val haptics = LocalHapticFeedback.current
     var actions by remember { mutableStateOf(false) }
+    val clickLabel = if (isSelectionMode) {
+        trf(if (isSelected) "Désélectionner %s" else "Sélectionner %s", book.title)
+    } else trf("Ouvrir %s", book.title)
     val state = when {
         book.progress < 0.01f -> tr("Non lu")
         book.progress >= 0.98f -> tr("Terminé")
@@ -200,8 +203,8 @@ fun BookCard(
                 .glass(RoundedCornerShape(28.dp), tint)
                 .semantics { if (isSelectionMode) selected = isSelected }
                 .combinedClickable(
-                    onClickLabel = trf("Ouvrir %s", book.title),
-                    onLongClickLabel = tr("Options du livre"),
+                    onClickLabel = clickLabel,
+                    onLongClickLabel = if (isSelectionMode) clickLabel else tr("Options du livre"),
                     onClick = onBookClick,
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -251,7 +254,7 @@ fun BookCard(
                     trackColor = colors.onSurface.copy(alpha = 0.14f)
                 )
             }
-            FavoriteButton(book.isFavorite, onToggleFavorite, Modifier.align(Alignment.Top))
+            if (!isSelectionMode) FavoriteButton(book.isFavorite, onToggleFavorite, Modifier.align(Alignment.Top))
         }
         BookCover(
             book,
@@ -265,5 +268,5 @@ fun BookCard(
         )
     }
 
-    BookActionsHost(book, visible = actions, onDismiss = { actions = false }, onSelect = onSelect)
+    if (!isSelectionMode) BookActionsHost(book, visible = actions, onDismiss = { actions = false }, onSelect = onSelect)
 }

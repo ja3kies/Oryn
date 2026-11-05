@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -484,7 +485,8 @@ private fun OnlineBookRow(
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 downloading -> CircularProgressIndicator(
-                    modifier = Modifier.padding(end = 8.dp).size(24.dp),
+                    modifier = Modifier.padding(end = 8.dp).size(24.dp)
+                        .semantics { contentDescription = tr("Chargement…") },
                     strokeWidth = 2.5.dp
                 )
                 else -> FilledTonalIconButton(onClick = onDownload) {
@@ -505,21 +507,22 @@ private fun RemoteCover(url: String?, modifier: Modifier = Modifier) {
             }?.also { CoverCache.put(url, it) }
         }
     }
-    Surface(modifier = modifier, shape = RoundedCornerShape(10.dp), color = colors.primaryContainer) {
+    // Keep remote previews faithful to the same neutral, uncropped cover policy as local books.
+    Surface(modifier = modifier, shape = RoundedCornerShape(10.dp), color = colors.surfaceContainerLowest) {
         val image = bitmap
         if (image != null) {
             Image(
                 bitmap = image.asImageBitmap(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Fit
             )
         } else {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     OrynIcons.BookOpen,
                     contentDescription = null,
-                    tint = colors.primary,
+                    tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
             }

@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.material3.TextButton
@@ -80,6 +81,7 @@ import com.example.oryn.reader.ui.components.GlassChip
 import com.example.oryn.reader.ui.components.GlassSearchField
 import com.example.oryn.reader.ui.components.LibraryEmptyState
 import com.example.oryn.reader.ui.components.HugeIcons
+import com.example.oryn.reader.ui.theme.OrynShape
 import com.example.oryn.reader.ui.components.OrynIcons
 import com.example.oryn.reader.ui.components.OrynNav
 import com.example.oryn.reader.ui.components.inkPrimary
@@ -148,13 +150,15 @@ internal fun LibraryContent(
     if (pendingDeleteBooks.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { pendingDeleteIds = longArrayOf() },
+            shape = RoundedCornerShape(OrynShape.sheet),
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(tr("Supprimer la sélection ?")) },
             text = { Text(trf("%s livres seront retirés de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées.", pendingDeleteBooks.size)) },
             confirmButton = { TextButton(onClick = {
                 onDeleteBooks(pendingDeleteBooks)
                 pendingDeleteIds = longArrayOf()
                 clearSelection()
-            }) { Text(tr("Supprimer")) } },
+            }) { Text(tr("Supprimer"), color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { pendingDeleteIds = longArrayOf() }) { Text(tr("Annuler")) } }
         )
     }
@@ -212,15 +216,17 @@ internal fun LibraryContent(
                     selectedIds = if (shown.isNotEmpty() && shown.all { it.id in selectedSet }) longArrayOf()
                         else shown.map { it.id }.toLongArray()
                 }
-                Box(
-                    Modifier.size(48.dp).clip(CircleShape).clickable {
-                        if (selectedBooks.isNotEmpty()) {
-                            pendingDeleteIds = selectedBooks.map { it.id }.toLongArray()
-                        }
-                    },
-                    contentAlignment = Alignment.Center
+                IconButton(
+                    onClick = { pendingDeleteIds = selectedBooks.map { it.id }.toLongArray() },
+                    enabled = selectedBooks.isNotEmpty(),
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(imageVector = HugeIcons.Trash, contentDescription = tr("Supprimer la sélection"), tint = colors.error, modifier = Modifier.size(24.dp))
+                    Icon(
+                        imageVector = HugeIcons.Trash,
+                        contentDescription = tr("Supprimer la sélection"),
+                        tint = if (selectedBooks.isNotEmpty()) colors.error else colors.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         } else {
@@ -530,6 +536,9 @@ internal fun GridBook(
     val colors = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
     var actions by remember { mutableStateOf(false) }
+    val clickLabel = if (isSelectionMode) {
+        trf(if (isSelected) "Désélectionner %s" else "Sélectionner %s", book.title)
+    } else trf("Ouvrir %s", book.title)
     val state = when {
         book.progress >= 0.98f -> tr("Terminé")
         book.progress >= 0.01f -> "${(book.progress * 100).toInt()} %"
@@ -540,6 +549,8 @@ internal fun GridBook(
             .fillMaxWidth()
             .semantics { if (isSelectionMode) selected = isSelected }
             .combinedClickable(
+                onClickLabel = clickLabel,
+                onLongClickLabel = if (isSelectionMode) clickLabel else tr("Options du livre"),
                 onClick = onClick,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -592,7 +603,7 @@ internal fun GridBook(
                 color = inkSecondary(),
                 modifier = Modifier.weight(1f)
             )
-            FavoriteButton(
+            if (!isSelectionMode) FavoriteButton(
                 isFavorite = book.isFavorite,
                 onClick = onToggleFavorite,
                 size = 28.dp
