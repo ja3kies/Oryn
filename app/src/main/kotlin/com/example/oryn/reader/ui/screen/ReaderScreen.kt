@@ -176,17 +176,8 @@ fun ReaderScreen(
     // Marque le livre comme « lu récemment » sans toucher à la progression
     LaunchedEffect(book.id) { onUpdateProgress(book, book.progress) }
 
-    // Luminosité manuelle, rétablie en quittant le lecteur
-    LaunchedEffect(settings.brightness, settings.autoBrightness, ready) {
-        val window = activity?.window ?: return@LaunchedEffect
-        val params = window.attributes
-        params.screenBrightness = if (settings.autoBrightness) {
-            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-        } else {
-            settings.brightness.coerceIn(0.01f, 1f)
-        }
-        window.attributes = params
-    }
+    // Reader brightness follows Android system settings. Keep legacy DataStore values
+    // readable for backwards compatibility, but never apply a stale window override.
 
     LaunchedEffect(settings.hideStatusBar, controlsState) {
         val window = activity?.window ?: return@LaunchedEffect
