@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.luminance
 import com.example.oryn.reader.ui.screen.coverFrame
+import com.example.oryn.reader.ui.theme.OrynShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -78,10 +79,12 @@ fun BookActionsHost(book: BookEntity, visible: Boolean, onDismiss: () -> Unit, o
             val viewModel = rememberMainViewModel()
             AlertDialog(
                 onDismissRequest = onDismiss,
+                shape = RoundedCornerShape(OrynShape.sheet),
+                containerColor = MaterialTheme.colorScheme.surface,
                 title = { Text(tr("Supprimer ce livre ?")) },
                 text = { Text(trf("« %s » sera retiré de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées.", book.title)) },
                 confirmButton = {
-                    TextButton(onClick = { onDismiss(); viewModel.deleteBook(book) }) { Text(tr("Supprimer")) }
+                    TextButton(onClick = { onDismiss(); viewModel.deleteBook(book) }) { Text(tr("Supprimer"), color = MaterialTheme.colorScheme.error) }
                 },
                 dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Annuler")) } }
             )
@@ -204,13 +207,15 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
     if (confirmCoverRemoval) {
         AlertDialog(
             onDismissRequest = { confirmCoverRemoval = false },
+            shape = RoundedCornerShape(OrynShape.sheet),
+            containerColor = colors.surface,
             title = { Text(tr("Supprimer la couverture ?")) },
             text = { Text(tr("Tu pourras choisir une autre couverture depuis la fiche du livre.")) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.removeCover(book)
                     confirmCoverRemoval = false
-                }) { Text(tr("Supprimer")) }
+                }) { Text(tr("Supprimer"), color = colors.error) }
             },
             dismissButton = { TextButton(onClick = { confirmCoverRemoval = false }) { Text(tr("Annuler")) } }
         )
@@ -226,7 +231,7 @@ private fun InfoDialog(book: BookEntity, onDismiss: () -> Unit) {
                 modifier = Modifier
                     .widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 680.dp)
                     .clickable(interactionSource = inside, indication = null, onClick = {}),
-                shape = RoundedCornerShape(32.dp),
+                shape = RoundedCornerShape(OrynShape.sheet),
                 color = colors.surface,
                 contentColor = colors.onSurface,
                 shadowElevation = 8.dp
@@ -399,6 +404,8 @@ private fun EditInfoDialog(
     val pagesError = pages.isNotBlank() && (parsedPages == null || parsedPages !in 1..200_000)
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(OrynShape.sheet),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(tr("Modifier les informations")) },
         text = {
             Column(
