@@ -42,6 +42,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -213,10 +215,10 @@ private fun ReaderControlsSheetContent(
     ) {
         Column(
             modifier = Modifier
-                .heightIn(max = minOf(520.dp, screenHeight * 0.7f))
+                .heightIn(max = minOf(640.dp, screenHeight * 0.82f))
                 .animateContentSize(tween(if (motionEnabled) 160 else 0))
                 .verticalScroll(rememberScrollState())
-                .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 14.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Poignée : glisser vers le bas ou toucher pour fermer
@@ -239,79 +241,32 @@ private fun ReaderControlsSheetContent(
                 )
             }
 
-            // Outils rapides : sommaire, recherche, annotations
-            if (onOpenToc != null || onOpenSearch != null || onOpenAnnotations != null || onTogglePdfReflow != null) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    onOpenToc?.let { ToolButton(OrynIcons.Toc, tr("Sommaire"), it, Modifier.weight(1f)) }
-                    onOpenSearch?.let { ToolButton(OrynIcons.Search, tr("Recherche"), it, Modifier.weight(1f)) }
-                    onOpenAnnotations?.let { ToolButton(OrynIcons.Highlighter, tr("Annotations"), it, Modifier.weight(1f)) }
-                    onTogglePdfReflow?.let { ToolButton(if (pdfReflow) OrynIcons.Pages else OrynIcons.Font, if (pdfReflow) tr("Page") else tr("Texte"), it, Modifier.weight(1f)) }
+            // The Reader Pill already exposes contents, annotations and reading
+            // progress. Keep only unique actions accessible from the sheet.
+            Row(
+                Modifier.fillMaxWidth().padding(start = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    tr("Réglages de lecture"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                onOpenSearch?.let { search ->
+                    IconToggle(OrynIcons.Search, tr("Recherche"), size = 48.dp, onClick = search)
+                }
+                onTogglePdfReflow?.let { toggle ->
+                    IconToggle(
+                        if (pdfReflow) OrynIcons.Pages else OrynIcons.Font,
+                        if (pdfReflow) tr("Page") else tr("Texte"),
+                        size = 48.dp,
+                        onClick = toggle
+                    )
                 }
             }
-
-            // Progression : glisser pour aller à un endroit du livre (+ chapitre précédent / suivant)
-            if (onSeek != null) {
-                var dragging by remember { mutableStateOf<Float?>(null) }
-                val shown = (dragging ?: readingProgress).coerceIn(0f, 1f)
-                MiniCard {
-                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconToggle(OrynIcons.ArrowLeft, tr("Chapitre précédent"), enabled = onPrevChapter != null, size = 32.dp) {
-                                onPrevChapter?.invoke()
-                            }
-                            Slider(
-                                value = shown,
-                                onValueChange = { dragging = it },
-                                onValueChangeFinished = { dragging?.let(onSeek); dragging = null },
-                                modifier = Modifier.weight(1f)
-                            )
-                            Box(Modifier.graphicsLayer { rotationZ = 180f }) {
-                                IconToggle(OrynIcons.ArrowLeft, tr("Chapitre suivant"), enabled = onNextChapter != null, size = 32.dp) {
-                                    onNextChapter?.invoke()
-                                }
-                            }
-                        }
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "${(shown * 100).toInt()} %",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.primary
-                            )
-                            Text(
-                                remainingLabel ?: "",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = colors.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            currentChapterTitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 10.dp)
-                        )
-                    }
-                }
-            }
-
-            Text(
-                tr("Réglages de lecture"),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.onSurface,
-                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-            )
             // Two labelled tabs are easier to discover than icon-only segmented options.
             Row(
                 modifier = Modifier
@@ -360,7 +315,7 @@ private fun ReaderControlsSheetContent(
                 },
                 label = "readerSettingsTab"
             ) { current ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     when (current) {
                         ReaderSettingsTab.ESSENTIALS -> EssentialsPage(settings, onSettingsChange, typographyTarget, layoutTarget)
                         ReaderSettingsTab.APPEARANCE -> AppearancePage(
@@ -428,9 +383,6 @@ private fun ColumnScope.EssentialsPage(
     val columns = if (LocalConfiguration.current.screenWidthDp < 380) 1 else 2
     val size = settings.fontSizePt.coerceIn(10, 36)
     val spacing = settings.lineSpacing.coerceIn(1f, 2.5f)
-    val narrowChoices = LocalConfiguration.current.screenWidthDp < 380 ||
-        LocalDensity.current.fontScale >= 1.3f
-
     // Taille + interligne côte à côte
     FlowRow(Modifier.fillMaxWidth().bringIntoViewRequester(typographyTarget), maxItemsInEachRow = columns, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         StepperCard(
@@ -459,72 +411,106 @@ private fun ColumnScope.EssentialsPage(
         )
     }
 
-    // Police : 4 puces sur une ligne
+    // One compact font selector avoids four wide cards while keeping every option.
     MiniCard {
+        var fontsOpen by remember { mutableStateOf(false) }
         CardTitle(OrynIcons.Font, tr("Police"))
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            maxItemsInEachRow = if (narrowChoices) 2 else 4,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ReaderFontFamily.entries.forEach { font ->
-                FontChip(
-                    font = font,
-                    selected = settings.fontFamily == font,
-                    onClick = { onSettingsChange { it.copy(fontFamily = font) } },
-                    modifier = Modifier.weight(1f)
-                )
+        Box {
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClickLabel = tr("Police")) { fontsOpen = true }
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(tr(settings.fontFamily.label), style = MaterialTheme.typography.labelLarge)
+                Icon(OrynIcons.Chevron, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(expanded = fontsOpen, onDismissRequest = { fontsOpen = false }) {
+                ReaderFontFamily.entries.forEach { font ->
+                    DropdownMenuItem(
+                        text = { Text(tr(font.label)) },
+                        onClick = {
+                            fontsOpen = false
+                            onSettingsChange { it.copy(fontFamily = font) }
+                        },
+                        trailingIcon = {
+                            if (settings.fontFamily == font) {
+                                Icon(OrynIcons.Check, contentDescription = null)
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 
-    // Alignement | carte « Marges + Défilement » coupée en deux moitiés côte à côte
-    FlowRow(Modifier.fillMaxWidth().bringIntoViewRequester(layoutTarget), maxItemsInEachRow = columns, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        MiniCard(fillWidth = false) {
-            CardTitle(OrynIcons.AlignLeft, tr("Texte"))
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                IconToggle(OrynIcons.AlignLeft, tr("Aligné à gauche"), settings.textAlign == ReaderTextAlign.START, size = 28.dp) {
+    // Keep alignment and margins horizontal at normal width; split into full
+    // width cards when the device or accessibility font scale needs room.
+    FlowRow(
+        Modifier.fillMaxWidth().bringIntoViewRequester(layoutTarget),
+        maxItemsInEachRow = columns,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        MiniCard(modifier = Modifier.weight(1f), fillWidth = false) {
+            CardTitle(OrynIcons.AlignLeft, tr("Alignement"))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                IconToggle(OrynIcons.AlignLeft, tr("Aligné à gauche"), settings.textAlign == ReaderTextAlign.START) {
                     onSettingsChange { it.copy(textAlign = ReaderTextAlign.START) }
                 }
-                IconToggle(OrynIcons.AlignCenter, tr("Centré"), settings.textAlign == ReaderTextAlign.CENTER, size = 28.dp) {
+                IconToggle(OrynIcons.AlignCenter, tr("Centré"), settings.textAlign == ReaderTextAlign.CENTER) {
                     onSettingsChange { it.copy(textAlign = ReaderTextAlign.CENTER) }
                 }
-                IconToggle(OrynIcons.AlignJustify, tr("Justifié"), settings.textAlign == ReaderTextAlign.JUSTIFY, size = 28.dp) {
+                IconToggle(OrynIcons.AlignJustify, tr("Justifié"), settings.textAlign == ReaderTextAlign.JUSTIFY) {
                     onSettingsChange { it.copy(textAlign = ReaderTextAlign.JUSTIFY) }
                 }
             }
         }
-        MiniCard(Modifier.weight(1f)) {
-            // Standard stacked groups avoid a 3-button + 2-button row overflowing
-            // half-width cards at large text scale or on narrow Android screens.
+        MiniCard(modifier = Modifier.weight(1f), fillWidth = false) {
             CardTitle(OrynIcons.MarginNormal, tr("Marges"))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 listOf(
                     Triple(ReaderMarginSize.NARROW, OrynIcons.MarginNarrow, tr("Marges étroites")),
                     Triple(ReaderMarginSize.NORMAL, OrynIcons.MarginNormal, tr("Marges normales")),
                     Triple(ReaderMarginSize.WIDE, OrynIcons.MarginWide, tr("Marges larges"))
                 ).forEach { (margin, icon, description) ->
-                    IconToggle(icon, description, settings.marginSize == margin, size = 48.dp) {
+                    IconToggle(icon, description, settings.marginSize == margin) {
                         onSettingsChange { it.copy(marginSize = margin) }
                     }
                 }
             }
-            CardTitle(OrynIcons.ScrollVertical, tr("Défilement"))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconToggle(OrynIcons.Pages, tr("Mode pages"), settings.scrollMode == ReaderScrollMode.PAGES, size = 48.dp) {
-                    onSettingsChange { it.copy(scrollMode = ReaderScrollMode.PAGES) }
-                }
-                IconToggle(OrynIcons.ScrollVertical, tr("Mode défilement"), settings.scrollMode == ReaderScrollMode.SCROLL, size = 48.dp) {
-                    onSettingsChange { it.copy(scrollMode = ReaderScrollMode.SCROLL) }
+        }
+    }
+    MiniCard {
+        CardTitle(OrynIcons.ScrollVertical, tr("Mode de lecture"))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                Triple(ReaderScrollMode.PAGES, OrynIcons.Pages, tr("Pages")),
+                Triple(ReaderScrollMode.SCROLL, OrynIcons.ScrollVertical, tr("Défilement"))
+            ).forEach { (mode, icon, label) ->
+                val selected = settings.scrollMode == mode
+                Row(
+                    Modifier.weight(1f)
+                        .heightIn(min = 48.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer)
+                        .selectable(selected = selected, role = Role.RadioButton) {
+                            onSettingsChange { it.copy(scrollMode = mode) }
+                        }
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp),
+                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                    Spacer(Modifier.width(6.dp))
+                    Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
                 }
             }
         }
@@ -544,29 +530,10 @@ private fun ColumnScope.AppearancePage(
     val narrowChoices = LocalConfiguration.current.screenWidthDp < 380 ||
         LocalDensity.current.fontScale >= 1.3f
 
-    // Thèmes de lecture : 4 mini-cartes sur une ligne
+    // Accent comes first. Preset IDs remain stable; only presentation order
+    // changes, with OLED deliberately last.
     MiniCard {
-        CardTitle(OrynIcons.Palette, tr("Thème de lecture"))
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            maxItemsInEachRow = if (narrowChoices) 2 else 3,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ReaderThemePreset.entries.forEach { preset ->
-                ThemeChip(
-                    preset = preset,
-                    selected = settings.themePreset == preset,
-                    onClick = { onSettingsChange { it.copy(themePreset = preset) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-
-    // Accent : pastilles de couleur sur une seule ligne
-    MiniCard {
-        CardTitle(OrynIcons.Sparkle, tr("Accent"))
+        CardTitle(OrynIcons.Sparkle, tr("Couleur d'accentuation"))
         Row(Modifier.fillMaxWidth()) {
             AppAccentTheme.choices.forEach { accent ->
                 AccentDot(
@@ -579,31 +546,27 @@ private fun ColumnScope.AppearancePage(
             }
         }
     }
-
-    // Luminosité : icône, curseur, bouton auto
     MiniCard {
-        Row(
+        CardTitle(OrynIcons.Palette, tr("Thème de lecture"))
+        FlowRow(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            maxItemsInEachRow = if (narrowChoices) 2 else 3,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(
-                OrynIcons.Sun,
-                contentDescription = tr("Luminosité"),
-                tint = colors.primary,
-                modifier = Modifier
-                    .padding(start = 6.dp)
-                    .size(18.dp)
-            )
-            Slider(
-                value = settings.brightness.coerceIn(0.01f, 1f),
-                onValueChange = { v -> onSettingsChange { it.copy(brightness = v, autoBrightness = false) } },
-                valueRange = 0.01f..1f,
-                enabled = !settings.autoBrightness,
-                modifier = Modifier.weight(1f)
-            )
-            IconToggle(OrynIcons.SunAuto, tr("Luminosité automatique"), settings.autoBrightness) {
-                onSettingsChange { it.copy(autoBrightness = !it.autoBrightness) }
+            listOf(
+                ReaderThemePreset.LIGHT,
+                ReaderThemePreset.BEIGE,
+                ReaderThemePreset.MIDNIGHT,
+                ReaderThemePreset.NUIT,
+                ReaderThemePreset.OLED
+            ).forEach { preset ->
+                ThemeChip(
+                    preset = preset,
+                    selected = settings.themePreset == preset,
+                    onClick = { onSettingsChange { it.copy(themePreset = preset) } },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -623,8 +586,8 @@ private fun MiniCard(
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             content = content
         )
     }
@@ -758,7 +721,7 @@ private fun ThemeChip(
     val colors = MaterialTheme.colorScheme
     Column(
         modifier = modifier
-            .heightIn(min = 64.dp)
+            .heightIn(min = 56.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -766,7 +729,7 @@ private fun ThemeChip(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
+                .heightIn(min = 40.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(preset.pageColor)
                 .border(
@@ -781,7 +744,7 @@ private fun ThemeChip(
             Text("Aa", color = preset.textColor, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
         Text(
-            preset.label,
+            tr(preset.label),
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -144,6 +144,23 @@ class ReaderImmersiveControlsTest {
         pressBack()
         rule.onNodeWithContentDescription(tr("Tous les réglages")).assertIsDisplayed()
     }
+    @Test fun tabsKeepTypographySeparateFromAppearanceAndPreserveAllFiveThemes() {
+        show(); reveal()
+        rule.onNodeWithContentDescription(tr("Tous les réglages")).performClick()
+        rule.onNodeWithText(tr("Police")).assertExists()
+        rule.onNodeWithText(tr("Thème de lecture")).assertDoesNotExist()
+        rule.onNodeWithText(tr("Apparence")).performClick()
+        rule.onNodeWithText(tr("Police")).assertDoesNotExist()
+        rule.onNodeWithText(tr("Couleur d'accentuation")).assertExists()
+        rule.onNodeWithText(tr("Thème de lecture")).assertExists()
+        listOf("Clair", "Beige", "Anthracite", "Obsidian Tide", "Noir OLED").forEach {
+            rule.onNodeWithText(tr(it)).assertExists()
+        }
+        rule.onNodeWithText(tr("Essentiels")).performClick()
+        rule.onNodeWithText(tr("Police")).assertExists()
+        rule.onNodeWithText(tr("Thème de lecture")).assertDoesNotExist()
+    }
+
     private fun assertPageIsClearOfChrome() {
         reveal()
         val top = rule.onNodeWithTag("ReaderCompactTopBar").fetchSemanticsNode().boundsInRoot
