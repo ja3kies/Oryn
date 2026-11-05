@@ -7,6 +7,11 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.luminance
+import com.example.oryn.reader.data.local.preferences.ReaderScrollMode
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.*
@@ -41,7 +46,7 @@ import kotlin.math.roundToInt
 
 /** Stable gutters: toggling chrome must never change the pagination viewport. */
 data class ReaderChromeMetrics(val top: Dp, val progress: Dp) {
-    val bottom: Dp get() = progress + 64.dp
+    val bottom: Dp get() = 64.dp
 }
 fun readerChromeMetrics(fontScale: Float, chapterDetail: Boolean = false) = ReaderChromeMetrics(
     maxOf(56.dp, ((if (chapterDetail) 36 else 20) * fontScale + 8).dp), maxOf(36.dp, (22 * fontScale + 8).dp)
@@ -92,6 +97,8 @@ fun ReaderCompactControls(
     chapterProgress: Float?,
     bookmarked: Boolean,
     currentAccent: AppAccentTheme,
+    scrollMode: ReaderScrollMode = ReaderScrollMode.PAGES,
+    onToggleScrollMode: () -> Unit = {},
     onBack: () -> Unit,
     onTimer: () -> Unit,
     onBookmark: () -> Unit,
@@ -101,15 +108,18 @@ fun ReaderCompactControls(
     modifier: Modifier = Modifier
 ) {
     val motion = systemAnimationsEnabled(LocalContext.current)
+    val chromeDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     // No outgoing compact panel underneath the modal sheet, including during its animation.
     if (state == ReaderControlsState.EXPANDED) return
     AnimatedVisibility(
         visible = state == ReaderControlsState.COMPACT,
-        enter = if (motion) fadeIn(tween(140)) else EnterTransition.None,
+        enter = if (motion) fadeIn(tween(180)) +
+            slideInVertically(initialOffsetY = { it / 5 }, animationSpec = tween(210)) +
+            scaleIn(initialScale = 0.97f, animationSpec = tween(210)) else EnterTransition.None,
         exit = if (motion) fadeOut(tween(90)) else ExitTransition.None,
         modifier = modifier
     ) {
-        MaterialTheme(colorScheme = orynColorScheme(true, currentAccent)) {
+        MaterialTheme(colorScheme = orynColorScheme(chromeDark, currentAccent)) {
             val colors = MaterialTheme.colorScheme
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
                 Surface(
@@ -121,7 +131,14 @@ fun ReaderCompactControls(
                 ) {
                     Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         ChromeAction(OrynIcons.ArrowLeft, tr("Retour"), onBack)
-                        Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                        Column(
+                            Modifier.weight(1f).padding(horizontal = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = onContents != null, onClickLabel = tr("Sommaire")) {
+                                    onContents?.invoke()
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
                             Text(chapterTitle, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             chapterRemaining?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
@@ -138,23 +155,6 @@ fun ReaderCompactControls(
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
-                        modifier = Modifier.fillMaxWidth().height(metrics.progress)
-                            .pointerInput(Unit) { detectTapGestures { } },
-                        shape = CircleShape, color = colors.surface
-                    ) {
-                        Column(Modifier.padding(horizontal = 14.dp, vertical = 3.dp), verticalArrangement = Arrangement.Center) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(trf("Livre : %s %", (bookProgress.coerceIn(0f, 1f) * 100).roundToInt()),
-                                    modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                chapterProgress?.let { fraction ->
-                                    Text(trf("Chapitre : %s %", (fraction * 100).roundToInt()),
-                                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                            }
-                            LinearProgressIndicator(progress = { bookProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp))
-                        }
-                    }
-                    Surface(
                         modifier = Modifier.height(56.dp).pointerInput(Unit) { detectTapGestures { } },
                         shape = CircleShape, color = colors.surface
                     ) {
@@ -166,7 +166,11 @@ fun ReaderCompactControls(
                         ) {
                             ChromeAction(OrynIcons.Toc, tr("Sommaire"), { onContents?.invoke() }, enabled = onContents != null)
                             ChromeAction(OrynIcons.Highlighter, tr("Annotations"), { onAnnotations?.invoke() }, enabled = onAnnotations != null)
-                            ChromeAction(OrynIcons.Pages, tr("Mise en page"), { onExpand(ReaderSheetFocus.LAYOUT) })
+                            ChromeAction(
+                                if (scrollMode == ReaderScrollMode.SCROLL) OrynIcons.ScrollVertical else OrynIcons.Pages,
+                                if (scrollMode == ReaderScrollMode.SCROLL) tr("Passer en mode pages") else tr("Passer en mode défilement"),
+                                onToggleScrollMode
+                            )
                             ChromeAction(OrynIcons.TextSize, tr("Typographie"), { onExpand(ReaderSheetFocus.TYPOGRAPHY) })
                             ChromeAction(OrynIcons.Menu, tr("Tous les réglages"), { onExpand(ReaderSheetFocus.ALL) })
                         }
