@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Switch
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import com.example.oryn.reader.ui.components.CloverGlyph
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -486,33 +488,29 @@ private fun ColumnScope.EssentialsPage(
         }
     }
     MiniCard {
-        CardTitle(OrynIcons.ScrollVertical, tr("Mode de lecture"))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                Triple(ReaderScrollMode.PAGES, OrynIcons.Pages, tr("Pages")),
-                Triple(ReaderScrollMode.SCROLL, OrynIcons.ScrollVertical, tr("Défilement"))
-            ).forEach { (mode, icon, label) ->
-                val selected = settings.scrollMode == mode
-                Row(
-                    Modifier.weight(1f)
-                        .heightIn(min = 48.dp)
-                        .clip(CircleShape)
-                        .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer)
-                        .selectable(selected = selected, role = Role.RadioButton) {
-                            onSettingsChange { it.copy(scrollMode = mode) }
-                        }
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp),
-                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
-                    Spacer(Modifier.width(6.dp))
-                    Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
-                }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val scrolling = settings.scrollMode == ReaderScrollMode.SCROLL
+            Icon(if (scrolling) OrynIcons.ScrollVertical else OrynIcons.Pages,
+                contentDescription = null, modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.onSurface)
+            Column(Modifier.weight(1f)) {
+                Text(tr("Mode de lecture"), style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface)
+                Text(if (scrolling) tr("Défilement") else tr("Pages"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Switch(
+                checked = scrolling,
+                onCheckedChange = { enabled ->
+                    onSettingsChange { it.copy(scrollMode = if (enabled) ReaderScrollMode.SCROLL else ReaderScrollMode.PAGES) }
+                },
+                modifier = Modifier.semantics { contentDescription = tr("Mode de lecture") }
+            )
         }
     }
 }
@@ -536,7 +534,7 @@ private fun ColumnScope.AppearancePage(
         CardTitle(OrynIcons.Sparkle, tr("Couleur d'accentuation"))
         Row(Modifier.fillMaxWidth()) {
             AppAccentTheme.choices.forEach { accent ->
-                AccentDot(
+                CloverAccentOption(
                     accent = accent,
                     selected = currentAccent == accent,
                     dark = dark,
@@ -728,20 +726,19 @@ private fun ThemeChip(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 40.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .size(40.dp)
+                .clip(CircleShape)
                 .background(preset.pageColor)
                 .border(
                     BorderStroke(
                         if (selected) 2.dp else 1.dp,
-                        if (selected) colors.primary else colors.outlineVariant
+                        if (selected) colors.onSurface else colors.outlineVariant
                     ),
-                    RoundedCornerShape(10.dp)
+                    CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Text("Aa", color = preset.textColor, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("Aa", color = preset.textColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
         Text(
             tr(preset.label),
