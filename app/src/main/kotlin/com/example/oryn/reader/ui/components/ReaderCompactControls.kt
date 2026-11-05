@@ -13,6 +13,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.luminance
 import com.example.oryn.reader.data.local.preferences.ReaderScrollMode
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
