@@ -240,7 +240,9 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                         view.loadUrl(url.toHttps())
                                         return true
                                     }
-                                    if (looksLikeBook(url)) {
+                                    // Only a top-level GET link is an intentional book
+                                    // selection; an iframe or resource must not trigger UI.
+                                    if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) && looksLikeBook(url)) {
                                         detected = DetectedFile(
                                             url = url,
                                             name = URLUtil.guessFileName(url, null, null),
@@ -298,7 +300,8 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                             // Le site déclenche un vrai téléchargement (en-têtes « attachment »)
                             setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
                                 val name = URLUtil.guessFileName(url, contentDisposition, mimetype)
-                                if (isSupportedDownload(name, mimetype)) {
+                                if (url.startsWith("https://", ignoreCase = true) &&
+                                    isSupportedDownload(name, mimetype)) {
                                     detected = DetectedFile(url, name, userAgent)
                                     started = false
                                 } else {
