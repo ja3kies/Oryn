@@ -16,7 +16,6 @@ import android.webkit.WebResourceError
 import android.webkit.WebSettings
 import android.webkit.WebResourceResponse
 import android.webkit.WebResourceRequest
-import android.webkit.WebViewRenderProcess
 import android.os.Build
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -257,8 +256,9 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                     view: WebView,
                                     detail: android.webkit.RenderProcessGoneDetail
                                 ): Boolean {
-                                    errorMessage = tr("Le navigateur intégré s’est arrêté. Rouvre ce catalogue.")
-                                    webView = null
+                                    // A crashed WebView must be removed, not reloaded in place.
+                                    Toast.makeText(context, tr("Le navigateur intégré s’est arrêté. Rouvre ce catalogue."), Toast.LENGTH_LONG).show()
+                                    onClose()
                                     return true
                                 }
 
