@@ -439,6 +439,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Clair" to "Light",
         "Beige" to "Beige",
         "Prune" to "Plum",
+        "Anthracite" to "Charcoal",
+        "Obsidian Tide" to "Obsidian Tide",
         "Noir OLED" to "OLED black",
         "Par défaut" to "Default",
         "Sérif" to "Serif",
