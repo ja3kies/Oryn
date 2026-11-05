@@ -81,6 +81,7 @@ import com.example.oryn.reader.ui.components.GlassChip
 import com.example.oryn.reader.ui.components.GlassSearchField
 import com.example.oryn.reader.ui.components.LibraryEmptyState
 import com.example.oryn.reader.ui.components.HugeIcons
+import com.example.oryn.reader.ui.theme.OrynShape
 import com.example.oryn.reader.ui.components.OrynIcons
 import com.example.oryn.reader.ui.components.OrynNav
 import com.example.oryn.reader.ui.components.inkPrimary
@@ -149,13 +150,15 @@ internal fun LibraryContent(
     if (pendingDeleteBooks.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { pendingDeleteIds = longArrayOf() },
+            shape = RoundedCornerShape(OrynShape.sheet),
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(tr("Supprimer la sélection ?")) },
             text = { Text(trf("%s livres seront retirés de ta bibliothèque. Les fichiers externes restent inchangés ; les copies locales inutilisées peuvent être supprimées.", pendingDeleteBooks.size)) },
             confirmButton = { TextButton(onClick = {
                 onDeleteBooks(pendingDeleteBooks)
                 pendingDeleteIds = longArrayOf()
                 clearSelection()
-            }) { Text(tr("Supprimer")) } },
+            }) { Text(tr("Supprimer"), color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { pendingDeleteIds = longArrayOf() }) { Text(tr("Annuler")) } }
         )
     }
