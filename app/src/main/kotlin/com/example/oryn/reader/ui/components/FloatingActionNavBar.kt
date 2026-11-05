@@ -1,7 +1,6 @@
 package com.example.oryn.reader.ui.components
 
 import com.example.oryn.reader.i18n.tr
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -30,6 +29,9 @@ import androidx.compose.material3.Surface
 import com.example.oryn.reader.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,8 +58,8 @@ private val OuterVertical = 12.dp
 val FloatingNavBarHeight: Dp = BarHeight + OuterVertical * 2
 
 /**
- * Onglets d'origine conservés pour l'hôte de navigation : seuls Accueil, Bibliothèque et Favoris
- * apparaissent dans la barre. Les Réglages s'ouvrent depuis le menu « hamburger » de l'accueil.
+ * Quatre destinations : Accueil, Bibliothèque, Découvrir et Favoris.
+ * Les Réglages restent dans le menu de l'accueil ; le bouton import est indépendant.
  */
 enum class ReaderTab(
     val route: String,
@@ -67,6 +69,7 @@ enum class ReaderTab(
 ) {
     Home("home", "Accueil", OrynIcons.NavHome, OrynIcons.NavHomeFilled),
     Explore("explore", "Bibliothèque", OrynIcons.NavLibrary, OrynIcons.NavLibraryFilled),
+    Discover("discover", "Découvrir", OrynIcons.Compass, OrynIcons.CompassFilled),
     Favorites("bookmarks", "Favoris", HugeIcons.Bookmark, HugeIcons.BookmarkFilled),
     Settings("settings", "Réglages", OrynIcons.Settings, OrynIcons.Settings)
 }
@@ -96,10 +99,10 @@ object OrynNav {
     }
 }
 
-private val visibleTabs = listOf(ReaderTab.Home, ReaderTab.Explore, ReaderTab.Favorites)
+internal val visibleTabs = listOf(ReaderTab.Home, ReaderTab.Explore, ReaderTab.Discover, ReaderTab.Favorites)
 
 /**
- * Barre flottante : pastille de verre (onglet actif déployé avec son libellé, les autres en icônes)
+ * Barre flottante : pastille opaque tonale (onglet actif avec libellé si la largeur le permet)
  * + bouton « + » rond et lumineux, à part, à droite.
  */
 @Composable
@@ -111,10 +114,15 @@ fun FloatingActionNavBar(
 ) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < 0.5f
+    // Fit four tabs and the separate import button, including narrow/font-scaled screens.
+    val showActiveLabel = LocalConfiguration.current.screenWidthDp >= 360 &&
+        LocalDensity.current.fontScale < 1.3f
+    val motion = systemAnimationsEnabled(LocalContext.current)
     SideEffect { OrynNav.go = onRouteSelected }
 
     val selected: ReaderTab? = when (selectedRoute) {
         ReaderTab.Favorites.route -> ReaderTab.Favorites
+        ReaderTab.Discover.route, "online_search", ReaderTab.Explore.route -> ReaderTab.Discover
         ReaderTab.Home.route -> if (OrynNav.section == HomeSection.LIBRARY) ReaderTab.Explore else ReaderTab.Home
         else -> null
     }
@@ -141,7 +149,7 @@ fun FloatingActionNavBar(
             modifier = Modifier.height(BarHeight),
             shape = CircleShape,
             color = if (dark) colors.surfaceContainerHigh.copy(alpha = 0.97f) else colors.surfaceContainerLowest.copy(alpha = 0.97f),
-            shadowElevation = 10.dp
+            shadowElevation = if (dark) 0.dp else 10.dp
         ) {
             Row(
                 Modifier.padding(horizontal = 8.dp),
@@ -152,10 +160,13 @@ fun FloatingActionNavBar(
                     NavItem(
                         tab = tab,
                         selected = tab == selected,
+                        showActiveLabel = showActiveLabel,
+                        motion = motion,
                         onClick = {
                             when (tab) {
                                 ReaderTab.Home -> OrynNav.open(ReaderTab.Home.route)
                                 ReaderTab.Explore -> OrynNav.openLibrary()
+                                ReaderTab.Discover -> OrynNav.open(ReaderTab.Discover.route)
                                 else -> OrynNav.open(tab.route)
                             }
                         }
@@ -169,16 +180,16 @@ fun FloatingActionNavBar(
 }
 
 @Composable
-private fun NavItem(tab: ReaderTab, selected: Boolean, onClick: () -> Unit) {
+private fun NavItem(
+    tab: ReaderTab,
+    selected: Boolean,
+    showActiveLabel: Boolean,
+    motion: Boolean,
+    onClick: () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
-    val pill by animateColorAsState(
-        if (selected) colors.primaryContainer else Color.Transparent,
-        label = "navPill"
-    )
-    val ink by animateColorAsState(
-        if (selected) colors.onPrimaryContainer else colors.onSurface.copy(alpha = 0.66f),
-        label = "navInk"
-    )
+    val pill = if (selected) colors.primaryContainer else Color.Transparent
+    val ink = if (selected) colors.onPrimaryContainer else colors.onSurface.copy(alpha = 0.80f)
     Row(
         Modifier
             .height(48.dp)
@@ -191,15 +202,15 @@ private fun NavItem(tab: ReaderTab, selected: Boolean, onClick: () -> Unit) {
                 role = Role.Tab,
                 onClick = onClick
             )
-            // L'onglet actif se déploie avec un petit rebond
-            .animateContentSize(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
-            .padding(horizontal = if (selected) 16.dp else 14.dp),
+            // L'onglet actif s'étend sans rebond ; aucun mouvement si les animations sont réduites
+            .then(if (motion) Modifier.animateContentSize(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) else Modifier)
+            .padding(horizontal = if (selected && showActiveLabel) 12.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Deux états : contour quand l'onglet est inactif, forme pleine quand il est actif (fondu enchaîné)
         androidx.compose.animation.Crossfade(
             targetState = selected,
-            animationSpec = androidx.compose.animation.core.tween(160),
+            animationSpec = androidx.compose.animation.core.tween(if (motion) 160 else 0),
             label = "navIcon"
         ) { on ->
             Icon(
@@ -209,9 +220,9 @@ private fun NavItem(tab: ReaderTab, selected: Boolean, onClick: () -> Unit) {
                 modifier = Modifier.size(24.dp)
             )
         }
-        if (selected) {
+        if (selected && showActiveLabel) {
             Text(
-                text = tab.label,
+                text = tr(tab.label),
                 fontSize = 13.sp,
                 maxLines = 1,
                 fontWeight = FontWeight.Bold,
@@ -226,6 +237,7 @@ private fun NavItem(tab: ReaderTab, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun AddButton(onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < 0.5f
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -237,7 +249,9 @@ private fun AddButton(onClick: () -> Unit) {
         Modifier
             .size(64.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
+            .shadow(if (dark) 0.dp else 10.dp, CircleShape,
+                ambientColor = Color.Black.copy(alpha = 0.25f),
+                spotColor = Color.Black.copy(alpha = 0.25f))
             .clip(CircleShape)
             .background(colors.primary)
             .clickable(

@@ -11,6 +11,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -93,17 +94,30 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private class LibrarySource(val name: String, val description: String, val url: String)
+private class LibrarySource(
+    val name: String,
+    val description: String,
+    val url: String,
+    val externalBrowserOnly: Boolean = false
+)
 
 /** Livres récents : accès ouvert, licences libres, ou prêt en ligne. */
 private val recentSources = listOf(
     LibrarySource("DOAB", "Plus de 88 000 livres académiques en accès ouvert", "https://www.doabooks.org"),
     LibrarySource("OAPEN", "Livres scientifiques récents, PDF libres", "https://library.oapen.org"),
     LibrarySource("Des livres en communs", "Essais, BD et fictions sous licence libre (Framasoft)", "https://deslivresencommuns.org"),
-    LibrarySource("Open Library", "Millions de titres ; seuls les livres du domaine public sont téléchargeables", "https://openlibrary.org"),
-    // External index only: Oryn never starts an Anna's Archive download.
-    // Copyright/licence and the authenticity of mirrors must be checked by the reader.
-    LibrarySource("Anna’s Archive", "Index externe : vérifie les droits des ouvrages avant toute consultation", "https://annas-archive.gl")
+    LibrarySource("Open Library", "Millions de titres ; seuls les livres du domaine public sont téléchargeables", "https://openlibrary.org")
+)
+
+// Distinct from openly licensed catalogues. The official mirror was checked
+// on 2026-11-05; app-side scraping and downloading are NOT verified.
+private val externalIndexes = listOf(
+    LibrarySource(
+        "Anna’s Archive",
+        "Index externe : vérifier les droits et ouvrir dans le navigateur",
+        "https://annas-archive.gl",
+        externalBrowserOnly = true
+    )
 )
 
 /** Classiques du domaine public, mis à jour régulièrement. */
@@ -197,7 +211,7 @@ fun ExploreScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    tr("Explorer"),
+                    tr("Découvrir"),
                     style = MaterialTheme.typography.headlineLarge,
                     color = colors.onBackground,
                     modifier = Modifier.weight(1f).padding(start = 4.dp)
@@ -231,6 +245,25 @@ fun ExploreScreen(
             }
             item { SectionTitle(tr("Classiques · domaine public")) }
             item { SourceRow(classicSources) { openSource = it } }
+            item { SectionTitle(tr("Index externes · droits à vérifier")) }
+            item {
+                SourceRow(externalIndexes) { source ->
+                    // Never pass untrusted shadow-library pages to our embedded
+                    // WebView/download interceptor as an allegedly tested flow.
+                    if (source.externalBrowserOnly) {
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(source.url))
+                                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                            )
+                        } catch (_: ActivityNotFoundException) {
+                            Toast.makeText(context, tr("Aucun navigateur disponible"), Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        openSource = source
+                    }
+                }
+            }
         }
 
         if (tab == 1) {

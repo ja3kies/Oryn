@@ -123,7 +123,7 @@ fun GlassChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: M
     Box(
         modifier
             .solidSurface(CircleShape)
-            .then(if (selected) Modifier.background(colors.primary) else Modifier)
+            .then(if (selected) Modifier.background(colors.primaryContainer) else Modifier)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .heightIn(min = 48.dp)
             .padding(horizontal = 16.dp, vertical = 9.dp),
@@ -133,7 +133,7 @@ fun GlassChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: M
             label,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) colors.onPrimary else inkPrimary()
+            color = if (selected) colors.onPrimaryContainer else inkPrimary()
         )
     }
 }

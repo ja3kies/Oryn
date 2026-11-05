@@ -93,7 +93,6 @@ import com.example.oryn.reader.data.local.preferences.ReaderSettings
 import com.example.oryn.reader.data.local.preferences.ReaderThemePreset
 import com.example.oryn.reader.ui.screen.ReaderOpenDyslexicFont
 import com.example.oryn.reader.ui.theme.AppAccentTheme
-import com.example.oryn.reader.ui.theme.orynColorScheme
 import com.example.oryn.reader.ui.theme.previewColor
 import com.example.oryn.reader.ui.theme.pageColor
 import com.example.oryn.reader.ui.theme.textColor
@@ -137,7 +136,7 @@ fun ReaderControlsSheet(
 ) {
     // Primary text/icons must remain readable even when the user selects a low-contrast
     // accent (e.g. cherry rose). Use accent only on its matching primaryContainer surface.
-    val panel = remember(currentAccent) { orynColorScheme(true, currentAccent) }
+    val panel = readerChromeScheme(currentAccent)
     MaterialTheme(colorScheme = panel, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val scope = rememberCoroutineScope()

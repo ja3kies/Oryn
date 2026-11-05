@@ -41,7 +41,6 @@ import com.example.oryn.reader.ui.components.AmbientBackdrop
 import com.example.oryn.reader.ui.components.systemAnimationsEnabled
 import com.example.oryn.reader.ui.screen.BookmarksScreen
 import com.example.oryn.reader.ui.screen.ExploreScreen
-import com.example.oryn.reader.ui.screen.OnlineSearchScreen
 import com.example.oryn.reader.ui.screen.HomeScreen
 import com.example.oryn.reader.ui.screen.ReaderScreen
 import com.example.oryn.reader.ui.screen.SettingsScreen
@@ -49,7 +48,7 @@ import com.example.oryn.reader.ui.screen.OnboardingScreen
 import com.example.oryn.reader.ui.theme.OrynTheme
 import com.example.oryn.reader.ui.theme.AppThemeMode
 
-private val routeOrder = listOf("home", "explore", "bookmarks", "settings")
+private val routeOrder = listOf("home", "explore", "discover", "online_search", "bookmarks", "settings")
 
 private val importMimeTypes = arrayOf(
     "application/epub+zip",
@@ -169,10 +168,9 @@ class MainActivity : ComponentActivity() {
                                                 onDeleteBooks = { books -> viewModel.deleteBooks(books) }
                                             )
                                         }
-                                        "online_search" -> OnlineSearchScreen(
-                                            onBack = { OrynNav.open("home") }
-                                        )
-                                        "explore" -> ExploreScreen(
+                                        // Legacy catalogue routes now resolve to the verified Discover hub.
+                                        // The old Anna HTML-scraping/download view is not exposed as a working catalogue.
+                                        "online_search", "discover", "explore" -> ExploreScreen(
                                             onImportClick = { importLauncher.launch(importMimeTypes) }
                                         )
                                         "bookmarks" -> {

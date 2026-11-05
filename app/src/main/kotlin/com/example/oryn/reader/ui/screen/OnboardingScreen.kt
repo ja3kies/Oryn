@@ -1,6 +1,8 @@
 package com.example.oryn.reader.ui.screen
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -42,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -51,17 +54,21 @@ import com.example.oryn.reader.i18n.Text
 import com.example.oryn.reader.i18n.tr
 import com.example.oryn.reader.ui.theme.accent
 import com.example.oryn.reader.ui.theme.onAccent
+import com.example.oryn.reader.ui.theme.EditorialColors
+import com.example.oryn.reader.ui.components.systemAnimationsEnabled
 import kotlin.math.min
 
 private data class IntroPage(val title: String, val body: String, val illustration: Int)
 
-// Couleurs des couvertures dessinées : fixes (elles doivent ressortir en clair comme en sombre).
-private val Cream = Color(0xFFF1EDE2)
-private val Ink = Color(0xFF141414)
-private val Coral = Color(0xFFFF7A59)
-private val Forest = Color(0xFF1F3B2D)
-private val Butter = Color(0xFFFFE04A)
-private val Rust = Color(0xFFB5452B)
+// Fixed illustration inks drawn from existing Oryn editorial tokens; the actual
+// chrome continues to use MaterialTheme light/dark surfaces.
+private val introPalette = EditorialColors()
+private val Cream = introPalette.parchment
+private val Ink = introPalette.teal
+private val Coral = introPalette.cherry
+private val Forest = introPalette.teal
+private val Butter = introPalette.lime
+private val Rust = introPalette.cyanDeep
 
 /**
  * Présentation en 4 pages : une grande illustration faite de couvertures posées, un titre en sérif,
@@ -79,6 +86,7 @@ fun OnboardingScreen(onFinish: () -> Unit, modifier: Modifier = Modifier) {
     }
     var page by remember { mutableIntStateOf(0) }
     val colors = MaterialTheme.colorScheme
+    val motionEnabled = systemAnimationsEnabled(LocalContext.current)
     val last = pages.lastIndex
 
     Column(
@@ -122,9 +130,13 @@ fun OnboardingScreen(onFinish: () -> Unit, modifier: Modifier = Modifier) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                val dir = if (targetState > initialState) 1 else -1
-                (slideInHorizontally { w -> dir * w / 5 } + fadeIn()) togetherWith
-                    (slideOutHorizontally { w -> -dir * w / 5 } + fadeOut())
+                if (!motionEnabled) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (slideInHorizontally { w -> dir * w / 5 } + fadeIn()) togetherWith
+                        (slideOutHorizontally { w -> -dir * w / 5 } + fadeOut())
+                }
             },
             label = "onboardingPage",
             modifier = Modifier.weight(1f)
