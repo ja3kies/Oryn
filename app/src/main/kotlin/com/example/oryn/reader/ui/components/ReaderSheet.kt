@@ -93,7 +93,6 @@ import com.example.oryn.reader.data.local.preferences.ReaderSettings
 import com.example.oryn.reader.data.local.preferences.ReaderThemePreset
 import com.example.oryn.reader.ui.screen.ReaderOpenDyslexicFont
 import com.example.oryn.reader.ui.theme.AppAccentTheme
-import com.example.oryn.reader.ui.theme.orynColorScheme
 import com.example.oryn.reader.ui.theme.previewColor
 import com.example.oryn.reader.ui.theme.pageColor
 import com.example.oryn.reader.ui.theme.textColor
