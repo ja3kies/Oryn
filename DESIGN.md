@@ -112,8 +112,8 @@ Existing DataStore enum names `ORANGE`, `FUCHSIA`, `GREEN`, `BLUE`, and `DYNAMIC
 ## 7. Navigation and screen roles
 
 Do not change the existing navigation structure without explicit approval:
-- exactly three tabs in the floating navigation bar;
-- separate import (+) action;
+- exactly four tabs in the floating navigation bar, as explicitly approved on 5 November 2026: Home, Library, Discover, Favorites;
+- separate import (+) action; Discover opens the online and community catalogue hub;
 - Home, Library, Bookmarks & Notes, Settings, reader and catalogue flows remain available through their current routes/entry points.
 
 Screen priorities:
