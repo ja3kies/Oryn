@@ -137,7 +137,7 @@ fun ReaderControlsSheet(
 ) {
     // Primary text/icons must remain readable even when the user selects a low-contrast
     // accent (e.g. cherry rose). Use accent only on its matching primaryContainer surface.
-    val panel = remember(currentAccent) { orynColorScheme(true, currentAccent) }
+    val panel = readerChromeScheme(currentAccent)
     MaterialTheme(colorScheme = panel, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val scope = rememberCoroutineScope()
