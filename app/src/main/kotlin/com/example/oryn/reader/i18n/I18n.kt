@@ -440,6 +440,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Beige" to "Beige",
         "Prune" to "Plum",
         "Anthracite" to "Charcoal",
+        "Alignement" to "Alignment",
+        "Mode de lecture" to "Reading mode",
         "Obsidian Tide" to "Obsidian Tide",
         "Noir OLED" to "OLED black",
         "Par défaut" to "Default",
