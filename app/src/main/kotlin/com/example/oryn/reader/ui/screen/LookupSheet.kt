@@ -248,7 +248,7 @@ private fun TranslateBody(text: String, target: String, onTarget: (String) -> Un
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(tr("Traduire vers").uppercase(), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LookupClient.targetLanguages.forEach { (code, name) ->
+            LookupClient.targetLanguages.filter { it.first in setOf("fr", "en", "es") }.forEach { (code, name) ->
                 val selected = code == target
                 Box(
                     Modifier
