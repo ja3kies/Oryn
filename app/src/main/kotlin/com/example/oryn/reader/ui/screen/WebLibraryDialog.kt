@@ -25,6 +25,9 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -381,7 +384,8 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                             null -> "Lien de fichier détecté · pas encore téléchargé"
                                         }),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = colors.onSurfaceVariant
+                                        color = if (phase == WebImportPhase.FAILED) colors.error else colors.onSurfaceVariant,
+                                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                     )
                                 }
                             }
@@ -428,7 +432,10 @@ fun WebLibraryDialog(title: String, startUrl: String, onClose: () -> Unit) {
                                             color = colors.onPrimary
                                         )
                                     } else {
-                                        Icon(OrynIcons.Plus, null, modifier = Modifier.size(18.dp))
+                                        Icon(
+                                            if (phase == WebImportPhase.SUCCEEDED) OrynIcons.Check else OrynIcons.Plus,
+                                            null, modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                     Text(
                                         when {

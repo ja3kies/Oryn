@@ -11,6 +11,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -45,6 +48,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +91,7 @@ fun OnboardingScreen(onFinish: () -> Unit, modifier: Modifier = Modifier) {
     var page by remember { mutableIntStateOf(0) }
     val colors = MaterialTheme.colorScheme
     val motionEnabled = systemAnimationsEnabled(LocalContext.current)
+    val illustrationHeight = (LocalConfiguration.current.screenHeightDp * 0.34f).dp.coerceIn(140.dp, 290.dp)
     val last = pages.lastIndex
 
     Column(
@@ -142,8 +147,13 @@ fun OnboardingScreen(onFinish: () -> Unit, modifier: Modifier = Modifier) {
             modifier = Modifier.weight(1f)
         ) { index ->
             val item = pages[index]
-            Column(Modifier.fillMaxSize()) {
-                IntroIllustration(item.illustration, Modifier.fillMaxWidth().weight(1f).padding(vertical = 8.dp))
+            // Scroll ONLY the artwork and explanatory text. Primary CTA stays at
+            // the same bottom position even at 200% system font scale.
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            ) {
+                IntroIllustration(item.illustration,
+                    Modifier.fillMaxWidth().height(illustrationHeight).padding(vertical = 8.dp))
                 Text(
                     item.title,
                     style = MaterialTheme.typography.displaySmall,
