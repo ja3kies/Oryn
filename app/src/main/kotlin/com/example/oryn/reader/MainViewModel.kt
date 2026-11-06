@@ -48,6 +48,12 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 
+/** Import state is only successful once the book is committed to Room. */
+enum class WebImportPhase {
+    DOWNLOADING, IMPORTING, SUCCEEDED, FAILED;
+    val inProgress: Boolean get() = this == DOWNLOADING || this == IMPORTING
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
@@ -106,6 +112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _webDownloads = MutableStateFlow<Set<String>>(emptySet())
     /** Adresses de fichiers en cours de téléchargement depuis le navigateur intégré. */
     val webDownloads: StateFlow<Set<String>> = _webDownloads.asStateFlow()
+
+    private val _webImportPhases = MutableStateFlow<Map<String, WebImportPhase>>(emptyMap())
+    val webImportPhases: StateFlow<Map<String, WebImportPhase>> = _webImportPhases.asStateFlow()
 
     init {
         viewModelScope.launch { repository.deleteSamples() }
@@ -427,6 +436,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addFromWeb(url: String, fileName: String, userAgent: String?, cookie: String?, referer: String?) {
         if (url in _webDownloads.value) return
         _webDownloads.update { it + url }
+        _webImportPhases.update { it + (url to WebImportPhase.DOWNLOADING) }
         val app = getApplication<Application>()
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -445,6 +455,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 libraryMutations.stageThenMutate(
                     stage = { GutendexClient.downloadFromWeb(url, incoming, headers) },
                     publish = {
+                        _webImportPhases.update { it + (url to WebImportPhase.IMPORTING) }
                         val file = uniqueFile(dir, safeName)
                         if (!incoming.renameTo(file)) throw java.io.IOException("Book publication failed")
                         target = file
@@ -452,6 +463,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val meta = metadataReader.read(uri)
                         if (meta == null) {
                             file.delete()
+                            _webImportPhases.update { it + (url to WebImportPhase.FAILED) }
                             toast(tr("Format non pris en charge (EPUB, PDF ou TXT)."))
                         } else {
                             val hash = computeContentHash(uri)
@@ -465,15 +477,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     contentHash = hash
                                 )
                             )
+                            _webImportPhases.update { it + (url to WebImportPhase.SUCCEEDED) }
                             toast(trf("« %s » ajouté à ta bibliothèque", meta.title))
                         }
                     }
                 )
             } catch (cancelled: CancellationException) {
                 target?.let { deleteUnreferencedDownload(it) }
+                _webImportPhases.update { it + (url to WebImportPhase.FAILED) }
                 throw cancelled
             } catch (_: Exception) {
                 target?.let { deleteUnreferencedDownload(it) }
+                _webImportPhases.update { it + (url to WebImportPhase.FAILED) }
                 toast(tr("Téléchargement impossible. Le site demande peut-être une connexion."))
             } finally {
                 staged?.delete()

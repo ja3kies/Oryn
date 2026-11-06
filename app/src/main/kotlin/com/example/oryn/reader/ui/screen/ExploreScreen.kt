@@ -154,7 +154,6 @@ fun ExploreScreen(
     var loading by remember { mutableStateOf(true) }
     var loadingMore by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var errorDetail by remember { mutableStateOf<String?>(null) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openSource by remember { mutableStateOf<LibrarySource?>(null) }
     var retry by remember { mutableIntStateOf(0) }
@@ -172,7 +171,6 @@ fun ExploreScreen(
         if (query.isNotBlank()) delay(450)
         loading = true
         error = null
-        errorDetail = null
         try {
             val result = GutendexClient.search(query, language.ifBlank { null }, 1)
             results = result.books
@@ -184,7 +182,6 @@ fun ExploreScreen(
             results = emptyList()
             hasMore = false
             error = tr("Impossible de joindre la bibliothèque. Vérifie ta connexion.")
-            errorDetail = "${e.javaClass.simpleName}: ${e.message.orEmpty().take(120)}"
         } finally {
             loading = false
         }
@@ -311,11 +308,7 @@ fun ExploreScreen(
             }
 
             if (loading) {
-                item {
-                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
+                items(4) { CatalogueSkeletonRow() }
             } else if (error != null) {
                 item {
                     Column(
@@ -324,9 +317,6 @@ fun ExploreScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(error.orEmpty(), color = inkSecondary())
-                        errorDetail?.let {
-                            Text(it, style = MaterialTheme.typography.labelSmall, color = inkSecondary())
-                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { retry++ }) { Text(tr("Réessayer")) }
                             OutlinedButton(onClick = {
@@ -541,6 +531,43 @@ private fun RemoteCover(url: String?, modifier: Modifier = Modifier) {
                     tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
+            }
+        }
+    }
+}
+
+
+/** Loading placeholder mirrors a book row: cover, title, author and secondary metadata. */
+@Composable
+private fun CatalogueSkeletonRow() {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(92.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = colors.surfaceContainerLow
+    ) {
+        Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(
+                modifier = Modifier.width(48.dp).height(68.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = colors.surfaceContainerHighest
+            ) {}
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(0.85f).height(14.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = colors.surfaceContainerHigh
+                ) {}
+                Surface(
+                    modifier = Modifier.fillMaxWidth(0.55f).height(12.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = colors.surfaceContainerHigh
+                ) {}
+                Surface(
+                    modifier = Modifier.fillMaxWidth(0.28f).height(10.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = colors.surfaceContainerHigh
+                ) {}
             }
         }
     }
