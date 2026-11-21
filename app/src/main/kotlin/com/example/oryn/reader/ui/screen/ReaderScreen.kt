@@ -148,33 +148,54 @@ fun ReaderScreen(
 
     // Autorisation expirée (« Permission Denial ») : l'utilisateur re-sélectionne le fichier, on la rétablit
     var reloadKey by remember { mutableStateOf(0) }
-    var pathOverride by remember(book.id) { mutableStateOf<String?>(null) }
+    var pendingPath by rememberSaveable(book.id) { mutableStateOf<String?>(null) }
+    var repairError by remember(book.id) { mutableStateOf(false) }
+    fun restoreAccess(path: String) {
+        scope.launch {
+            val restored = withContext(Dispatchers.IO) {
+                try {
+                    val uri = android.net.Uri.parse(path)
+                    val metadata = com.example.oryn.reader.data.importer.BookMetadataReader(context).read(uri)
+                    if (metadata?.format != book.format) return@withContext false
+                    context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    path == book.filePath || OrynDatabase.getDatabase(context).bookDao()
+                        .updateFilePath(book.id, book.filePath, path) == 1
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            repairError = !restored
+            if (restored && path == book.filePath) reloadKey++
+        }
+    }
     val regrant = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { picked ->
-        if (picked != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    picked, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }.recoverCatching {
-                context.contentResolver.takePersistableUriPermission(picked, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val newPath = picked.toString()
-            if (newPath != book.filePath) {
-                pathOverride = newPath
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    runCatching { OrynDatabase.getDatabase(context).bookDao().updateFilePath(book.id, newPath) }
-                }
-            }
-            loadResult = null
-            reloadKey++
+        picked?.toString()?.let { path ->
+            if (path == book.filePath) restoreAccess(path) else pendingPath = path
         }
+    }
+    pendingPath?.let { path ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingPath = null },
+            title = { Text(tr("Associer ce fichier au livre ?")) },
+            text = { Text(trf("Vérifie que tu as choisi la même édition de « %s ». Tes notes et ta progression seront associées à ce fichier.", book.title)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingPath = null; restoreAccess(path) }) {
+                    Text(tr("Associer le fichier"))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingPath = null }) { Text(tr("Annuler")) }
+            }
+        )
     }
 
     LaunchedEffect(book.id, book.filePath, reloadKey) {
         loadResult = null
-        val loaded = BookTextLoader(context).loadBook(pathOverride ?: book.filePath, book.format)
+        val loaded = BookTextLoader(context).loadBook(book.filePath, book.format)
         loadResult = loaded
         try {
             // This effect owns exactly the document it acquired, including on reload.
@@ -238,7 +259,7 @@ fun ReaderScreen(
         if (wantReflow) {
             value = try {
                 PdfReflowBuilder.build(
-                    context, android.net.Uri.parse(pathOverride ?: book.filePath), readerPdf.text, readerPdf.pageCount
+                    context, android.net.Uri.parse(book.filePath), readerPdf.text, readerPdf.pageCount
                 ) { reflowProgress = it }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -315,27 +336,25 @@ fun ReaderScreen(
                 }
 
                 is BookLoadResult.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    val denied = result.message.contains("Permission", ignoreCase = true) ||
-                        result.message.contains("ACTION_OPEN_DOCUMENT")
                     androidx.compose.foundation.layout.Column(
                         Modifier.padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = if (denied) tr("Android n'autorise plus l'accès à ce fichier (autorisation expirée ou jamais conservée).")
-                            else result.message,
+                            text = result.message,
                             color = foregroundColor,
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center
                         )
-                        if (denied) {
+                        if (result.canRelink) {
                             Text(
                                 tr("Re-sélectionne le même fichier pour rétablir l'accès : ta progression et tes annotations sont conservées."),
                                 color = foregroundColor.copy(alpha = 0.75f),
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center
                             )
+                            if (repairError) Text(tr("Impossible de rétablir l’accès. Vérifie le format et choisis un fichier disponible qui ne figure pas déjà dans ta bibliothèque."))
                             androidx.compose.material3.Button(onClick = { regrant.launch(arrayOf("*/*")) }) {
                                 Text(tr("Réautoriser le fichier"))
                             }

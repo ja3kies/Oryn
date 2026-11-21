@@ -48,7 +48,8 @@ class LocalLibraryIntegrityTest {
         dao.toggleFavorite(initial.id)
         assertFalse(dao.getAllBooks().first().single().isFavorite)
         dao.toggleFavorite(initial.id)
-        dao.updateFilePath(initial.id, "content://repaired")
+        assertEquals(1, dao.updateFilePath(initial.id, initial.filePath, "content://repaired"))
+        assertEquals(0, dao.updateFilePath(initial.id, initial.filePath, "content://stale"))
         val repaired = dao.getAllBooks().first().single()
         assertTrue(repaired.isFavorite)
         assertEquals(initial.progress, repaired.progress, 0f)
@@ -62,6 +63,8 @@ class LocalLibraryIntegrityTest {
         for (path in listOf("content://a", "content://b")) {
             dao.insertIfAbsent(BookEntity(title = "Book", author = "Author", filePath = path, format = "EPUB", coverPath = "/cover.jpg"))
         }
+        val first = dao.getAllBooks().first().single { it.filePath == "content://a" }
+        assertEquals(0, dao.updateFilePath(first.id, first.filePath, "content://b"))
         assertEquals(2, dao.countByCoverPath("/cover.jpg"))
         dao.updateCover(dao.getAllBooks().first().first().id, "")
         assertEquals(1, dao.countByCoverPath("/cover.jpg"))

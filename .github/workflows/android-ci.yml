@@ -147,8 +147,9 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew :app:installDebug
-            python3 scripts/capture-reading-journey.py
+            python3 scripts/capture-reading-journey.py || touch build/device-captures/journey-failed
             ./gradlew :app:connectedDebugAndroidTest
+            test ! -f build/device-captures/journey-failed
       - uses: actions/upload-artifact@v4
         if: always()
         with:

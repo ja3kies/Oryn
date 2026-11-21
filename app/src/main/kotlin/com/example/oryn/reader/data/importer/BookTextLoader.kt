@@ -43,7 +43,7 @@ sealed interface BookLoadResult {
         /** Page HTML d'origine, affichée telle quelle (mise en page respectée). */
         val html: String? = null
     ) : BookLoadResult
-    data class Error(val message: String) : BookLoadResult
+    data class Error(val message: String, val canRelink: Boolean = false) : BookLoadResult
 }
 
 /**
@@ -127,33 +127,37 @@ class BookTextLoader(private val context: Context) {
 
 
     suspend fun loadBook(filePath: String, format: String): BookLoadResult = loadDocumentWithCleanup(load = load@{
-        if (filePath.isBlank()) return@load BookLoadResult.Error("Chemin de fichier invalide.")
+        if (filePath.isBlank()) return@load BookLoadResult.Error(tr("Chemin de fichier invalide."))
         val uri = Uri.parse(filePath)
 
         runCatching {
             when (format.uppercase()) {
                 "TXT" -> {
                     val text = loadTxt(uri)?.takeIf { it.isNotBlank() }
-                        ?: return@runCatching BookLoadResult.Error("Le fichier texte est vide ou inaccessible.")
+                        ?: return@runCatching BookLoadResult.Error(tr("Le fichier texte est vide ou inaccessible."))
                     val clean = text.replace(Regex("\\n{3,}"), "\n\n").trim()
                     BookLoadResult.Success(emptyList(), null, RichBook(clean, emptyList(), autoLinks(clean, emptyList()), txtToc(clean)))
                 }
                 "EPUB" -> {
                     val rich = loadEpubRich(uri)
-                    if (rich == null || rich.text.isBlank()) BookLoadResult.Error("Aucun contenu textuel lisible trouvé dans cet EPUB.")
+                    if (rich == null || rich.text.isBlank()) BookLoadResult.Error(tr("Aucun contenu textuel lisible trouvé dans cet EPUB."))
                     else BookLoadResult.Success(emptyList(), null, rich)
                 }
                 "HTML" -> {
                     val html = loadHtml(uri)?.takeIf { it.isNotBlank() }
-                        ?: return@runCatching BookLoadResult.Error("Le fichier HTML est vide ou inaccessible.")
+                        ?: return@runCatching BookLoadResult.Error(tr("Le fichier HTML est vide ou inaccessible."))
                     BookLoadResult.Success(emptyList(), null, null, html)
                 }
                 "PDF" -> loadPdf(uri)
-                else -> BookLoadResult.Error("Format non supporté pour la lecture directe.")
+                else -> BookLoadResult.Error(tr("Format non supporté pour la lecture directe."))
             }
         }.getOrElse {
             if (it is CancellationException) throw it
-            BookLoadResult.Error(trf("Erreur de chargement : %s", it.localizedMessage))
+            when (it) {
+                is SecurityException -> BookLoadResult.Error(tr("Android n'autorise plus l'accès à ce fichier (autorisation expirée ou jamais conservée)."), canRelink = true)
+                is java.io.FileNotFoundException -> BookLoadResult.Error(tr("Ce fichier a été déplacé ou supprimé."), canRelink = true)
+                else -> BookLoadResult.Error(trf("Erreur de chargement : %s", it.localizedMessage))
+            }
         }
     }, dispose = { (it as? BookLoadResult.Success)?.pdf?.close() })
 
