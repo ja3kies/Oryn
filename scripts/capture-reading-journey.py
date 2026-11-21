@@ -86,6 +86,8 @@ def visible_passage(previous=None):
             text = node.get("text", "")
             if re.search(r"Passage \d{3}", text) and text != previous:
                 return text
+    capture("reader-stalled")
+    (OUT / "reader-stalled.xml").write_bytes(adb("shell", "cat", "/sdcard/oryn-window.xml"))
     raise RuntimeError("Reader did not show the expected passage")
 
 

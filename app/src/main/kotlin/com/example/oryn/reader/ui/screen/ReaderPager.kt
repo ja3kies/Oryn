@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import com.example.oryn.reader.ui.components.systemAnimationsEnabled
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +61,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -133,6 +135,7 @@ internal fun BookPager(
     pageCount: Int,
     initialPage: Int,
     curlMode: Boolean,
+    horizontal: Boolean,
     backgroundColor: Color,
     onPageChanged: (Int) -> Unit,
     onCenterTap: () -> Unit,
@@ -190,7 +193,16 @@ internal fun BookPager(
             state = curlState,
             modifier = Modifier.fillMaxSize(),
             config = curlConfig
-        ) { index -> page(index) }
+        ) { index ->
+            // Adjacent pages are drawn behind the curl. TalkBack should read the visible one.
+            Box(if (index == curlState.current) Modifier else Modifier.clearAndSetSemantics {}) {
+                page(index)
+            }
+        }
+    } else if (horizontal) {
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), userScrollEnabled = !lockPaging) {
+            page(it)
+        }
     } else {
         // Mode SCROLL : défilement vertical (cohérent avec le label UI)
         VerticalPager(
@@ -317,7 +329,8 @@ internal fun ReflowReader(
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
     val bars = WindowInsets.systemBarsIgnoringVisibility
-    val curlMode = settings.scrollMode == ReaderScrollMode.PAGES
+    val horizontal = settings.scrollMode == ReaderScrollMode.PAGES
+    val curlMode = horizontal && systemAnimationsEnabled(context)
     val bodyLarge = MaterialTheme.typography.bodyLarge
     val text = book.text
 
@@ -465,6 +478,7 @@ internal fun ReflowReader(
                     pageCount = starts.size,
                     initialPage = index.coerceIn(0, max(0, starts.size - 1)),
                     curlMode = curlMode,
+                    horizontal = horizontal,
                     backgroundColor = backgroundColor,
                     onPageChanged = { page ->
                         selection = null

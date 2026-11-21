@@ -18,7 +18,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -74,6 +75,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalClipboardManager
+import com.example.oryn.reader.ui.components.systemAnimationsEnabled
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -143,7 +145,8 @@ internal fun PdfReader(
     val density = LocalDensity.current
     val topPad = with(density) { bars.getTop(density).toDp() } + 12.dp
     val bottomPad = with(density) { bars.getBottom(density).toDp() } + 8.dp
-    val curlMode = settings.scrollMode == ReaderScrollMode.PAGES
+    val horizontal = settings.scrollMode == ReaderScrollMode.PAGES
+    val curlMode = horizontal && systemAnimationsEnabled(context)
     val handleColor = MaterialTheme.colorScheme.primary
     val activeColor = MaterialTheme.colorScheme.primary
 
@@ -200,6 +203,7 @@ internal fun PdfReader(
                 pageCount = total,
                 initialPage = startPage,
                 curlMode = curlMode,
+                horizontal = horizontal,
                 backgroundColor = backgroundColor,
                 onPageChanged = { page ->
                     selection = null
@@ -382,17 +386,26 @@ internal fun PdfReader(
                                     boxCoords = it
                                     pageOrigin[page] = it.positionInRoot() - containerRoot
                                 }
-                                .pointerInput(Unit) {
+                                .pointerInput(curlMode) {
                                     if (!curlMode) {
-                                        detectTransformGestures { _, pan, zoom, _ ->
-                                            val newScale = (pageScale * zoom).coerceIn(1f, 5f)
-                                            val maxX = ((boxSize.width * (newScale - 1)) / 2).coerceAtLeast(0f)
-                                            val maxY = ((boxSize.height * (newScale - 1)) / 2).coerceAtLeast(0f)
-                                            pageScale = newScale
-                                            pageOffset = Offset(
-                                                (pageOffset.x + pan.x).coerceIn(-maxX, maxX),
-                                                (pageOffset.y + pan.y).coerceIn(-maxY, maxY)
-                                            )
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false)
+                                            do {
+                                                val event = awaitPointerEvent()
+                                                val pinch = event.changes.count { it.pressed } >= 2
+                                                val pan = event.calculatePan()
+                                                if (pinch || (pageScale > 1f && pan != Offset.Zero)) {
+                                                    val scale = (pageScale * event.calculateZoom()).coerceIn(1f, 5f)
+                                                    val maxX = boxSize.width * (scale - 1f) / 2f
+                                                    val maxY = boxSize.height * (scale - 1f) / 2f
+                                                    pageScale = scale
+                                                    pageOffset = Offset(
+                                                        (pageOffset.x + pan.x).coerceIn(-maxX, maxX),
+                                                        (pageOffset.y + pan.y).coerceIn(-maxY, maxY)
+                                                    )
+                                                    event.changes.forEach { it.consume() }
+                                                }
+                                            } while (event.changes.any { it.pressed })
                                         }
                                     }
                                 }
