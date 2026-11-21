@@ -150,7 +150,7 @@ class ReaderImmersiveControlsTest {
         rule.onNodeWithContentDescription(tr("Passer en mode défilement")).performClick()
         rule.onNodeWithContentDescription(tr("Passer en mode pages")).assertIsDisplayed()
         rule.onNodeWithContentDescription(tr("Tous les réglages")).performClick()
-        rule.onNodeWithText(tr("Marges")).assertIsDisplayed()
+        rule.onNodeWithText(tr("Marges")).performScrollTo().assertIsDisplayed()
     }
     @Test fun tabsKeepTypographySeparateFromAppearanceAndPreserveAllFiveThemes() {
         show(); reveal()
@@ -196,12 +196,14 @@ class ReaderImmersiveControlsTest {
 
     @Test fun enterRevealsControlsButEnterOnTheMenuDoesNotTurnThePageOrHideControls() {
         show()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_TAB)
+        rule.waitForIdle()
         val before = position.get(); val writes = progressWrites.get()
         rule.onNodeWithTag("ReaderKeyboardSurface").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         rule.onNodeWithTag("ReaderKeyboardSurface").performKeyInput { pressKey(Key.Enter) }
         val menu = rule.onNodeWithContentDescription(tr("Tous les réglages"))
         menu.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        menu.performKeyInput { pressKey(Key.Enter) }
+        menu.assertIsFocused().performKeyInput { pressKey(Key.Enter) }
         rule.onNodeWithText(tr("Réglages de lecture")).assertIsDisplayed()
         rule.runOnIdle { assertEquals(before, position.get()); assertEquals(writes, progressWrites.get()) }
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_ESCAPE)

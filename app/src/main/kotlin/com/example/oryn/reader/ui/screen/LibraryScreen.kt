@@ -329,7 +329,6 @@ internal fun LibraryContent(
                     val handleClick = {
                         if (isSelectionMode) {
                             selectedIds = (if (isSelected) selectedSet - book.id else selectedSet + book.id).toLongArray()
-                            if (selectedIds.isEmpty()) isSelectionMode = false
                         } else {
                             onBookClick(book)
                         }

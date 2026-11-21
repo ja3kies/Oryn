@@ -23,7 +23,7 @@ class CommunityManifestPolicyTest {
         val filter = main.elements("intent-filter").single { it.elements("action").any { it.attr("name") == "android.intent.action.VIEW" } }
         val data = filter.elements("data")
         assertEquals(setOf("content", "file"), data.map { it.attr("scheme") }.filter(String::isNotEmpty).toSet())
-        assertEquals(setOf("application/epub+zip", "application/zip", "application/pdf", "text/plain"),
+        assertEquals(setOf("application/epub+zip", "application/zip", "application/pdf", "text/plain", "text/html", "application/xhtml+xml"),
             data.map { it.attr("mimeType") }.filter(String::isNotEmpty).toSet())
         assertTrue(filter.elements("category").any { it.attr("name") == "android.intent.category.BROWSABLE" })
     }
