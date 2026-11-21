@@ -35,6 +35,8 @@
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="text/plain" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/xhtml+xml" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
@@ -43,6 +45,8 @@
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="text/plain" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/xhtml+xml" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -55,6 +59,8 @@
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="text/plain" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/xhtml+xml" />
             </intent-filter>
         </activity>
     </application>

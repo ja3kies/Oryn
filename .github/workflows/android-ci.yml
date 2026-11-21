@@ -145,9 +145,14 @@ jobs:
           api-level: 35
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest
+          script: |
+            ./gradlew :app:installDebug
+            python3 scripts/capture-reading-journey.py
+            ./gradlew :app:connectedDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-35-device-results
-          path: app/build/reports/androidTests/connected/
+          path: |
+            app/build/reports/androidTests/connected/
+            build/device-captures/
