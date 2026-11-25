@@ -974,13 +974,19 @@ internal fun hitChar(lr: TextLayoutResult, p: Offset, count: Int, slop: Float = 
     val right = lr.getLineRight(line)
     if (p.x < left - slop || p.x > right + slop) return null
     val start = lr.getLineStart(line)
-    val lastInLine = max(start, lr.getLineEnd(line, visibleEnd = true) - 1)
+    val limit = min(count, lr.getLineEnd(line, visibleEnd = true))
+    if (limit <= start) return null
     val x = p.x.coerceIn(left, max(left, right - 0.5f))
     val midY = (lr.getLineTop(line) + lr.getLineBottom(line)) / 2f
-    var off = lr.getOffsetForPosition(Offset(x, midY)).coerceIn(start, lastInLine)
-    // la position retournée est la frontière la plus proche : si le doigt est à gauche du caractère, c'est le précédent
-    if (off > start && x < lr.getBoundingBox(off).left) off--
-    return off.coerceIn(0, count - 1)
+    val caret = lr.getOffsetForPosition(Offset(x, midY))
+    // A caret is an insertion boundary. Check the glyph on either side in visual space.
+    for (candidate in listOf(caret, caret - 1)) {
+        if (candidate in start until limit) {
+            val box = lr.getBoundingBox(candidate)
+            if (x >= box.left && x < box.right) return candidate
+        }
+    }
+    return caret.coerceIn(start, limit - 1)
 }
 
 private fun isSentenceEnd(c: Char) = c == '.' || c == '!' || c == '?' || c == '…' || c == '\n'

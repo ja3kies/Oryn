@@ -106,3 +106,8 @@ tap("Bibliothèque", "Library")
 tap(title, "Open " + title, "Ouvrir " + title)
 assert visible_passage() == later, "Reader reopened at a different passage"
 capture("08-restored-passage")
+
+adb("shell", "input", "tap", str(w // 2), str(h // 2))
+tap("Typographie", "Typography")
+wait_for("La lumière traverse les pages du livre ouvert.", "Light falls across the pages of the open book.")
+capture("09-reader-typography")

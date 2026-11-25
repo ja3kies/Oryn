@@ -336,7 +336,6 @@ private val Dictionary: Map<String, String> by lazy {
         "Ajoute un EPUB ou un PDF, ou explore les catalogues libres." to "Add an EPUB or a PDF, or explore the free catalogs.",
         "Partager le passage" to "Share passage",
         "Revenir au passage précédent" to "Return to previous passage",
-        "Ouverts récemment" to "Recently opened",
         "La lumière traverse les pages du livre ouvert." to "Light falls across the pages of the open book.",
         "Ajoutés récemment" to "Recently added",
         "PARCOURIR" to "BROWSE",

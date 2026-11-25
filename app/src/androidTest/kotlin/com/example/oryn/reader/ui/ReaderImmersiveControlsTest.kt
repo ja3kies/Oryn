@@ -100,6 +100,23 @@ class ReaderImmersiveControlsTest {
     }
     private fun reveal() { rule.onNodeWithTag("ReadingSurface").performTouchInput { click(center) } }
 
+    @Test fun longPressCopiesTheWordUnderTheFinger() {
+        show()
+        val page = rule.onAllNodesWithTag("ReaderPageText").onFirst()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        page.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        val word = "paragraph"
+        val index = layout.layoutInput.text.text.indexOf(word)
+        assertTrue(index >= 0)
+        page.performTouchInput { longClick(layout.getBoundingBox(index + 3).center) }
+        rule.onNodeWithText(tr("Copier")).performClick()
+        rule.runOnIdle {
+            val clipboard = rule.activity.getSystemService(android.content.ClipboardManager::class.java)
+            assertEquals(word, clipboard.primaryClip?.getItemAt(0)?.text.toString())
+        }
+    }
+
     @Test fun oneTapRevealsCompactAndAnOutsideTapHidesWithoutMovingThePage() {
         show()
         val before = position.get(); val writes = progressWrites.get()
