@@ -310,6 +310,11 @@ fun ReaderScreen(
     val chromeIsPdf = readerPdf != null && !useReflow
     val chromePosition = visiblePosition ?: if (effectiveRich != null) (liveProgress * effectiveRich.text.length).toInt() else pdfCurrentPage * PDF_STRIDE
     val documentLength = effectiveRich?.text?.length ?: if (chromeIsPdf) (pdfPageCount.toLong() * PDF_STRIDE).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() else 0
+    var returnOffset by rememberSaveable(book.filePath, annotBookId) { mutableStateOf<Int?>(null) }
+    fun navigateTo(offset: Int, length: Int = 0) {
+        if (returnOffset == null) returnOffset = visiblePosition
+        jumpRequest = offset to length
+    }
     val chapter = remember(chromeToc, chromePosition, documentLength, chromeIsPdf, visiblePosition) {
         if (visiblePosition == null) null else readerChapterProgress(chromeToc.map { it.offset to it.title }, chromePosition, documentLength, if (chromeIsPdf) PDF_STRIDE else null)
     }
@@ -471,6 +476,7 @@ fun ReaderScreen(
                     else com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES) }
             },
             onBack = onBack,
+            onReturnToPassage = returnOffset?.let { offset -> { jumpRequest = offset to 0; returnOffset = null; controlsEvent(ReaderControlsEvent.HIDE) } },
             onTimer = { openTool(ReaderTool.TIMER) }, onBookmark = { onToggleBookmark(book) },
             onContents = chromeToc.takeIf { it.isNotEmpty() }?.let { { openTool(ReaderTool.CONTENTS) } },
             onAnnotations = if (effectiveRich != null || chromeIsPdf) ({ openTool(ReaderTool.ANNOTATIONS) }) else null,
@@ -486,7 +492,7 @@ fun ReaderScreen(
                 onJump = { offset ->
                     closeTool(false)
                     controlsEvent(ReaderControlsEvent.HIDE)
-                    jumpRequest = offset to 0
+                    navigateTo(offset)
                 },
                 onDismiss = { closeTool() }
             )
@@ -497,7 +503,7 @@ fun ReaderScreen(
                 currentOffset = (liveProgress * effectiveRich.text.length).toInt(),
                 onJump = { offset, length ->
                     // Keep the search dialog open for successive previous/next jumps.
-                    jumpRequest = offset to length
+                    navigateTo(offset, length)
                 },
                 onDismiss = { closeTool() }
             )
@@ -510,7 +516,7 @@ fun ReaderScreen(
                 onJump = { offset ->
                     closeTool(false)
                     controlsEvent(ReaderControlsEvent.HIDE)
-                    jumpRequest = offset to 0
+                    navigateTo(offset)
                 },
                 onDelete = { a -> scope.launch { annotationDao.delete(a) } },
                 onDismiss = { closeTool() }
@@ -536,7 +542,7 @@ fun ReaderScreen(
                     liveProgress = ((o / PDF_STRIDE + 1f) / pdfPageCount).coerceIn(0f, 1f)
                 } else return
                 controlsEvent(ReaderControlsEvent.HIDE)
-                jumpRequest = o to 0
+                navigateTo(o)
             }
             ReaderControlsSheet(
                 settings = settings,

@@ -727,6 +727,7 @@ internal fun ReflowReader(
                             val endBox = lr.getBoundingBox((sel.second - 1 - from).coerceIn(0, last))
                             SelectionHandle(
                                 anchor = Offset(startBox.left, startBox.bottom),
+                                lineCenterY = startBox.center.y,
                                 color = handleColor,
                                 onDrag = { p ->
                                     val cur = selection
@@ -742,6 +743,7 @@ internal fun ReflowReader(
                             )
                             SelectionHandle(
                                 anchor = Offset(endBox.right, endBox.bottom),
+                                lineCenterY = endBox.center.y,
                                 color = handleColor,
                                 onDrag = { p ->
                                     val cur = selection
@@ -793,7 +795,7 @@ internal fun ReflowReader(
                     selection = null
                 }
                 SelectionBar(
-                    existing = active,
+                    existing = active, passage = rangeText,
                     onColor = { c ->
                         if (sel != null) create("HIGHLIGHT", c, null)
                         else if (active != null) onUpdateAnnotation(active.copy(kind = "HIGHLIGHT", color = c))

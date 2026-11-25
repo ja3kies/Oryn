@@ -244,10 +244,12 @@ internal fun PdfReader(
                     var best = -1
                     var bestD = Float.MAX_VALUE
                     for (i in words.indices) {
-                        val r = rectOf(i).inflate(slop)
+                        val bounds = rectOf(i)
+                        val r = bounds.inflate(slop)
                         if (r.contains(p)) {
-                            val c = r.center
-                            val d = (c.x - p.x) * (c.x - p.x) + (c.y - p.y) * (c.y - p.y)
+                            val dx = p.x - p.x.coerceIn(bounds.left, bounds.right)
+                            val dy = p.y - p.y.coerceIn(bounds.top, bounds.bottom)
+                            val d = dx * dx + dy * dy
                             if (d < bestD) { best = i; bestD = d }
                         }
                     }
@@ -415,7 +417,7 @@ internal fun PdfReader(
                                             val down = awaitFirstDown(requireUnconsumed = false)
                                             val press = awaitLongPressOrCancellation(down.id)
                                             if (press != null) {
-                                                longPressAt((press.position - pageOffset) / pageScale)
+                                                longPressAt(press.position)
                                                 do {
                                                     val event = awaitPointerEvent()
                                                     event.changes.forEach { it.consume() }
@@ -440,8 +442,8 @@ internal fun PdfReader(
                                                     )
                                                 }
                                             },
-                                            onLongPress = { pos -> longPressAt((pos - pageOffset) / pageScale) },
-                                            onTap = { pos -> if (pageHit[page]?.invoke((pos - pageOffset) / pageScale) != true) onCenterTap() }
+                                            onLongPress = { pos -> longPressAt(pos) },
+                                            onTap = { pos -> if (pageHit[page]?.invoke(pos) != true) onCenterTap() }
                                         )
                                     }
                                 }
@@ -546,6 +548,7 @@ internal fun PdfReader(
                                 val last = rectOf((sel.second - 1).coerceIn(0, words.size - 1))
                                 SelectionHandle(
                                     anchor = Offset(first.left, first.bottom),
+                                    lineCenterY = first.center.y,
                                     color = handleColor,
                                     onDrag = { p ->
                                         val cur = selection
@@ -556,6 +559,7 @@ internal fun PdfReader(
                                 )
                                 SelectionHandle(
                                     anchor = Offset(last.right, last.bottom),
+                                    lineCenterY = last.center.y,
                                     color = handleColor,
                                     onDrag = { p ->
                                         val cur = selection
@@ -608,7 +612,7 @@ internal fun PdfReader(
                 selection = null
             }
             SelectionBar(
-                existing = active,
+                existing = active, passage = rangeText,
                 onColor = { c ->
                     if (sel != null) create("HIGHLIGHT", c, null)
                     else if (active != null) onUpdateAnnotation(active.copy(kind = "HIGHLIGHT", color = c))

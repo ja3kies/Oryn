@@ -81,6 +81,7 @@ internal val HighlightColors = listOf(
 @Composable
 internal fun SelectionBar(
     existing: AnnotationEntity?,
+    passage: String,
     onColor: (Int) -> Unit,
     onUnderline: () -> Unit,
     onNote: () -> Unit,
@@ -93,6 +94,7 @@ internal fun SelectionBar(
 ) {
     val colors = MaterialTheme.colorScheme
     val ink = colors.onSurface
+    val context = LocalContext.current
     Surface(
         modifier = modifier.width(272.dp),
         shape = RoundedCornerShape(26.dp),
@@ -134,6 +136,13 @@ internal fun SelectionBar(
                     onDefine?.let { BarAction(OrynIcons.BookOpen, tr("Définir"), false, ink, it, Modifier.weight(1f)) }
                     onTranslate?.let { BarAction(OrynIcons.Globe, tr("Traduire"), false, ink, it, Modifier.weight(1f)) }
                 }
+            }
+            if (passage.isNotBlank()) {
+                androidx.compose.material3.TextButton(onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND)
+                        .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, passage)
+                    context.startActivity(android.content.Intent.createChooser(intent, null))
+                }) { Text(tr("Partager le passage")) }
             }
             onDelete?.let {
                 Box(Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
@@ -199,13 +208,13 @@ internal fun NoteDialog(initial: String, onSave: (String) -> Unit, onDismiss: ()
  * pour que le tournage de page ne le récupère pas.
  */
 @Composable
-internal fun SelectionHandle(anchor: Offset, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit) {
+internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit) {
     val currentAnchor by rememberUpdatedState(anchor)
     val currentDrag by rememberUpdatedState(onDrag)
     val currentDone by rememberUpdatedState(onDone)
     val half = with(LocalDensity.current) { 24.dp.toPx() }
     val lift = with(LocalDensity.current) { 6.dp.toPx() }
-    val touchLift = with(LocalDensity.current) { 30.dp.toPx() }
+    val currentLineCenter by rememberUpdatedState(lineCenterY)
     Box(
         Modifier
             .offset { IntOffset((anchor.x - half).roundToInt(), (anchor.y - lift).roundToInt()) }
@@ -214,12 +223,11 @@ internal fun SelectionHandle(anchor: Offset, color: Color, onDrag: (Offset) -> U
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
-                    var pos = currentAnchor
+                    var pos = Offset(currentAnchor.x, currentLineCenter)
                     drag(down.id) { change ->
-                        change.consume()
                         pos += change.positionChange()
-                        // on vise la ligne juste au-dessus du doigt
-                        currentDrag(Offset(pos.x, pos.y - touchLift))
+                        change.consume()
+                        currentDrag(pos)
                     }
                     currentDone()
                 }

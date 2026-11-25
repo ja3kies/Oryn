@@ -2,6 +2,7 @@ package com.example.oryn.reader.ui.components
 
 import com.example.oryn.reader.i18n.tr
 import com.example.oryn.reader.i18n.trf
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -412,41 +413,19 @@ private fun ColumnScope.EssentialsPage(
         )
     }
 
-    // One compact font selector avoids four wide cards while keeping every option.
     MiniCard {
-        var fontsOpen by remember { mutableStateOf(false) }
         CardTitle(OrynIcons.Font, tr("Police"))
-        Box {
-            Row(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .heightIn(min = 48.dp)
-                    .clickable(role = Role.Button, onClickLabel = tr("Police")) { fontsOpen = true }
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(tr(settings.fontFamily.label), style = MaterialTheme.typography.labelLarge)
-                Icon(OrynIcons.Chevron, contentDescription = null, modifier = Modifier.size(20.dp))
-            }
-            DropdownMenu(expanded = fontsOpen, onDismissRequest = { fontsOpen = false }) {
-                ReaderFontFamily.entries.forEach { font ->
-                    DropdownMenuItem(
-                        text = { Text(tr(font.label)) },
-                        onClick = {
-                            fontsOpen = false
-                            onSettingsChange { it.copy(fontFamily = font) }
-                        },
-                        trailingIcon = {
-                            if (settings.fontFamily == font) {
-                                Icon(OrynIcons.Check, contentDescription = null)
-                            }
-                        }
-                    )
-                }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ReaderFontFamily.entries.forEach { font ->
+                FontChip(font, settings.fontFamily == font, { onSettingsChange { it.copy(fontFamily = font) } },
+                    Modifier.widthIn(min = 64.dp))
             }
         }
+        Text(tr("La lumière traverse les pages du livre ouvert."),
+            modifier = Modifier.fillMaxWidth().background(settings.themePreset.pageColor, RoundedCornerShape(12.dp)).padding(12.dp),
+            color = settings.themePreset.textColor, fontSize = settings.fontSizePt.sp,
+            lineHeight = (settings.fontSizePt * settings.lineSpacing).sp,
+            fontFamily = readerSampleFamily(settings.fontFamily))
     }
 
     // Keep alignment and margins horizontal at normal width; split into full
@@ -675,12 +654,7 @@ private fun FontChip(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val family = when (font) {
-        ReaderFontFamily.SERIF -> FontFamily.Serif
-        ReaderFontFamily.SANS_SERIF -> FontFamily.SansSerif
-        ReaderFontFamily.DYSLEXIC -> ReaderOpenDyslexicFont ?: FontFamily.Monospace
-        ReaderFontFamily.SYSTEM -> FontFamily.Default
-    }
+    val family = readerSampleFamily(font)
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -786,3 +760,10 @@ private fun AccentDot(
         }
     }
 }
+
+private fun readerSampleFamily(font: ReaderFontFamily) = when (font) {
+        ReaderFontFamily.SERIF -> FontFamily.Serif
+        ReaderFontFamily.SANS_SERIF -> FontFamily.SansSerif
+        ReaderFontFamily.DYSLEXIC -> ReaderOpenDyslexicFont ?: FontFamily.Monospace
+        ReaderFontFamily.SYSTEM -> FontFamily.Default
+    }

@@ -148,7 +148,8 @@ private fun Dashboard(
 ) {
     val colors = MaterialTheme.colorScheme
     val reading = remember(books) { recentReading(books) }
-    val recent = remember(books) { books.sortedByDescending { it.id }.take(12) }
+    val opened = remember(books) { books.filter { it.lastReadTimestamp > 0 }.sortedByDescending { it.lastReadTimestamp }.take(12) }
+    val recent = remember(books, opened) { opened.ifEmpty { books.sortedByDescending { it.id }.take(12) } }
     val done = remember(books) { books.count { it.progress >= 0.98f } }
     val unread = remember(books) { books.count { it.progress < 0.01f } }
 
@@ -229,6 +230,7 @@ private fun Dashboard(
                 Text(
                     if (books.isEmpty()) tr("Ta bibliothèque t'attend") else tr("Qu'est-ce qu'on lit ?"),
                     style = MaterialTheme.typography.headlineMedium,
+                    fontFamily = FontFamily.Serif,
                     color = colors.onBackground
                 )
             }
@@ -254,6 +256,7 @@ private fun Dashboard(
         if (books.isEmpty() && !isLoading) {
             item(key = "empty") {
                 LibraryEmptyState(
+                    showFennec = true,
                     title = tr("Aucun livre"),
                     subtitle = tr("Ajoute un EPUB ou un PDF, ou explore les catalogues libres."),
                     onImportClick = onImportClick
@@ -281,7 +284,7 @@ private fun Dashboard(
         // ── Ajoutés récemment
         if (recent.isNotEmpty()) {
             item(key = "recent") {
-                Shelf(title = tr("Ajoutés récemment"), count = null, onHeader = { OrynNav.openLibrary() }) {
+                Shelf(title = tr(if (opened.isEmpty()) "Ajoutés récemment" else "Ouverts récemment"), count = null, onHeader = { OrynNav.openLibrary() }) {
                     ShelfRow(recent, onBookClick)
                 }
             }
