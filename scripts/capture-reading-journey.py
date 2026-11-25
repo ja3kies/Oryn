@@ -109,5 +109,9 @@ capture("08-restored-passage")
 
 adb("shell", "input", "tap", str(w // 2), str(h // 2))
 tap("Typographie", "Typography")
-wait_for("La lumière traverse les pages du livre ouvert.", "Light falls across the pages of the open book.")
+wait_for("Police", "Font")
 capture("09-reader-typography")
+# On a compact display the live sample is below the last font choice.
+adb("shell", "input", "swipe", str(w // 2), str(h * 4 // 5), str(w // 2), str(h // 2), "600")
+wait_for("La lumière traverse les pages du livre ouvert.", "Light falls across the pages of the open book.")
+capture("10-live-sample")
