@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import android.widget.Toast
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
@@ -351,6 +352,8 @@ internal fun ReflowReader(
     var jumpNonce by remember { mutableIntStateOf(0) }
     val backStack = remember(bookId) { mutableStateListOf<Int>() }
     val pageHit = remember { HashMap<Int, (Offset) -> Boolean>() }
+    var draggingSelection by remember { mutableStateOf(false) }
+    val pageWord = remember { HashMap<Int, (Offset) -> Pair<Int, Int>?>() }
     val pageSelect = remember { HashMap<Int, (Offset) -> Unit>() }
     val currentPageRef = remember { arrayOf<() -> Int>({ 0 }) }
     val latestAnnotations by rememberUpdatedState(annotations)
@@ -548,12 +551,13 @@ internal fun ReflowReader(
                     }
 
                     // Appui long : sélectionne le mot touché ; sur une sélection existante : la phrase, puis le paragraphe
+                    val wordAt: (Offset) -> Pair<Int, Int>? = lookup@{ o ->
+                        val lr = textLayout ?: return@lookup null
+                        val local = hitChar(lr, toText(o), end - from) ?: return@lookup null
+                        wordRangeAt(lr.layoutInput.text.text, local)?.let { from + it.first to from + it.second }
+                    }
                     val startSelection: (Offset) -> Unit = start@{ o ->
-                        val lr = textLayout ?: return@start
-                        if (end <= from) return@start
-                        val local = hitChar(lr, toText(o), end - from) ?: return@start
-                        val absolute = from + local
-                        val rng = wordRangeAt(text, absolute) ?: return@start
+                        val rng = wordAt(o) ?: return@start
                         val a = rng.first
                         val b = rng.second
                         if (b <= a) return@start
@@ -570,14 +574,13 @@ internal fun ReflowReader(
                     SideEffect {
                         pageHit[page] = tapAt
                         pageSelect[page] = startSelection
+                        pageWord[page] = wordAt
                     }
-                    // En mode « page qui se tourne », les pages voisines sont superposées à la page affichée :
-                    // l'appui long est toujours confié à la page réellement visible.
-                    val longPressAt: (Offset) -> Unit = { o ->
-                        val visible = currentPageRef[0]()
-                        val target = pageSelect[visible]
-                        if (target != null) target(o) else startSelection(o)
+                    DisposableEffect(page) {
+                        onDispose { pageSelect.remove(page); pageHit.remove(page); pageWord.remove(page) }
                     }
+                    val latestTap by rememberUpdatedState(tapAt)
+                    val latestCenterTap by rememberUpdatedState(onCenterTap)
 
                     // Texte de la page (les surlignages sont dessinés par-dessus : affichage immédiat)
                     val pageText = remember(styled, from, end, selection, latestAnnotations) {
@@ -623,32 +626,33 @@ internal fun ReflowReader(
                             .fillMaxSize()
                             .background(backgroundColor)
                             .onGloballyPositioned { gestureCoords = it }
-                            .then(
-                                if (curlMode) {
-                                    // Le tournage de page gère les touchers ; ici on ne réagit qu'à l'appui long
-                                    Modifier.pointerInput(page) {
-                                        awaitEachGesture {
-                                            val down = awaitFirstDown(requireUnconsumed = false)
-                                            val press = awaitLongPressOrCancellation(down.id)
-                                            if (press != null) {
-                                                longPressAt(press.position)
-                                                // on avale la fin du geste pour ne pas tourner la page
-                                                do {
-                                                    val event = awaitPointerEvent()
-                                                    event.changes.forEach { it.consume() }
-                                                } while (event.changes.any { it.pressed })
+                            .pointerInput(page, curlMode) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                                    val visible = if (curlMode) currentPageRef[0]() else page
+                                    val lookup = pageWord[visible] ?: return@awaitEachGesture
+                                    if (lookup(press.position) == null) return@awaitEachGesture
+                                    pageSelect[visible]?.invoke(press.position)
+                                    val initial = selection ?: return@awaitEachGesture
+                                    draggingSelection = true
+                                    try {
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val finger = event.changes.firstOrNull { it.id == press.id } ?: break
+                                            finger.consume()
+                                            if ((finger.position - press.position).getDistance() > viewConfiguration.touchSlop) {
+                                                lookup(finger.position)?.let { word ->
+                                                    selection = min(initial.first, word.first) to max(initial.second, word.second)
+                                                }
                                             }
-                                        }
-                                    }
-                                } else {
-                                    Modifier.pointerInput(page) {
-                                        detectTapGestures(
-                                            onLongPress = { o -> longPressAt(o) },
-                                            onTap = { o -> if (!tapAt(o)) onCenterTap() }
-                                        )
-                                    }
+                                        } while (finger.pressed)
+                                    } finally { draggingSelection = false }
                                 }
-                            )
+                            }
+                            .then(if (curlMode) Modifier else Modifier.pointerInput(page) {
+                                detectTapGestures(onTap = { if (!latestTap(it)) latestCenterTap() })
+                            })
                             .padding(start = horizontalPadding, end = horizontalPadding, top = topPad, bottom = bottomPad)
                     ) {
                         Column {
@@ -730,36 +734,37 @@ internal fun ReflowReader(
                             val last = end - from - 1
                             val startBox = lr.getBoundingBox((sel.first - from).coerceIn(0, last))
                             val endBox = lr.getBoundingBox((sel.second - 1 - from).coerceIn(0, last))
+                            val startRtl = lr.getBidiRunDirection(sel.first - from) == androidx.compose.ui.text.style.ResolvedTextDirection.Rtl
+                            val endRtl = lr.getBidiRunDirection((sel.second - 1 - from).coerceIn(0, last)) == androidx.compose.ui.text.style.ResolvedTextDirection.Rtl
                             SelectionHandle(
-                                anchor = Offset(startBox.left, startBox.bottom),
+                                side = if (startRtl) 1 else -1,
+                                anchor = Offset(if (startRtl) startBox.right else startBox.left, startBox.bottom),
                                 lineCenterY = startBox.center.y,
                                 color = handleColor,
                                 onDrag = { p ->
                                     val cur = selection
                                     if (cur != null) {
-                                        // la poignée saute de mot en mot
-                                        val wb = lr.getWordBoundary(lr.getOffsetForPosition(p).coerceIn(0, last))
-                                        var o = from + wb.start
-                                        while (o < cur.second - 1 && !text[o].isLetterOrDigit()) o++
-                                        selection = o.coerceIn(from, cur.second - 1) to cur.second
+                                        val offset = from + lr.getOffsetForPosition(p)
+                                        if (offset in from until cur.second) selection = offset to cur.second
+                                        draggingSelection = true
                                     }
                                 },
-                                onDone = {}
+                                onDone = { draggingSelection = false }
                             )
                             SelectionHandle(
-                                anchor = Offset(endBox.right, endBox.bottom),
+                                side = if (endRtl) -1 else 1,
+                                anchor = Offset(if (endRtl) endBox.left else endBox.right, endBox.bottom),
                                 lineCenterY = endBox.center.y,
                                 color = handleColor,
                                 onDrag = { p ->
                                     val cur = selection
                                     if (cur != null) {
-                                        val wb = lr.getWordBoundary(lr.getOffsetForPosition(p).coerceIn(0, last))
-                                        var o = (from + wb.end).coerceAtMost(end)
-                                        while (o > cur.first + 1 && !text[o - 1].isLetterOrDigit()) o--
-                                        selection = cur.first to o.coerceIn(cur.first + 1, end)
+                                        val offset = from + lr.getOffsetForPosition(p)
+                                        if (offset in (cur.first + 1)..end) selection = cur.first to offset
+                                        draggingSelection = true
                                     }
                                 },
-                                onDone = {}
+                                onDone = { draggingSelection = false }
                             )
                         }
                     }
@@ -782,7 +787,7 @@ internal fun ReflowReader(
         run {
             val sel = selection
             val active = latestAnnotations.firstOrNull { it.id == activeId }
-            if (sel != null || active != null) {
+            if (!draggingSelection && (sel != null || active != null)) {
                 val rangeText = sel?.let { text.substring(it.first, it.second) } ?: active?.quote.orEmpty()
                 fun create(kind: String, color: Int, note: String?) {
                     val range = sel ?: return
@@ -813,7 +818,7 @@ internal fun ReflowReader(
                         if (sel != null) noteSelection = sel else noteAnnotation = active
                     },
                     onCopy = {
-                        clipboard.setText(AnnotatedString(rangeText.trim()))
+                        clipboard.setText(AnnotatedString(rangeText))
                         Toast.makeText(context, tr("Copié"), Toast.LENGTH_SHORT).show()
                         selection = null
                         activeId = null

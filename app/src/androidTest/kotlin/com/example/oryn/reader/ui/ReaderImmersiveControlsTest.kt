@@ -129,6 +129,25 @@ class ReaderImmersiveControlsTest {
         }
     }
 
+    @Test fun holdingThenDraggingSelectsThePassageInOneGesture() {
+        show(excerpt = "On ajoutait quelques mots sur le papier.")
+        val page = rule.onAllNodesWithTag("ReaderPageText").onFirst()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        page.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        page.performTouchInput {
+            down(layout.getBoundingBox(0).center)
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 100)
+            moveTo(layout.getBoundingBox(6).center)
+            up()
+        }
+        rule.onNodeWithText(tr("Copier")).performClick()
+        rule.runOnIdle {
+            assertEquals("On ajoutait", rule.activity.getSystemService(android.content.ClipboardManager::class.java)
+                .primaryClip?.getItemAt(0)?.text.toString())
+        }
+    }
+
     @Test fun longPressCopiesTheWordUnderTheFinger() {
         show()
         val page = rule.onAllNodesWithTag("ReaderPageText").onFirst()

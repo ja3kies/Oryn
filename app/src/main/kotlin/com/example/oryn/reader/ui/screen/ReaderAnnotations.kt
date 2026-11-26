@@ -208,7 +208,7 @@ internal fun NoteDialog(initial: String, onSave: (String) -> Unit, onDismiss: ()
  * pour que le tournage de page ne le récupère pas.
  */
 @Composable
-internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit) {
+internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit, side: Int = 0) {
     val currentAnchor by rememberUpdatedState(anchor)
     val currentDrag by rememberUpdatedState(onDrag)
     val currentDone by rememberUpdatedState(onDone)
@@ -217,7 +217,7 @@ internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, o
     val currentLineCenter by rememberUpdatedState(lineCenterY)
     Box(
         Modifier
-            .offset { IntOffset((anchor.x - half).roundToInt(), (anchor.y - lift).roundToInt()) }
+            .offset { IntOffset((anchor.x - half + side * half).roundToInt(), (anchor.y - lift).roundToInt()) }
             .size(48.dp)
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -232,7 +232,11 @@ internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, o
                     currentDone()
                 }
             },
-        contentAlignment = Alignment.TopCenter
+        contentAlignment = when (side) {
+            -1 -> Alignment.TopEnd
+            1 -> Alignment.TopStart
+            else -> Alignment.TopCenter
+        }
     ) {
         Box(
             Modifier

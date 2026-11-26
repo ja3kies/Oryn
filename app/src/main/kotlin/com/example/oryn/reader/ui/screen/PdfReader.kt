@@ -548,6 +548,7 @@ internal fun PdfReader(
                                 val last = rectOf((sel.second - 1).coerceIn(0, words.size - 1))
                                 SelectionHandle(
                                     anchor = Offset(first.left, first.bottom),
+                                    side = -1,
                                     lineCenterY = first.center.y,
                                     color = handleColor,
                                     onDrag = { p ->
@@ -559,6 +560,7 @@ internal fun PdfReader(
                                 )
                                 SelectionHandle(
                                     anchor = Offset(last.right, last.bottom),
+                                    side = 1,
                                     lineCenterY = last.center.y,
                                     color = handleColor,
                                     onDrag = { p ->
