@@ -123,7 +123,9 @@ fun SettingsScreen(
             SettingsNavigationRow("Apparence", OrynIcons.Palette) { section = SettingsSection.APPEARANCE }
             SettingsNavigationRow("Langue", OrynIcons.Globe) { section = SettingsSection.LANGUAGE }
             SettingsNavigationRow("Lecture", OrynIcons.BookOpen) { section = SettingsSection.READING }
-            SettingsNavigationRow("Mises à jour", OrynIcons.Download) { section = SettingsSection.UPDATES }
+            if (com.example.oryn.reader.BuildConfig.DEBUG) {
+                SettingsNavigationRow("Mises à jour", OrynIcons.Download) { section = SettingsSection.UPDATES }
+            }
             SettingsNavigationRow("Découvrir Oryn", OrynIcons.Sparkle) { section = SettingsSection.ABOUT }
         }
         if (section == SettingsSection.APPEARANCE) {
