@@ -93,7 +93,7 @@ fun ReaderScreen(
     currentAccent: AppAccentTheme,
     onAccentChange: (AppAccentTheme) -> Unit,
     onBack: () -> Unit,
-    onUpdateProgress: (BookEntity, Float) -> Unit,
+    onUpdateProgress: (BookEntity, Float, Int?) -> Unit,
     onToggleBookmark: (BookEntity) -> Unit
 ) {
     val context = LocalContext.current
@@ -208,7 +208,7 @@ fun ReaderScreen(
     }
 
     // Marque le livre comme « lu récemment » sans toucher à la progression
-    LaunchedEffect(book.id) { onUpdateProgress(book, book.progress) }
+    LaunchedEffect(book.id) { onUpdateProgress(book, book.progress, book.readingOffset) }
 
     // Reader brightness follows Android system settings. Keep legacy DataStore values
     // readable for backwards compatibility, but never apply a stale window override.
@@ -373,7 +373,7 @@ fun ReaderScreen(
                     val toggleUi = { controlsEvent(ReaderControlsEvent.SURFACE_TAP) }
                     val saveProgress: (Float) -> Unit = { fraction ->
                         liveProgress = fraction.coerceIn(0f, 1f)
-                        onUpdateProgress(book, liveProgress)
+                        onUpdateProgress(book, liveProgress, null)
                     }
 
                     // Fixed, font-scale-aware gutters keep text clear without repaginating on a tap.
@@ -435,6 +435,7 @@ fun ReaderScreen(
                         ReflowReader(
                             bookId = annotBookId,
                             book = rich,
+                            initialOffset = if (useReflow) null else book.readingOffset,
                             linkColor = linkColor,
                             initialProgress = if (useReflow) {
                                 if (switchPage >= 0) reflowBook?.fractionOfPage(switchPage) ?: liveProgress else liveProgress
@@ -444,7 +445,10 @@ fun ReaderScreen(
                             foregroundColor = foregroundColor,
                             backgroundColor = backgroundColor,
                             horizontalPadding = horizontalPadding,
-                            onProgress = saveProgress,
+                            onProgress = { fraction, offset ->
+                                liveProgress = fraction.coerceIn(0f, 1f)
+                                onUpdateProgress(book, liveProgress, if (useReflow) null else offset)
+                            },
                             onCenterTap = toggleUi,
                             onVisiblePosition = { visiblePosition = it },
                             onChapterPagesAfter = { chapterPagesAfter = it },

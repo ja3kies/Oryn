@@ -42,7 +42,7 @@ class ReaderDocumentReplacementTest {
                             linkColor = settings.themePreset.linkColor,
                             foregroundColor = settings.themePreset.textColor,
                             backgroundColor = settings.themePreset.pageColor,
-                            horizontalPadding = 16.dp, onProgress = {}, onCenterTap = {},
+                            horizontalPadding = 16.dp, onProgress = { _, _ -> }, onCenterTap = {},
                             onVisiblePosition = { position.set(it) }, annotations = emptyList(),
                             onAddAnnotation = {}, onUpdateAnnotation = {}, onDeleteAnnotation = {}
                         )

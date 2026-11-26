@@ -23,8 +23,8 @@ class BookRepository(private val dao: BookDao) {
 
     suspend fun coverIsReferenced(path: String): Boolean = dao.countByCoverPath(path) > 0
 
-    suspend fun updateProgress(book: BookEntity, progress: Float, timestamp: Long) =
-        dao.updateProgress(book.id, progress, timestamp)
+    suspend fun updateProgress(book: BookEntity, progress: Float, timestamp: Long, readingOffset: Int?) =
+        dao.updateProgress(book.id, progress, timestamp, readingOffset)
 
     suspend fun updateCover(bookId: Long, path: String?) = dao.updateCover(bookId, path)
 

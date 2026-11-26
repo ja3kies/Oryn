@@ -306,12 +306,13 @@ internal fun ReflowReader(
     book: RichBook,
     linkColor: Color,
     initialProgress: Float,
+    initialOffset: Int? = null,
     settings: ReaderSettings,
     fontFamily: FontFamily,
     foregroundColor: Color,
     backgroundColor: Color,
     horizontalPadding: Dp,
-    onProgress: (Float) -> Unit,
+    onProgress: (Float, Int) -> Unit,
     onCenterTap: () -> Unit,
     annotations: List<AnnotationEntity> = emptyList(),
     onAddAnnotation: (AnnotationEntity) -> Unit = {},
@@ -407,7 +408,7 @@ internal fun ReflowReader(
         var computing by remember { mutableStateOf(true) }
         // Position de lecture (début de la page courante), conservée quand la mise en page change
         val anchor = remember(bookId, book) {
-            intArrayOf(((initialProgress * text.length).toInt() - 1).coerceIn(0, max(0, text.length - 1)))
+            intArrayOf((initialOffset ?: ((initialProgress * text.length).toInt() - 1)).coerceIn(0, max(0, text.length - 1)))
         }
 
         val richReady = rich != null
@@ -427,7 +428,7 @@ internal fun ReflowReader(
             if (push) backStack.add(anchor[0])
             anchor[0] = offset.coerceIn(0, max(0, text.length - 1))
             jumpNonce++
-            onProgress(offset.toFloat() / max(1, text.length))
+            onProgress(anchor[0].toFloat() / max(1, text.length), anchor[0])
         }
         LaunchedEffect(jumpRequest, layout != null) {
             val target = jumpRequest
@@ -486,7 +487,7 @@ internal fun ReflowReader(
                         anchor[0] = starts[page]
                         reportVisible(page)
                         val endOffset = if (page + 1 < starts.size) starts[page + 1] else text.length
-                        onProgress(endOffset.toFloat() / text.length)
+                        onProgress(endOffset.toFloat() / text.length, starts[page])
                     },
                     onCenterTap = onCenterTap,
                     onTap = { page, offset -> pageHit[page]?.invoke(offset) == true },

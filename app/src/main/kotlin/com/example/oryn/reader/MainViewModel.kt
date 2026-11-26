@@ -560,9 +560,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateBookProgress(book: BookEntity, progress: Float) {
+    fun updateBookProgress(book: BookEntity, progress: Float, readingOffset: Int?) {
         viewModelScope.launch {
-            repository.updateProgress(book, progress.coerceIn(0f, 1f), System.currentTimeMillis())
+            repository.updateProgress(book, progress.coerceIn(0f, 1f), System.currentTimeMillis(), readingOffset)
         }
     }
 

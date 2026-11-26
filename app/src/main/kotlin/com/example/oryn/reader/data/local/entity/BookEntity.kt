@@ -19,6 +19,7 @@ data class BookEntity(
      * SHA-256 des 64 premiers Ko du fichier. Sert à retrouver la couverture
      * d'un livre supprimé puis réimporté (bibliothèque de covers Oryn).
      */
-    val contentHash: String? = null
+    val contentHash: String? = null,
+    val readingOffset: Int? = null
 )
 

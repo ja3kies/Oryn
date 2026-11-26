@@ -64,7 +64,7 @@ class ReaderImmersiveControlsTest {
                             bookId = 1, book = book, linkColor = settings.themePreset.linkColor,
                             initialProgress = 0.4f, settings = settings, fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
                             foregroundColor = settings.themePreset.textColor, backgroundColor = settings.themePreset.pageColor,
-                            horizontalPadding = 16.dp, onProgress = { progressWrites.incrementAndGet() },
+                            horizontalPadding = 16.dp, onProgress = { _, _ -> progressWrites.incrementAndGet() },
                             onCenterTap = { dispatch(ReaderControlsEvent.SURFACE_TAP) }, onVisiblePosition = { position.set(it) },
                             annotations = emptyList(), onAddAnnotation = {}, onUpdateAnnotation = {}, onDeleteAnnotation = {}
                         )

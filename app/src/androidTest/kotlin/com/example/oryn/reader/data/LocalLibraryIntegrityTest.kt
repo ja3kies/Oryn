@@ -32,11 +32,12 @@ class LocalLibraryIntegrityTest {
         }
         assertEquals(1, results.count { it })
         val book = dao.getAllBooks().first().single()
-        dao.updateProgress(book.id, 0.75f, 123L)
+        dao.updateProgress(book.id, 0.75f, 123L, 314)
         assertFalse(dao.insertIfAbsent(original.copy(title = "Replacement")))
         val restored = dao.getAllBooks().first().single()
         assertEquals("Book", restored.title)
         assertEquals(0.75f, restored.progress, 0f)
+        assertEquals(314, restored.readingOffset)
     }
 
     @Test fun favoriteToggleAndPathRepairPreserveOtherColumns() = runBlocking {
