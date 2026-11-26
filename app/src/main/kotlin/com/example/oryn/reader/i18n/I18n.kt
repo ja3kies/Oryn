@@ -280,6 +280,7 @@ private val Dictionary: Map<String, String> by lazy {
         "Passer" to "Skip",
         "Suivant" to "Next",
         "Commencer" to "Get started",
+        "Mises à jour" to "App updates",
         "Découvrir Oryn" to "Discover Oryn",
         "Revoir la présentation" to "View the introduction again",
         "Accueil" to "Home",
