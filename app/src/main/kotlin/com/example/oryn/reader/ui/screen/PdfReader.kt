@@ -413,21 +413,6 @@ internal fun PdfReader(
                                     }
                                 }
                                 .pointerInput(page, curlMode) {
-                                    fun visible() = if (curlMode) currentPageRef[0]() else page
-                                    selectPassage(
-                                        start = { point ->
-                                            val target = visible()
-                                            if ((pageWord[target]?.invoke(point) ?: -1) < 0) null else {
-                                                pageSelect[target]?.invoke(point)
-                                                selection
-                                            }
-                                        },
-                                        rangeAt = { point -> pageWord[visible()]?.invoke(point)?.takeIf { it >= 0 }?.let { it to it + 1 } },
-                                        update = { selection = it },
-                                        dragging = { draggingSelection = it }
-                                    )
-                                }
-                                .pointerInput(page, curlMode) {
                                     if (!curlMode) {
                                         detectTapGestures(
                                             onDoubleTap = { pos ->
@@ -449,6 +434,21 @@ internal fun PdfReader(
                                             onTap = { pos -> if (pageHit[page]?.invoke(pos) != true) onCenterTap() }
                                         )
                                     }
+                                }
+                                .pointerInput(page, curlMode) {
+                                    fun visible() = if (curlMode) currentPageRef[0]() else page
+                                    selectPassage(
+                                        start = { point ->
+                                            val target = visible()
+                                            if ((pageWord[target]?.invoke(point) ?: -1) < 0) null else {
+                                                pageSelect[target]?.invoke(point)
+                                                selection
+                                            }
+                                        },
+                                        rangeAt = { point -> pageWord[visible()]?.invoke(point)?.takeIf { it >= 0 }?.let { it to it + 1 } },
+                                        update = { selection = it },
+                                        dragging = { draggingSelection = it }
+                                    )
                                 }
                         ) {
                             Image(

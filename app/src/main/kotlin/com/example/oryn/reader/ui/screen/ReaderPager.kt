@@ -523,6 +523,7 @@ internal fun ReflowReader(
 
                     // Un toucher : efface la sélection, ouvre un lien, active une annotation… sinon affiche/masque l'interface
                     val tapAt: (Offset) -> Boolean = at@{ o ->
+                        if (draggingSelection) return@at true
                         if (selection != null) {
                             selection = null
                             return@at true
@@ -626,6 +627,9 @@ internal fun ReflowReader(
                             .fillMaxSize()
                             .background(backgroundColor)
                             .onGloballyPositioned { gestureCoords = it }
+                            .then(if (curlMode) Modifier else Modifier.pointerInput(page) {
+                                detectTapGestures(onTap = { if (!latestTap(it)) latestCenterTap() })
+                            })
                             .pointerInput(page, curlMode) {
                                 fun visible() = if (curlMode) currentPageRef[0]() else page
                                 selectPassage(
@@ -641,9 +645,6 @@ internal fun ReflowReader(
                                     dragging = { draggingSelection = it }
                                 )
                             }
-                            .then(if (curlMode) Modifier else Modifier.pointerInput(page) {
-                                detectTapGestures(onTap = { if (!latestTap(it)) latestCenterTap() })
-                            })
                             .padding(start = horizontalPadding, end = horizontalPadding, top = topPad, bottom = bottomPad)
                     ) {
                         Column {
