@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -42,11 +43,11 @@ class ReaderImmersiveControlsTest {
     private val exits = AtomicInteger()
     private val timerRequests = AtomicInteger()
 
-    private fun show(theme: ReaderThemePreset = ReaderThemePreset.LIGHT, fontScale: Float = 1f, short: Boolean = false) {
-        val book = RichBook("A local reading paragraph with enough words to paginate.\n\n".repeat(300), emptyList(), emptyList())
+    private fun show(theme: ReaderThemePreset = ReaderThemePreset.LIGHT, fontScale: Float = 1f, short: Boolean = false, excerpt: String? = null) {
+        val book = if (excerpt != null) RichBook(excerpt, listOf(com.example.oryn.reader.data.importer.RichSpan(0, excerpt.length, com.example.oryn.reader.data.importer.SpanKind.ITALIC)), emptyList()) else RichBook("A local reading paragraph with enough words to paginate.\n\n".repeat(300), emptyList(), emptyList())
         rule.setContent {
             var state by rememberSaveable { mutableStateOf(ReaderControlsState.HIDDEN) }
-            var settings by remember { mutableStateOf(ReaderSettings(themePreset = theme)) }
+            var settings by remember { mutableStateOf(ReaderSettings(themePreset = theme, textAlign = if (excerpt != null) com.example.oryn.reader.data.local.preferences.ReaderTextAlign.JUSTIFY else ReaderSettings().textAlign)) }
             var bookmarked by remember { mutableStateOf(false) }
             var focus by remember { mutableStateOf(ReaderSheetFocus.ALL) }
             val originalDensity = LocalDensity.current
@@ -99,6 +100,32 @@ class ReaderImmersiveControlsTest {
         rule.waitForIdle()
     }
     private fun reveal() { rule.onNodeWithTag("ReadingSurface").performTouchInput { click(center) } }
+
+    @Test fun justifiedItalicShortWordPaintsBothLettersAndStopsBeforeNextWord() {
+        show(excerpt = "On ajoutait sur ce bout de papier un peu jauni que le Sénégal est respecté pour ses poètes et artistes.")
+        val page = rule.onAllNodesWithTag("ReaderPageText").onFirst()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        page.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        page.performTouchInput { longClick(layout.getBoundingBox(1).center) }
+        val pixels = page.captureToImage().toPixelMap()
+        fun hasGoldBehind(index: Int): Boolean {
+            val glyph = layout.getBoundingBox(index)
+            val x = glyph.center.x.toInt()
+            return (glyph.top.toInt().coerceAtLeast(0) until glyph.bottom.toInt().coerceAtMost(pixels.height)).any { y ->
+                val color = pixels[x, y]
+                color.red > color.blue + 0.16f && color.green > color.blue + 0.07f
+            }
+        }
+        assertTrue("O must be highlighted", hasGoldBehind(0))
+        assertTrue("n must be highlighted", hasGoldBehind(1))
+        assertFalse("The next word must be clear", hasGoldBehind(3))
+        rule.onNodeWithText(tr("Copier")).performClick()
+        rule.runOnIdle {
+            assertEquals("On", rule.activity.getSystemService(android.content.ClipboardManager::class.java)
+                .primaryClip?.getItemAt(0)?.text.toString())
+        }
+    }
 
     @Test fun longPressCopiesTheWordUnderTheFinger() {
         show()

@@ -133,7 +133,7 @@ internal fun PdfReader(
     onDeleteAnnotation: (AnnotationEntity) -> Unit,
     jumpRequest: Pair<Int, Int>?,
     onJumpHandled: () -> Unit,
-    onDefine: ((String) -> Unit)? = null,
+    onDefine: ((String, String) -> Unit)? = null,
     onTranslate: ((String) -> Unit)? = null,
     onVisiblePosition: ((Int) -> Unit)? = null
 ) {
@@ -631,7 +631,12 @@ internal fun PdfReader(
                     activeId = null
                 },
                 onDelete = active?.let { a -> { onDeleteAnnotation(a); activeId = null } },
-                onDefine = onDefine?.let { f -> { f(rangeText.trim()) } },
+                onDefine = onDefine?.let { define -> {
+                    val words = pageWords[if (sel != null) selPage else (active?.startOffset ?: 0) / PDF_STRIDE].orEmpty()
+                    val index = sel?.first ?: ((active?.startOffset ?: 0) % PDF_STRIDE)
+                    val excerpt = words.drop((index - 10).coerceAtLeast(0)).take(24).joinToString(" ") { it.text }
+                    define(rangeText.trim(), excerpt)
+                } },
                 onTranslate = onTranslate?.let { f -> { f(rangeText.trim()) } },
                 onExtend = sel?.let { cur ->
                     {

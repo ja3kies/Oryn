@@ -60,7 +60,7 @@ import java.io.IOException
 enum class LookupMode { DEFINE, TRANSLATE }
 
 /** Demande de recherche depuis le lecteur : le mode demandé et le texte sélectionné. */
-data class LookupRequest(val mode: LookupMode, val text: String)
+data class LookupRequest(val mode: LookupMode, val text: String, val excerpt: String = "")
 
 private sealed interface Load<out T> {
     object Loading : Load<Nothing>
@@ -78,7 +78,9 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < 0.5f
     var mode by remember(request) { mutableStateOf(request.mode) }
-    var target by remember { mutableStateOf(if (Lang.isEnglish) "en" else "fr") }
+    val preferences = LocalContext.current.getSharedPreferences("lookup", android.content.Context.MODE_PRIVATE)
+    var target by remember { mutableStateOf(preferences.getString("language", null) ?: if (Lang.isEnglish) "en" else "fr") }
+    fun chooseTarget(code: String) { target = code; preferences.edit().putString("language", code).apply() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -110,8 +112,8 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
                 LookupTab(tr("Traduction"), mode == LookupMode.TRANSLATE) { mode = LookupMode.TRANSLATE }
             }
             when (mode) {
-                LookupMode.DEFINE -> DefineBody(request.text, onTranslateInstead = { mode = LookupMode.TRANSLATE })
-                LookupMode.TRANSLATE -> TranslateBody(request.text, target) { target = it }
+                LookupMode.DEFINE -> DefineBody(request, target, ::chooseTarget, onTranslateInstead = { mode = LookupMode.TRANSLATE })
+                LookupMode.TRANSLATE -> TranslateBody(request.text, target, ::chooseTarget)
             }
         }
     }
@@ -168,7 +170,26 @@ private fun LoadingRow() {
 }
 
 @Composable
-private fun DefineBody(text: String, onTranslateInstead: () -> Unit) {
+private fun LanguageChoice(label: String, code: String, change: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        androidx.compose.material3.OutlinedButton(onClick = { expanded = true }) {
+            Text("$label · ${LookupClient.targetLanguages.firstOrNull { it.first == code }?.second ?: code}")
+        }
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LookupClient.targetLanguages.forEach { (value, name) ->
+                androidx.compose.material3.DropdownMenuItem(text = { Text(name) }, onClick = { change(value); expanded = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun DefineBody(request: LookupRequest, target: String, onTarget: (String) -> Unit, onTranslateInstead: () -> Unit) {
+    val text = request.text
+    var language by remember(request) { mutableStateOf(LookupClient.guessLanguage(request.excerpt) ?: if (Lang.isEnglish) "en" else "fr") }
+    LanguageChoice(tr("Langue du mot"), language) { language = it }
+    LanguageChoice(tr("Définition en"), target, onTarget)
     if (LookupClient.wordCount(text) > 3) {
         StatusLine(
             tr("Sélectionne un seul mot pour voir sa définition."),
@@ -178,11 +199,10 @@ private fun DefineBody(text: String, onTranslateInstead: () -> Unit) {
         return
     }
     var attempt by remember { mutableIntStateOf(0) }
-    val state by produceState<Load<DictionaryResult>>(Load.Loading, text, attempt) {
+    val state by produceState<Load<DictionaryResult>>(Load.Loading, text, language, target, attempt) {
         value = Load.Loading
-        val languages = if (Lang.isEnglish) listOf("en", "fr") else listOf("fr", "en")
         value = try {
-            Load.Done(LookupClient.define(text, languages))
+            Load.Done(LookupClient.define(text, language, target))
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
@@ -203,16 +223,17 @@ private fun DefineBody(text: String, onTranslateInstead: () -> Unit) {
                     onTranslateInstead
                 )
             } else {
-                DefinitionContent(result)
+                DefinitionContent(result, request.excerpt, target != "en")
             }
         }
     }
 }
 
 @Composable
-private fun DefinitionContent(result: DictionaryResult) {
+private fun DefinitionContent(result: DictionaryResult, excerpt: String, targetIsTranslated: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(java.util.Locale.forLanguageTag(result.language).getDisplayLanguage(if (Lang.isEnglish) java.util.Locale.ENGLISH else java.util.Locale.FRENCH), style = MaterialTheme.typography.labelLarge)
             Text(result.word, style = MaterialTheme.typography.headlineSmall)
             result.phonetic?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = inkSecondary()) }
         }
@@ -238,7 +259,13 @@ private fun DefinitionContent(result: DictionaryResult) {
                 }
             }
         }
-        Text(trf("Source : %s. Le mot sélectionné est envoyé à ce service.", result.source), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
+        if (result.entries.all { group -> group.senses.none { it.example != null } }) {
+            if (excerpt.isNotBlank()) {
+                Text(tr("Dans ton livre"), style = MaterialTheme.typography.labelLarge)
+                Text(excerpt, fontStyle = FontStyle.Italic)
+            } else Text(tr("Aucun exemple fourni par le dictionnaire."))
+        }
+        Text(result.source + " · FreeDictionaryAPI" + if (targetIsTranslated) " · MyMemory" else "", style = MaterialTheme.typography.labelSmall, color = inkSecondary())
     }
 }
 

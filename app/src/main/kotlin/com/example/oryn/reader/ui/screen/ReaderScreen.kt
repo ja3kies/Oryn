@@ -421,7 +421,7 @@ fun ReaderScreen(
                             onDeleteAnnotation = { a -> scope.launch { annotationDao.delete(a) } },
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
-                            onDefine = { showLookup(LookupRequest(LookupMode.DEFINE, it)) },
+                            onDefine = { word, excerpt -> showLookup(LookupRequest(LookupMode.DEFINE, word, excerpt)) },
                             onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
                         )
                     } else {
@@ -454,7 +454,7 @@ fun ReaderScreen(
                             onDeleteAnnotation = { a -> scope.launch { annotationDao.delete(a) } },
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
-                            onDefine = { showLookup(LookupRequest(LookupMode.DEFINE, it)) },
+                            onDefine = { word, excerpt -> showLookup(LookupRequest(LookupMode.DEFINE, word, excerpt)) },
                             onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
                         )
                     }

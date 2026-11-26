@@ -319,7 +319,7 @@ internal fun ReflowReader(
     onDeleteAnnotation: (AnnotationEntity) -> Unit = {},
     jumpRequest: Pair<Int, Int>? = null,
     onJumpHandled: () -> Unit = {},
-    onDefine: ((String) -> Unit)? = null,
+    onDefine: ((String, String) -> Unit)? = null,
     onTranslate: ((String) -> Unit)? = null,
     onVisiblePosition: ((Int) -> Unit)? = null,
     onChapterPagesAfter: ((Int?) -> Unit)? = null
@@ -579,7 +579,21 @@ internal fun ReflowReader(
                     }
 
                     // Texte de la page (les surlignages sont dessinés par-dessus : affichage immédiat)
-                    val pageText = remember(current.key, linkColor, from, end) { styled.subSequence(from, end) }
+                    val pageText = remember(styled, from, end, selection, latestAnnotations) {
+                        buildAnnotatedString {
+                            append(styled.subSequence(from, end))
+                            fun shade(start: Int, stop: Int, color: Color) {
+                                val lo = max(start, from)
+                                val hi = min(stop, end)
+                                if (lo < hi) addStyle(SpanStyle(background = color), lo - from, hi - from)
+                            }
+                            latestAnnotations.filter { it.kind == "HIGHLIGHT" }.forEach { annotation ->
+                                val (lo, hi) = trimAnnotationRange(text, annotation.startOffset, annotation.endOffset)
+                                shade(lo, hi, HighlightColors[annotation.color.coerceIn(0, 3)].copy(alpha = 0.45f))
+                            }
+                            selection?.let { shade(it.first, it.second, Color(0xFFD99A32).copy(alpha = 0.35f)) }
+                        }
+                    }
 
                     // Position de la barre d'actions : juste au-dessus du passage sélectionné
                     LaunchedEffect(selection, activeId, textLayout, textCoords, containerCoords, annotations) {
@@ -655,21 +669,11 @@ internal fun ReflowReader(
                                                 val s0 = local(ts)
                                                 val e0 = local(te)
                                                 if (e0 <= s0) continue
-                                                if (a.kind == "HIGHLIGHT") {
-                                                    drawPath(
-                                                        lr.getPathForRange(s0, e0),
-                                                        HighlightColors[a.color.coerceIn(0, 3)].copy(alpha = 0.45f)
-                                                    )
-                                                }
                                                 if (a.id == activeId) {
                                                     drawPath(lr.getPathForRange(s0, e0), activeColor, style = Stroke(2.dp.toPx()))
                                                 }
                                             }
-                                            selection?.let { sel ->
-                                                val s0 = local(sel.first)
-                                                val e0 = local(sel.second)
-                                                if (e0 > s0) drawPath(lr.getPathForRange(s0, e0), Color(0xFFD99A32).copy(alpha = 0.35f))
-                                            }
+
                                         }
                                         drawContent()
                                         if (lr != null && len > 0) {
@@ -826,7 +830,11 @@ internal fun ReflowReader(
                             }
                         }
                     },
-                    onDefine = onDefine?.let { f -> { f(rangeText.trim()) } },
+                    onDefine = onDefine?.let { define -> {
+                        val at = (sel?.first ?: active?.startOffset ?: 0).coerceIn(0, text.lastIndex)
+                        val (lo, hi) = sentenceBounds(text, at, max(0, at - 220), min(text.length, at + 220))
+                        define(rangeText.trim(), text.substring(lo, hi))
+                    } },
                     onTranslate = onTranslate?.let { f -> { f(rangeText.trim()) } },
                     modifier = Modifier
                         .align(Alignment.TopStart)
