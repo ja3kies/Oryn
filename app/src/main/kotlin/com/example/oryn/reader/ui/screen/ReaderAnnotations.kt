@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -207,6 +208,34 @@ internal fun NoteDialog(initial: String, onSave: (String) -> Unit, onDismiss: ()
  * [anchor] est en pixels, dans le repère du texte. Zone tactile de 48 dp ; le geste est capté dès l'appui
  * pour que le tournage de page ne le récupère pas.
  */
+/** The initial word stays anchored while the finger moves in either direction. */
+internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.selectPassage(
+    start: (Offset) -> Pair<Int, Int>?,
+    rangeAt: (Offset) -> Pair<Int, Int>?,
+    update: (Pair<Int, Int>) -> Unit,
+    dragging: (Boolean) -> Unit
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+        val initial = start(press.position) ?: return@awaitEachGesture
+        dragging(true)
+        try {
+            do {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) break
+                val finger = event.changes.firstOrNull { it.id == press.id } ?: break
+                finger.consume()
+                if ((finger.position - press.position).getDistance() > viewConfiguration.touchSlop) {
+                    rangeAt(finger.position)?.let { word ->
+                        update(minOf(initial.first, word.first) to maxOf(initial.second, word.second))
+                    }
+                }
+            } while (finger.pressed)
+        } finally { dragging(false) }
+    }
+}
+
 @Composable
 internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit, side: Int = 0) {
     val currentAnchor by rememberUpdatedState(anchor)

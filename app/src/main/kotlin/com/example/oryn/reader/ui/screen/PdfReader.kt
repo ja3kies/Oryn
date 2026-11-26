@@ -175,6 +175,8 @@ internal fun PdfReader(
     var containerRoot by remember { mutableStateOf(Offset.Zero) }
 
     val currentPageRef = remember { arrayOf<() -> Int>({ 0 }) }
+    var draggingSelection by remember { mutableStateOf(false) }
+    val pageWord = remember { HashMap<Int, (Offset) -> Int>() }
     val pageSelect = remember { HashMap<Int, (Offset) -> Unit>() }
     val pageHit = remember { HashMap<Int, (Offset) -> Boolean>() }
     val pageOrigin = remember { HashMap<Int, Offset>() }
@@ -324,12 +326,11 @@ internal fun PdfReader(
                 SideEffect {
                     pageHit[page] = tapAt
                     pageSelect[page] = startSelect
+                    pageWord[page] = { wordAt(it, 14f) }
                     pageWords[page] = words
                 }
-                // Les pages voisines sont superposées en mode « page qui se tourne » : l'appui long va à la page visible
-                val longPressAt: (Offset) -> Unit = { p ->
-                    val target = pageSelect[currentPageRef[0]()]
-                    if (target != null) target(p) else startSelect(p)
+                androidx.compose.runtime.DisposableEffect(page) {
+                    onDispose { pageHit.remove(page); pageSelect.remove(page); pageWord.remove(page); pageOrigin.remove(page); pageWords.remove(page) }
                 }
 
                 // Texte de la sélection + position de la barre d'actions (en pixels, repère du lecteur)
@@ -396,7 +397,7 @@ internal fun PdfReader(
                                                 val event = awaitPointerEvent()
                                                 val pinch = event.changes.count { it.pressed } >= 2
                                                 val pan = event.calculatePan()
-                                                if (pinch || (pageScale > 1f && pan != Offset.Zero)) {
+                                                if (pinch || (!draggingSelection && pageScale > 1f && pan != Offset.Zero)) {
                                                     val scale = (pageScale * event.calculateZoom()).coerceIn(1f, 5f)
                                                     val maxX = boxSize.width * (scale - 1f) / 2f
                                                     val maxY = boxSize.height * (scale - 1f) / 2f
@@ -412,19 +413,22 @@ internal fun PdfReader(
                                     }
                                 }
                                 .pointerInput(page, curlMode) {
-                                    if (curlMode) {
-                                        awaitEachGesture {
-                                            val down = awaitFirstDown(requireUnconsumed = false)
-                                            val press = awaitLongPressOrCancellation(down.id)
-                                            if (press != null) {
-                                                longPressAt(press.position)
-                                                do {
-                                                    val event = awaitPointerEvent()
-                                                    event.changes.forEach { it.consume() }
-                                                } while (event.changes.any { it.pressed })
+                                    fun visible() = if (curlMode) currentPageRef[0]() else page
+                                    selectPassage(
+                                        start = { point ->
+                                            val target = visible()
+                                            if ((pageWord[target]?.invoke(point) ?: -1) < 0) null else {
+                                                pageSelect[target]?.invoke(point)
+                                                selection
                                             }
-                                        }
-                                    } else {
+                                        },
+                                        rangeAt = { point -> pageWord[visible()]?.invoke(point)?.takeIf { it >= 0 }?.let { it to it + 1 } },
+                                        update = { selection = it },
+                                        dragging = { draggingSelection = it }
+                                    )
+                                }
+                                .pointerInput(page, curlMode) {
+                                    if (!curlMode) {
                                         detectTapGestures(
                                             onDoubleTap = { pos ->
                                                 if (pageScale > 1f) {
@@ -442,7 +446,6 @@ internal fun PdfReader(
                                                     )
                                                 }
                                             },
-                                            onLongPress = { pos -> longPressAt(pos) },
                                             onTap = { pos -> if (pageHit[page]?.invoke(pos) != true) onCenterTap() }
                                         )
                                     }
@@ -596,7 +599,7 @@ internal fun PdfReader(
         }
         val sel = selection
         val active = latestAnnotations.firstOrNull { it.id == activeId }
-        if (sel != null || active != null) {
+        if (!draggingSelection && (sel != null || active != null)) {
             val rangeText = if (sel != null) selQuote else active?.quote.orEmpty()
             fun create(kind: String, color: Int, note: String?) {
                 val range = sel ?: return

@@ -627,28 +627,19 @@ internal fun ReflowReader(
                             .background(backgroundColor)
                             .onGloballyPositioned { gestureCoords = it }
                             .pointerInput(page, curlMode) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-                                    val visible = if (curlMode) currentPageRef[0]() else page
-                                    val lookup = pageWord[visible] ?: return@awaitEachGesture
-                                    if (lookup(press.position) == null) return@awaitEachGesture
-                                    pageSelect[visible]?.invoke(press.position)
-                                    val initial = selection ?: return@awaitEachGesture
-                                    draggingSelection = true
-                                    try {
-                                        do {
-                                            val event = awaitPointerEvent()
-                                            val finger = event.changes.firstOrNull { it.id == press.id } ?: break
-                                            finger.consume()
-                                            if ((finger.position - press.position).getDistance() > viewConfiguration.touchSlop) {
-                                                lookup(finger.position)?.let { word ->
-                                                    selection = min(initial.first, word.first) to max(initial.second, word.second)
-                                                }
-                                            }
-                                        } while (finger.pressed)
-                                    } finally { draggingSelection = false }
-                                }
+                                fun visible() = if (curlMode) currentPageRef[0]() else page
+                                selectPassage(
+                                    start = { point ->
+                                        val target = visible()
+                                        pageWord[target]?.invoke(point)?.let {
+                                            pageSelect[target]?.invoke(point)
+                                            selection
+                                        }
+                                    },
+                                    rangeAt = { pageWord[visible()]?.invoke(it) },
+                                    update = { selection = it },
+                                    dragging = { draggingSelection = it }
+                                )
                             }
                             .then(if (curlMode) Modifier else Modifier.pointerInput(page) {
                                 detectTapGestures(onTap = { if (!latestTap(it)) latestCenterTap() })
