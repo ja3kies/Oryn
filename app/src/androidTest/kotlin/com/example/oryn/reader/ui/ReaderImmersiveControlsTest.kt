@@ -102,12 +102,14 @@ class ReaderImmersiveControlsTest {
     private fun reveal() { rule.onNodeWithTag("ReadingSurface").performTouchInput { click(center) } }
 
     @Test fun justifiedItalicShortWordPaintsBothLettersAndStopsBeforeNextWord() {
-        show(excerpt = "On ajoutait sur ce bout de papier un peu jauni que le Sénégal est respecté pour ses poètes et artistes.")
+        show(excerpt = "Guerres civiles ? » On ajoutait sur ce bout de papier un peu jauni que le Sénégal est respecté pour ses poètes et artistes.")
         val page = rule.onAllNodesWithTag("ReaderPageText").onFirst()
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
         page.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         val layout = layouts.single()
-        page.performTouchInput { longClick(layout.getBoundingBox(1).center) }
+        val word = layout.layoutInput.text.text.indexOf("On ajoutait")
+        assertTrue(word >= 0)
+        page.performTouchInput { longClick(layout.getBoundingBox(word + 1).center) }
         val pixels = page.captureToImage().toPixelMap()
         fun hasGoldBehind(index: Int): Boolean {
             val glyph = layout.getBoundingBox(index)
@@ -117,9 +119,9 @@ class ReaderImmersiveControlsTest {
                 color.red > color.blue + 0.16f && color.green > color.blue + 0.07f
             }
         }
-        assertTrue("O must be highlighted", hasGoldBehind(0))
-        assertTrue("n must be highlighted", hasGoldBehind(1))
-        assertFalse("The next word must be clear", hasGoldBehind(3))
+        assertTrue("O must be highlighted", hasGoldBehind(word))
+        assertTrue("n must be highlighted", hasGoldBehind(word + 1))
+        assertFalse("The next word must be clear", hasGoldBehind(word + 3))
         rule.onNodeWithText(tr("Copier")).performClick()
         rule.runOnIdle {
             assertEquals("On", rule.activity.getSystemService(android.content.ClipboardManager::class.java)

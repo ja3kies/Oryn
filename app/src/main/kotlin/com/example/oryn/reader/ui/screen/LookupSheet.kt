@@ -223,14 +223,14 @@ private fun DefineBody(request: LookupRequest, target: String, onTarget: (String
                     onTranslateInstead
                 )
             } else {
-                DefinitionContent(result, request.excerpt, target != "en")
+                DefinitionContent(result, request.excerpt)
             }
         }
     }
 }
 
 @Composable
-private fun DefinitionContent(result: DictionaryResult, excerpt: String, targetIsTranslated: Boolean) {
+private fun DefinitionContent(result: DictionaryResult, excerpt: String) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(java.util.Locale.forLanguageTag(result.language).getDisplayLanguage(if (Lang.isEnglish) java.util.Locale.ENGLISH else java.util.Locale.FRENCH), style = MaterialTheme.typography.labelLarge)
@@ -265,7 +265,11 @@ private fun DefinitionContent(result: DictionaryResult, excerpt: String, targetI
                 Text(excerpt, fontStyle = FontStyle.Italic)
             } else Text(tr("Aucun exemple fourni par le dictionnaire."))
         }
-        Text(result.source + " · FreeDictionaryAPI" + if (targetIsTranslated) " · MyMemory" else "", style = MaterialTheme.typography.labelSmall, color = inkSecondary())
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        val nativeFrench = result.source.startsWith("Wiktionnaire")
+        val host = if (nativeFrench) "fr.wiktionary.org" else "en.wiktionary.org"
+        Text(result.source + (if (nativeFrench) "" else " · FreeDictionaryAPI") + (if (result.translated) " · MyMemory" else ""),
+            modifier = Modifier.clickable { uriHandler.openUri("https://$host/wiki/${android.net.Uri.encode(result.word)}") }, style = MaterialTheme.typography.labelSmall, color = inkSecondary())
     }
 }
 

@@ -20,7 +20,8 @@ data class DictionaryResult(
     val phonetic: String?,
     val entries: List<DictEntry>,
     val source: String,
-    val language: String
+    val language: String,
+    val translated: Boolean = false
 )
 
 data class TranslationResult(
@@ -58,11 +59,17 @@ object LookupClient {
     suspend fun define(raw: String, language: String, target: String): DictionaryResult? = withContext(Dispatchers.IO) {
         val word = cleanWord(raw)
         if (word.isEmpty()) return@withContext null
+        if (target == "fr") {
+            val article = try {
+                httpGet("https://fr.wiktionary.org/wiki/${enc(word.lowercase(java.util.Locale.ROOT))}")
+            } catch (_: IOException) { null }
+            article?.let { frenchEntry(word, language, it) }?.let { return@withContext it }
+        }
         val body = httpGet("https://freedictionaryapi.com/api/v1/entries/${enc(language)}/${enc(word.lowercase(java.util.Locale.ROOT))}")
             ?: return@withContext null
         val result = dictionaryEntry(JSONObject(body), language) ?: return@withContext null
         if (target == "en") return@withContext result
-        result.copy(entries = result.entries.map { entry ->
+        result.copy(translated = true, entries = result.entries.map { entry ->
             entry.copy(senses = entry.senses.map { sense ->
                 val response = httpGet("https://api.mymemory.translated.net/get?q=${enc(sense.definition)}&langpair=en%7C${enc(target)}")
                     ?: throw IOException("Translation unavailable")
@@ -73,6 +80,26 @@ object LookupClient {
                 sense.copy(definition = htmlToText(translated))
             })
         })
+    }
+
+    internal fun frenchEntry(word: String, language: String, html: String): DictionaryResult? {
+        val groups = mutableListOf<DictEntry>()
+        val doc = org.jsoup.Jsoup.parse(html)
+        for (title in doc.select(".titredef")) {
+            if (!title.id().startsWith("$language-")) continue
+            val section = title.closest("section") ?: continue
+            val list = section.children().firstOrNull { it.tagName() == "ol" } ?: continue
+            val senses = list.children().asSequence().filter { it.tagName() == "li" }.take(2).mapNotNull { item ->
+                val example = item.selectFirst(".example q")?.text()
+                val copy = item.clone()
+                copy.select("ul, ol, dl, sup.reference").remove()
+                copy.text().takeIf(String::isNotBlank)?.let { DictSense(it, example) }
+            }
+            val available = senses.toList()
+            if (available.isNotEmpty()) groups += DictEntry(title.text(), available)
+            if (groups.size == 2) break
+        }
+        return if (groups.isEmpty()) null else DictionaryResult(word, null, groups, "Wiktionnaire · CC BY-SA 4.0", language)
     }
 
     internal fun dictionaryEntry(root: JSONObject, language: String): DictionaryResult? {
