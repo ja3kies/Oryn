@@ -20,13 +20,28 @@ class LookupSheetTest {
     private val original = Lang.mode
     @After fun restore() { Lang.set(rule.activity, original) }
 
+    @Test fun compactEntryShowsFirstSenseAndBookExampleBeforeOtherMeanings() {
+        val entry = com.example.oryn.reader.data.remote.DictEntry("Nom commun", listOf(
+            com.example.oryn.reader.data.remote.DictSense("Hospitalité."),
+            com.example.oryn.reader.data.remote.DictSense("Deuxième sens de test.")))
+        val result = com.example.oryn.reader.data.remote.DictionaryResult("teranga", null, listOf(entry), "Wiktionnaire", "wo")
+        rule.setContent { OrynTheme(darkTheme = false) {
+            com.example.oryn.reader.ui.screen.DefinitionContent(result, "Un passage du livre.") {}
+        } }
+        rule.onNodeWithText("Hospitalité.").assertExists()
+        rule.onNodeWithText(tr("Dans ton livre")).assertExists()
+        rule.onNodeWithText("Deuxième sens de test.").assertDoesNotExist()
+        rule.onNodeWithText(tr("Voir les autres sens")).performClick()
+        rule.onNodeWithText("Deuxième sens de test.").assertExists()
+    }
+
     @Test fun ambiguousWordRequiresSourceAndLanguageChoicesCarryAcrossTabs() {
         Lang.set(rule.activity, AppLanguage.FRENCH)
         rule.activity.getSharedPreferences("lookup", 0).edit().putString("target_TRANSLATE", "de").commit()
         rule.setContent {
             OrynTheme(darkTheme = false) { LookupSheet(LookupRequest(LookupMode.DEFINE, "On")) {} }
         }
-        rule.onNodeWithText(tr("Traduction")).performClick()
+        rule.onNodeWithText(tr("Traduire")).performClick()
         rule.onNodeWithText(tr("Choisis la langue du passage pour continuer.")).assertExists()
         rule.onNodeWithText(tr("Langue du texte"), substring = true).performClick()
         rule.onNodeWithText("English").performClick()

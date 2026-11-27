@@ -345,6 +345,8 @@ private val Dictionary: Map<String, String> by lazy {
         "Traduire le passage" to "Translate passage",
         "Copier la traduction" to "Copy translation",
         "Choisir" to "Choose",
+        "Masquer les autres sens" to "Hide other meanings",
+        "Voir les autres sens" to "Show other meanings",
         "Langue du mot" to "Word language",
         "Définition en" to "Definition in",
         "Dans ton livre" to "In your book",
