@@ -322,7 +322,7 @@ internal fun ReflowReader(
     jumpRequest: Pair<Int, Int>? = null,
     onJumpHandled: () -> Unit = {},
     onDefine: ((String, String) -> Unit)? = null,
-    onTranslate: ((String) -> Unit)? = null,
+    onTranslate: ((String, String) -> Unit)? = null,
     onVisiblePosition: ((Int) -> Unit)? = null,
     onChapterPagesAfter: ((Int?) -> Unit)? = null
 ) {
@@ -796,6 +796,11 @@ internal fun ReflowReader(
                     )
                     selection = null
                 }
+                fun excerpt(): String {
+                        val at = (sel?.first ?: active?.startOffset ?: 0).coerceIn(0, text.lastIndex)
+                        val (lo, hi) = sentenceBounds(text, at, max(0, at - 220), min(text.length, at + 220))
+                        return text.substring(lo, hi)
+                }
                 SelectionBar(
                     existing = active, passage = rangeText,
                     onColor = { c ->
@@ -828,12 +833,8 @@ internal fun ReflowReader(
                             }
                         }
                     },
-                    onDefine = onDefine?.let { define -> {
-                        val at = (sel?.first ?: active?.startOffset ?: 0).coerceIn(0, text.lastIndex)
-                        val (lo, hi) = sentenceBounds(text, at, max(0, at - 220), min(text.length, at + 220))
-                        define(rangeText.trim(), text.substring(lo, hi))
-                    } },
-                    onTranslate = onTranslate?.let { f -> { f(rangeText.trim()) } },
+                    onDefine = onDefine?.let { define -> { define(rangeText.trim(), excerpt()) } },
+                    onTranslate = onTranslate?.let { translate -> { translate(rangeText.trim(), excerpt()) } },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .onSizeChanged { barSize = it }

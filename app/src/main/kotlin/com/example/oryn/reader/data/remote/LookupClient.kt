@@ -1,6 +1,6 @@
 package com.example.oryn.reader.data.remote
 
-import androidx.core.text.HtmlCompat
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,13 +26,10 @@ data class DictionaryResult(
 
 data class TranslationResult(
     val text: String,
-    /** Code de la langue détectée ou devinée ; null si inconnue. */
-    val from: String?,
+    val from: String,
     val to: String,
-    /** Vrai si le texte d'origine était plus long que la limite du service et a été coupé. */
-    val truncated: Boolean,
-    /** Vrai si la langue d'origine est déjà la langue cible (aucune traduction utile). */
     val sameLanguage: Boolean
+
 )
 
 /**
@@ -43,7 +40,11 @@ data class TranslationResult(
  */
 object LookupClient {
     /** MyMemory refuse les requêtes de plus de 500 octets : on reste en dessous. */
-    private const val MAX_TRANSLATE_CHARS = 420
+    private const val MAX_REQUEST_BYTES = 500
+    class QuotaExceeded : IOException()
+    private data class Key(val text: String, val source: String, val target: String)
+    private val definitions by lazy { android.util.LruCache<Key, DictionaryResult>(32) }
+    private val translations by lazy { android.util.LruCache<Key, TranslationResult>(16) }
     private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
     val targetLanguages: List<Pair<String, String>> = listOf(
@@ -59,27 +60,24 @@ object LookupClient {
     suspend fun define(raw: String, language: String, target: String): DictionaryResult? = withContext(Dispatchers.IO) {
         val word = cleanWord(raw)
         if (word.isEmpty()) return@withContext null
+        val key = Key(word.lowercase(java.util.Locale.ROOT), language, target)
+        definitions.get(key)?.let { return@withContext it }
         if (target == "fr") {
             val article = try {
                 httpGet("https://fr.wiktionary.org/wiki/${enc(word.lowercase(java.util.Locale.ROOT))}")
             } catch (_: IOException) { null }
-            article?.let { frenchEntry(word, language, it) }?.let { return@withContext it }
+            article?.let { frenchEntry(word, language, it) }?.let { definitions.put(key, it); return@withContext it }
         }
         val body = httpGet("https://freedictionaryapi.com/api/v1/entries/${enc(language)}/${enc(word.lowercase(java.util.Locale.ROOT))}")
             ?: return@withContext null
         val result = dictionaryEntry(JSONObject(body), language) ?: return@withContext null
-        if (target == "en") return@withContext result
-        result.copy(translated = true, entries = result.entries.map { entry ->
+        val localized = if (target == "en") result else result.copy(translated = true, entries = result.entries.map { entry ->
             entry.copy(senses = entry.senses.map { sense ->
-                val response = httpGet("https://api.mymemory.translated.net/get?q=${enc(sense.definition)}&langpair=en%7C${enc(target)}")
-                    ?: throw IOException("Translation unavailable")
-                val json = JSONObject(response)
-                val translated = json.optJSONObject("responseData")?.optString("translatedText").orEmpty()
-                if (json.optInt("responseStatus") != 200 || json.optBoolean("quotaFinished") || translated.isBlank())
-                    throw IOException("Translation unavailable")
-                sense.copy(definition = htmlToText(translated))
+                sense.copy(definition = translate(sense.definition, "en", target).text)
             })
         })
+        definitions.put(key, localized)
+        localized
     }
 
     internal fun frenchEntry(word: String, language: String, html: String): DictionaryResult? {
@@ -127,26 +125,53 @@ object LookupClient {
         return if (groups.isEmpty()) null else DictionaryResult(root.getString("word"), phonetic, groups, "Wiktionary · CC BY-SA 4.0", language)
     }
 
-    suspend fun translate(raw: String, target: String): TranslationResult = withContext(Dispatchers.IO) {
-        val clean = raw.trim().replace(Regex("\\s+"), " ")
-        val truncated = clean.length > MAX_TRANSLATE_CHARS
-        val text = if (truncated) clean.take(MAX_TRANSLATE_CHARS).substringBeforeLast(' ', clean.take(MAX_TRANSLATE_CHARS)) else clean
-        val guessed = guessLanguage(text)
-        if (guessed == target) return@withContext TranslationResult(text, guessed, target, truncated, sameLanguage = true)
-        val pair = (guessed ?: "autodetect") + "|" + target
-        val body = httpGet("https://api.mymemory.translated.net/get?q=${enc(text)}&langpair=${enc(pair)}")
-            ?: throw IOException("Réponse vide")
-        val json = JSONObject(body)
-        val data = json.optJSONObject("responseData")
-        val translated = htmlToText(data?.optString("translatedText").orEmpty())
-        if (translated.isEmpty() || translated.uppercase().startsWith("PLEASE SELECT TWO DISTINCT")) {
-            return@withContext TranslationResult(text, guessed, target, truncated, sameLanguage = true)
+    /** Split at whitespace when possible and never bisect a Unicode code point. */
+    internal fun chunks(text: String): Sequence<String> = sequence {
+        var start = 0
+        while (start < text.length) {
+            var end = start
+            var bytes = 0
+            var boundary = start
+            while (end < text.length) {
+                val cp = text.codePointAt(end)
+                val width = when { cp < 128 -> 1; cp < 2048 -> 2; cp < 65536 -> 3; else -> 4 }
+                if (bytes + width > MAX_REQUEST_BYTES) break
+                bytes += width
+                end += Character.charCount(cp)
+                if (Character.isWhitespace(cp)) boundary = end
+            }
+            if (end < text.length && boundary > start) end = boundary
+            yield(text.substring(start, end))
+            start = end
         }
-        if (json.optBoolean("quotaFinished", false) || json.optInt("responseStatus", 200) == 429) {
-            throw IOException("Quota de traduction atteint")
+    }
+
+    internal fun translationText(json: JSONObject): String {
+        if (json.optBoolean("quotaFinished") || json.optInt("responseStatus") == 429) throw QuotaExceeded()
+        if (json.optInt("responseStatus") != 200) throw IOException("Translation service rejected request")
+        val value = json.optJSONObject("responseData")?.optString("translatedText").orEmpty()
+        if (value.isBlank()) throw IOException("Empty translation")
+        return org.jsoup.parser.Parser.unescapeEntities(value, false).trim()
+    }
+
+    suspend fun translate(raw: String, source: String, target: String): TranslationResult = withContext(Dispatchers.IO) {
+        val text = raw.trim()
+        require(text.isNotEmpty() && listOf(source, target).all { code -> targetLanguages.any { it.first == code } })
+        if (source == target) return@withContext TranslationResult(text, source, target, true)
+        val key = Key(text, source, target)
+        translations.get(key)?.let { return@withContext it }
+        val translated = buildString {
+            for (chunk in chunks(text)) {
+                ensureActive()
+                if (chunk.isBlank()) { append(chunk); continue }
+                val body = httpGet("https://api.mymemory.translated.net/get?q=${enc(chunk.trim())}&langpair=${enc("$source|$target")}")
+                    ?: throw IOException("Translation unavailable")
+                append(chunk.takeWhile(Char::isWhitespace))
+                append(translationText(JSONObject(body)))
+                append(chunk.takeLastWhile(Char::isWhitespace))
+            }
         }
-        val detected = data?.optString("detectedLanguage")?.takeIf { it.isNotBlank() && it != "null" }?.take(2)
-        TranslationResult(translated, guessed ?: detected, target, truncated, sameLanguage = false)
+        TranslationResult(translated, source, target, false).also { translations.put(key, it) }
     }
 
     /** Devine la langue d'un passage avec quelques mots très fréquents ; null si l'indice est trop faible. */
@@ -167,9 +192,6 @@ object LookupClient {
         return if (best.value >= 2 && best.value > second) best.key else null
     }
 
-    private fun htmlToText(html: String): String =
-        HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().replace(Regex("\\s+"), " ").trim()
-
     private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
     /** Corps de la réponse, ou null si le serveur répond « introuvable » (404) ; IOException sinon. */
@@ -182,6 +204,7 @@ object LookupClient {
         return try {
             val code = c.responseCode
             when {
+                code == 429 -> throw QuotaExceeded()
                 code == 404 -> null
                 code in 200..299 -> c.inputStream.use { input ->
                     val out = java.io.ByteArrayOutputStream()

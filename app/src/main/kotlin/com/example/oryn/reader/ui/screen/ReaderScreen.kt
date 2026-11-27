@@ -422,7 +422,7 @@ fun ReaderScreen(
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
                             onDefine = { word, excerpt -> showLookup(LookupRequest(LookupMode.DEFINE, word, excerpt)) },
-                            onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
+                            onTranslate = { passage, excerpt -> showLookup(LookupRequest(LookupMode.TRANSLATE, passage, excerpt)) }
                         )
                     } else {
                         // Le texte est remis en page à la taille réelle de l'écran : plus de bas de page coupé
@@ -459,7 +459,7 @@ fun ReaderScreen(
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
                             onDefine = { word, excerpt -> showLookup(LookupRequest(LookupMode.DEFINE, word, excerpt)) },
-                            onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
+                            onTranslate = { passage, excerpt -> showLookup(LookupRequest(LookupMode.TRANSLATE, passage, excerpt)) }
                         )
                     }
                     }
