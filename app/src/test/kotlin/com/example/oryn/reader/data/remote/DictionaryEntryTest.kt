@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DictionaryEntryTest {
+    @Test fun regionalWordFindsFrenchAndWolofWithoutAPresetLanguage() {
+        fun section(code: String) = """<section><h3><span class="titredef" id="$code-nom-1">Nom commun</span></h3><ol><li>Hospitalité.</li></ol></section>"""
+        val results = LookupClient.frenchEntries("teranga", section("fr") + section("wo"))
+        assertEquals(listOf("fr", "wo"), results.map { it.language })
+        assertEquals("Hospitalité.", results.last().entries.single().senses.single().definition)
+    }
+
     @Test fun longMultilingualSelectionIsPreservedAcrossProviderRequests() {
         val passage = "Été à Montréal. ".repeat(60) + "📖".repeat(300) + "\n最後"
         val parts = LookupClient.chunks(passage).toList()

@@ -26,8 +26,8 @@ class LookupSheetTest {
         rule.setContent {
             OrynTheme(darkTheme = false) { LookupSheet(LookupRequest(LookupMode.DEFINE, "On")) {} }
         }
-        rule.onNodeWithText(tr("Choisis la langue du passage pour continuer.")).assertExists()
         rule.onNodeWithText(tr("Traduction")).performClick()
+        rule.onNodeWithText(tr("Choisis la langue du passage pour continuer.")).assertExists()
         rule.onNodeWithText(tr("Langue du texte"), substring = true).performClick()
         rule.onNodeWithText("English").performClick()
         rule.onNodeWithText(tr("MyMemory recevra uniquement le texte sélectionné.")).assertExists()

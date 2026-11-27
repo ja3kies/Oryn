@@ -21,7 +21,8 @@ data class DictionaryResult(
     val entries: List<DictEntry>,
     val source: String,
     val language: String,
-    val translated: Boolean = false
+    val translated: Boolean = false,
+    val availableLanguages: List<String> = emptyList()
 )
 
 data class TranslationResult(
@@ -60,20 +61,51 @@ object LookupClient {
     suspend fun define(raw: String, language: String, target: String): DictionaryResult? = withContext(Dispatchers.IO) {
         val word = cleanWord(raw)
         if (word.isEmpty()) return@withContext null
-        val key = Key(word.lowercase(java.util.Locale.ROOT), language, target)
+        val key = Key(word, language, target)
         definitions.get(key)?.let { return@withContext it }
-        if (target == "fr") {
-            val article = try {
-                httpGet("https://fr.wiktionary.org/wiki/${enc(word.lowercase(java.util.Locale.ROOT))}")
-            } catch (_: IOException) { null }
-            article?.let { frenchEntry(word, language, it) }?.let { definitions.put(key, it); return@withContext it }
+        val normalized = java.text.Normalizer.normalize(word, java.text.Normalizer.Form.NFC)
+        val titles = listOf(normalized, normalized.lowercase(java.util.Locale.ROOT)).distinct()
+        var failure: IOException? = null
+        fun fetch(url: String): String? = try { httpGet(url) } catch (e: IOException) { failure = e; null }
+        fun french(): List<DictionaryResult> {
+            for (title in titles) {
+                val html = fetch("https://fr.wiktionary.org/wiki/${enc(title)}") ?: continue
+                val entries = frenchEntries(title, html)
+                if (entries.isNotEmpty()) return entries
+            }
+            return emptyList()
         }
-        val body = httpGet("https://freedictionaryapi.com/api/v1/entries/${enc(language)}/${enc(word.lowercase(java.util.Locale.ROOT))}")
-            ?: return@withContext null
-        val result = dictionaryEntry(JSONObject(body), language) ?: return@withContext null
-        val localized = if (target == "en") result else result.copy(translated = true, entries = result.entries.map { entry ->
-            entry.copy(senses = entry.senses.map { sense ->
-                sense.copy(definition = translate(sense.definition, "en", target).text)
+        fun english(): List<DictionaryResult> {
+            for (title in titles) {
+                val body = fetch("https://en.wiktionary.org/api/rest_v1/page/definition/${enc(title)}") ?: continue
+                val entries = englishEntries(title, JSONObject(body))
+                if (entries.isNotEmpty()) return entries
+            }
+            return emptyList()
+        }
+        var glossLanguage = if (target == "fr") "fr" else "en"
+        var candidates = if (glossLanguage == "fr") french() else english()
+        if (candidates.isEmpty() || (language.isNotEmpty() && candidates.none { it.language == language })) {
+            val other = if (glossLanguage == "fr") english() else french()
+            if (other.isNotEmpty() && (candidates.isEmpty() || other.any { it.language == language })) {
+                candidates = other
+                glossLanguage = if (glossLanguage == "fr") "en" else "fr"
+            }
+        }
+        if (language.isNotEmpty() && candidates.none { it.language == language }) {
+            val body = fetch("https://freedictionaryapi.com/api/v1/entries/${enc(language)}/${enc(titles.last())}")
+            val fallback = body?.let { dictionaryEntry(JSONObject(it), language) }
+            if (fallback != null) {
+                candidates = listOf(fallback)
+                glossLanguage = "en"
+            }
+        }
+        val entry = candidates.firstOrNull { it.language == language } ?: candidates.firstOrNull()
+        if (entry == null) { failure?.let { throw it }; return@withContext null }
+        val result = entry.copy(availableLanguages = candidates.map { it.language })
+        val localized = if (target == glossLanguage) result else result.copy(translated = true, entries = result.entries.map { group ->
+            group.copy(senses = group.senses.map { sense ->
+                sense.copy(definition = translate(sense.definition, glossLanguage, target).text)
             })
         })
         definitions.put(key, localized)
@@ -81,10 +113,15 @@ object LookupClient {
     }
 
     internal fun frenchEntry(word: String, language: String, html: String): DictionaryResult? {
-        val groups = mutableListOf<DictEntry>()
+        return frenchEntries(word, html).firstOrNull { it.language == language }
+    }
+
+    internal fun frenchEntries(word: String, html: String): List<DictionaryResult> {
+        val groups = linkedMapOf<String, MutableList<DictEntry>>()
         val doc = org.jsoup.Jsoup.parse(html)
-        for (title in doc.select(".titredef")) {
-            if (!title.id().startsWith("$language-")) continue
+        for (title in doc.select(".titredef[id]")) {
+            val language = title.id().substringBeforeLast('-').substringBeforeLast('-', "")
+            if (language.isBlank()) continue
             val section = title.closest("section") ?: continue
             val list = section.children().firstOrNull { it.tagName() == "ol" } ?: continue
             val senses = list.children().asSequence().filter { it.tagName() == "li" }.take(2).mapNotNull { item ->
@@ -94,10 +131,32 @@ object LookupClient {
                 copy.text().takeIf(String::isNotBlank)?.let { DictSense(it, example) }
             }
             val available = senses.toList()
-            if (available.isNotEmpty()) groups += DictEntry(title.text(), available)
-            if (groups.size == 2) break
+            if (available.isNotEmpty()) {
+                val entries = groups.getOrPut(language) { mutableListOf() }
+                if (entries.size < 2) entries += DictEntry(title.text(), available)
+            }
         }
-        return if (groups.isEmpty()) null else DictionaryResult(word, null, groups, "Wiktionnaire · CC BY-SA 4.0", language)
+        return groups.map { (code, entries) -> DictionaryResult(word, null, entries, "Wiktionnaire · CC BY-SA 4.0", code) }
+    }
+
+    internal fun englishEntries(word: String, json: JSONObject): List<DictionaryResult> {
+        return json.keys().asSequence().filter { it != "other" }.mapNotNull { code ->
+            val sections = json.optJSONArray(code) ?: return@mapNotNull null
+            val entries = mutableListOf<DictEntry>()
+            for (i in 0 until sections.length()) {
+                val section = sections.optJSONObject(i) ?: continue
+                val definitions = section.optJSONArray("definitions") ?: continue
+                val senses = (0 until definitions.length()).asSequence().mapNotNull { index ->
+                    val sense = definitions.optJSONObject(index) ?: return@mapNotNull null
+                    val gloss = org.jsoup.Jsoup.parseBodyFragment(sense.optString("definition")).text()
+                    val example = sense.optJSONArray("examples")?.optString(0)?.let { org.jsoup.Jsoup.parseBodyFragment(it).text() }
+                    gloss.takeIf(String::isNotBlank)?.let { DictSense(it, example) }
+                }.take(2).toList()
+                if (senses.isNotEmpty()) entries += DictEntry(section.optString("partOfSpeech"), senses)
+                if (entries.size == 2) break
+            }
+            entries.takeIf { it.isNotEmpty() }?.let { DictionaryResult(word, null, it, "Wiktionary · CC BY-SA 4.0", code) }
+        }.toList()
     }
 
     internal fun dictionaryEntry(root: JSONObject, language: String): DictionaryResult? {
@@ -200,7 +259,7 @@ object LookupClient {
         c.connectTimeout = 10_000
         c.readTimeout = 12_000
         c.setRequestProperty("User-Agent", "OrynReader/1.0 (Android; lecture personnelle)")
-        c.setRequestProperty("Accept", "application/json")
+        c.setRequestProperty("Accept", if (url.startsWith("https://fr.wiktionary.org/wiki/")) "text/html" else "application/json")
         return try {
             val code = c.responseCode
             when {

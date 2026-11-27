@@ -122,10 +122,10 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
             if (longPassage) androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
                 Text(tr(if (expanded) "Réduire le passage" else "Lire tout le passage"))
             }
-            LanguageChoice(tr("Langue du texte"), source) { source = it }
+            if (mode == LookupMode.TRANSLATE) LanguageChoice(tr("Langue du texte"), source) { source = it }
             Text(tr(if (mode == LookupMode.DEFINE) "Définition en" else "Traduire vers") + " · " + targetName, style = MaterialTheme.typography.labelLarge)
             key(mode, source, target, request.text) {
-                if (source.isEmpty()) {
+                if (source.isEmpty() && mode == LookupMode.TRANSLATE) {
                     StatusLine(tr("Choisis la langue du passage pour continuer."))
                 } else when (mode) {
                     LookupMode.DEFINE -> DefineBody(request, source, target) { mode = LookupMode.TRANSLATE }
@@ -212,11 +212,12 @@ private fun DefineBody(request: LookupRequest, language: String, target: String,
         )
         return
     }
+    var selected by remember(request) { mutableStateOf(language) }
     var attempt by remember { mutableIntStateOf(0) }
-    val state by produceState<Load<DictionaryResult>>(Load.Loading, text, language, target, attempt) {
+    val state by produceState<Load<DictionaryResult>>(Load.Loading, text, selected, target, attempt) {
         value = Load.Loading
         value = try {
-            Load.Done(LookupClient.define(text, language, target))
+            Load.Done(LookupClient.define(text, selected, target))
         } catch (e: CancellationException) {
             throw e
         } catch (e: LookupClient.QuotaExceeded) {
@@ -240,6 +241,20 @@ private fun DefineBody(request: LookupRequest, language: String, target: String,
                     onTranslateInstead
                 )
             } else {
+                if (result.availableLanguages.size > 1) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Box {
+                        androidx.compose.material3.OutlinedButton(onClick = { expanded = true }) {
+                            Text(tr("Langue du mot") + " · " + Locale.forLanguageTag(result.language).getDisplayLanguage(Lang.locale))
+                        }
+                        androidx.compose.material3.DropdownMenu(expanded, { expanded = false }) {
+                            result.availableLanguages.forEach { code ->
+                                androidx.compose.material3.DropdownMenuItem(text = { Text(Locale.forLanguageTag(code).getDisplayLanguage(Lang.locale)) },
+                                    onClick = { expanded = false; selected = code })
+                            }
+                        }
+                    }
+                }
                 DefinitionContent(result, request.excerpt)
             }
         }
@@ -285,7 +300,7 @@ private fun DefinitionContent(result: DictionaryResult, excerpt: String) {
         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
         val nativeFrench = result.source.startsWith("Wiktionnaire")
         val host = if (nativeFrench) "fr.wiktionary.org" else "en.wiktionary.org"
-        Text(result.source + (if (nativeFrench) "" else " · FreeDictionaryAPI") + (if (result.translated) " · MyMemory" else ""),
+        Text(result.source + (if (result.translated) " · MyMemory" else ""),
             modifier = Modifier.clickable { uriHandler.openUri("https://$host/wiki/${android.net.Uri.encode(result.word)}") }, style = MaterialTheme.typography.labelSmall, color = inkSecondary())
     }
 }
