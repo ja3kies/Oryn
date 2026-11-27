@@ -156,7 +156,7 @@ object LookupClient {
 
     suspend fun translate(raw: String, source: String, target: String): TranslationResult = withContext(Dispatchers.IO) {
         val text = raw.trim()
-        require(text.isNotEmpty() && listOf(source, target).all { code -> targetLanguages.any { it.first == code } })
+        require(text.isNotEmpty() && targetLanguages.any { it.first == source } && target.matches(Regex("[a-z]{2,3}")))
         if (source == target) return@withContext TranslationResult(text, source, target, true)
         val key = Key(text, source, target)
         translations.get(key)?.let { return@withContext it }

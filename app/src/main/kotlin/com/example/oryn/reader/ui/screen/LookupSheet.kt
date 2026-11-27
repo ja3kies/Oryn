@@ -3,7 +3,9 @@ package com.example.oryn.reader.ui.screen
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.key
 import androidx.compose.foundation.text.selection.SelectionContainer
-import android.widget.Toast
+import androidx.compose.ui.platform.LocalConfiguration
+import java.util.Locale
+import com.example.oryn.reader.i18n.AppLanguage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
@@ -82,14 +84,14 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < 0.5f
     var mode by rememberSaveable(request.text, request.mode) { mutableStateOf(request.mode) }
-    val preferences = LocalContext.current.getSharedPreferences("lookup", android.content.Context.MODE_PRIVATE)
     val suggested = remember(request) { LookupClient.guessLanguage(request.excerpt) ?: LookupClient.guessLanguage(request.text) }
     var source by rememberSaveable(request.text, request.excerpt) { mutableStateOf(suggested.orEmpty()) }
-    val preferenceKey = "target_" + mode.name
-    var target by remember(mode) {
-        mutableStateOf(preferences.getString(preferenceKey, null) ?: preferences.getString("language", null) ?: if (Lang.isEnglish) "en" else "fr")
+    val target = when (Lang.mode) {
+        AppLanguage.FRENCH -> "fr"
+        AppLanguage.ENGLISH -> "en"
+        AppLanguage.SYSTEM -> LocalConfiguration.current.locales[0].language
     }
-    fun chooseTarget(code: String) { target = code; preferences.edit().putString(preferenceKey, code).apply() }
+    val targetName = Locale.forLanguageTag(target).getDisplayLanguage(Lang.locale)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -121,7 +123,7 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
                 Text(tr(if (expanded) "Réduire le passage" else "Lire tout le passage"))
             }
             LanguageChoice(tr("Langue du texte"), source) { source = it }
-            LanguageChoice(tr(if (mode == LookupMode.DEFINE) "Définition en" else "Traduire vers"), target, ::chooseTarget)
+            Text(tr(if (mode == LookupMode.DEFINE) "Définition en" else "Traduire vers") + " · " + targetName, style = MaterialTheme.typography.labelLarge)
             key(mode, source, target, request.text) {
                 if (source.isEmpty()) {
                     StatusLine(tr("Choisis la langue du passage pour continuer."))
