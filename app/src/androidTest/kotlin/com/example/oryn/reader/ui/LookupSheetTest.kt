@@ -62,6 +62,7 @@ class LookupSheetTest {
                 OrynTheme(darkTheme = false) { LookupSheet(LookupRequest(LookupMode.DEFINE, "On")) {} }
             }
         }
-        rule.onNodeWithText(tr("Définition en") + " · " + java.util.Locale.GERMAN.getDisplayLanguage(Lang.locale)).assertExists()
+        rule.onNodeWithText(tr("Traduire")).performClick()
+        rule.onNodeWithText(tr("Traduire vers") + " · " + java.util.Locale.GERMAN.getDisplayLanguage(Lang.locale)).assertExists()
     }
 }
