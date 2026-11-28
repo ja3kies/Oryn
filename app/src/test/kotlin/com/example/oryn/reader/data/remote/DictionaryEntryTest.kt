@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DictionaryEntryTest {
+    @Test fun prospectusUsesTheFrenchSenseInFlatMediaWikiMarkup() {
+        val html = """<div class="mw-heading"><h3><span class="titredef" id="fr-nom-1">Nom commun</span></h3></div>
+            <p>prospectus</p><ol><li>Imprimé distribué au public.</li></ol>"""
+        val result = LookupClient.frenchEntry("prospectus", "fr", html)!!
+        assertEquals("Imprimé distribué au public.", result.entries.single().senses.single().definition)
+    }
+
     @Test fun regionalWordFindsFrenchAndWolofWithoutAPresetLanguage() {
         fun section(code: String) = """<section><h3><span class="titredef" id="$code-nom-1">Nom commun</span></h3><ol><li>Hospitalité.</li></ol></section>"""
         val results = LookupClient.frenchEntries("teranga", section("fr") + section("wo"))
@@ -17,6 +24,12 @@ class DictionaryEntryTest {
         val parts = LookupClient.chunks(passage).toList()
         assertEquals(passage, parts.joinToString(""))
         assertTrue(parts.all { it.toByteArray().size <= 500 && !it.first().isLowSurrogate() })
+    }
+
+    @Test fun rejectsUnreadableTranslatedGloss() {
+        assertThrows(LookupClient.UnreadableResult::class.java) {
+            LookupClient.translationText(JSONObject("""{"responseStatus":200,"responseData":{"translatedText":"?? ?? ? ??."}}"""))
+        }
     }
 
     @Test fun rejectsQuotaAndProviderErrorsInsteadOfDisplayingThemAsTranslations() {

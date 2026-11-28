@@ -133,6 +133,7 @@ internal fun PdfReader(
     onDeleteAnnotation: (AnnotationEntity) -> Unit,
     jumpRequest: Pair<Int, Int>?,
     onJumpHandled: () -> Unit,
+    lookupOpen: Boolean = false,
     onDefine: ((String, String) -> Unit)? = null,
     onTranslate: ((String, String) -> Unit)? = null,
     onVisiblePosition: ((Int) -> Unit)? = null
@@ -599,7 +600,7 @@ internal fun PdfReader(
         }
         val sel = selection
         val active = latestAnnotations.firstOrNull { it.id == activeId }
-        if (!draggingSelection && (sel != null || active != null)) {
+        if (!lookupOpen && !draggingSelection && (sel != null || active != null)) {
             val rangeText = if (sel != null) selQuote else active?.quote.orEmpty()
             fun create(kind: String, color: Int, note: String?) {
                 val range = sel ?: return

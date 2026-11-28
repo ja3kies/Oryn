@@ -12,6 +12,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +58,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.example.oryn.reader.ui.components.OrynIcons
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Spacer
@@ -103,41 +107,34 @@ internal fun SelectionBar(
         contentColor = ink,
         shadowElevation = 6.dp
     ) {
-        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // Separate color choices from actions: the old 4x44dp + note row overflowed
-            // the 272dp popover on narrow screens and violated 48dp touch targets.
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HighlightColors.forEachIndexed { i, c ->
-                    val selected = existing != null && existing.kind == "HIGHLIGHT" && existing.color == i
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .clickable(onClickLabel = tr("Surligner"), onClick = { onColor(i) }),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            Modifier.size(28.dp).clip(CircleShape).background(c)
-                                .then(if (selected) Modifier.border(2.dp, colors.onSurface, CircleShape) else Modifier)
-                        )
+        var palette by remember(passage) { mutableStateOf(false) }
+        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(8.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.weight(1f))
+                BarAction(OrynIcons.Highlighter, tr("Surligner"), palette, ink, { palette = !palette }, Modifier.weight(1f))
+                BarAction(OrynIcons.Pages, tr("Copier"), false, ink, onCopy, Modifier.weight(1f))
+            }
+            if (palette) {
+                val names = listOf("Vert citron", "Jaune", "Corail", "Pêche")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    HighlightColors.forEachIndexed { index, color ->
+                        val selected = existing?.kind == "HIGHLIGHT" && existing.color == index
+                        Box(Modifier.size(48.dp).clip(CircleShape)
+                            .selectable(selected, role = Role.RadioButton, onClick = { onColor(index) })
+                            .semantics { contentDescription = tr(names[index]) }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(28.dp).background(color, CircleShape).border(1.dp, colors.outline, CircleShape),
+                                contentAlignment = Alignment.Center) {
+                                if (selected) Icon(OrynIcons.Check, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
-            Row(Modifier.fillMaxWidth()) {
-                BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.weight(1f))
-                BarAction(OrynIcons.Pages, tr("Copier"), false, ink, onCopy, Modifier.weight(1f))
-                BarAction(OrynIcons.Underline, tr("Souligner"), existing != null && existing.kind == "UNDERLINE", ink, onUnderline, Modifier.weight(1f))
-            }
-            if (onExtend != null || onDefine != null || onTranslate != null) {
-                Row(Modifier.fillMaxWidth()) {
-                    onExtend?.let { BarAction(OrynIcons.Select, tr("Étendre"), false, ink, it, Modifier.weight(1f)) }
-                    onDefine?.let { BarAction(OrynIcons.BookOpen, tr("Définir"), false, ink, it, Modifier.weight(1f)) }
-                    onTranslate?.let { BarAction(OrynIcons.Globe, tr("Traduire"), false, ink, it, Modifier.weight(1f)) }
-                }
-            }
+            androidx.compose.material3.HorizontalDivider()
+            onDefine?.let { MenuAction(OrynIcons.BookOpen, tr("Définir"), it) }
+            onTranslate?.let { MenuAction(OrynIcons.Globe, tr("Traduire"), it) }
+            MenuAction(OrynIcons.Underline, tr("Souligner"), onUnderline)
+            onExtend?.let { MenuAction(OrynIcons.Select, tr("Étendre"), it) }
             if (passage.isNotBlank()) {
                 androidx.compose.material3.TextButton(onClick = {
                     val intent = android.content.Intent(android.content.Intent.ACTION_SEND)
@@ -165,6 +162,16 @@ internal fun SelectionBar(
     }
 }
 
+@Composable
+private fun MenuAction(icon: ImageVector, label: String, action: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = action)
+        .heightIn(min = 48.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(icon, null, modifier = Modifier.size(20.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 /** Action à icône et légende (zone tactile ≥ 48 dp) ; active = accent. */
 @Composable
 private fun BarAction(icon: ImageVector, label: String, active: Boolean, ink: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -180,7 +187,7 @@ private fun BarAction(icon: ImageVector, label: String, active: Boolean, ink: Co
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Icon(icon, null, tint = if (active) colors.onPrimaryContainer else ink, modifier = Modifier.size(22.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) colors.onPrimaryContainer else ink.copy(alpha = 0.82f), maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) colors.onPrimaryContainer else ink)
     }
 }
 

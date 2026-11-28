@@ -10,6 +10,8 @@ import com.example.oryn.reader.i18n.AppLanguage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +73,7 @@ data class LookupRequest(val mode: LookupMode, val text: String, val excerpt: St
 private sealed interface Load<out T> {
     object Loading : Load<Nothing>
     object Quota : Load<Nothing>
+    object Unreadable : Load<Nothing>
     object Offline : Load<Nothing>
     class Done<T>(val value: T?) : Load<T>
 }
@@ -99,6 +102,7 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        contentColor = colors.onSurface,
         containerColor = if (dark) colors.surfaceContainerHigh else colors.surfaceContainerLowest
     ) {
         Column(
@@ -113,9 +117,12 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
         ) {
             var expanded by rememberSaveable(request.text) { mutableStateOf(false) }
             val longPassage = request.text.length > 160 || request.text.count { it == '\n' } >= 3
-            Text(request.text.trim(), style = if (request.text.length < 45) MaterialTheme.typography.headlineMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif) else MaterialTheme.typography.bodyLarge,
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(request.text.trim(), modifier = Modifier.weight(1f).semantics { heading() }, style = if (request.text.length < 45) MaterialTheme.typography.headlineMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif) else MaterialTheme.typography.bodyLarge,
                 maxLines = if (longPassage && !expanded) 3 else Int.MAX_VALUE,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            androidx.compose.material3.IconButton(onClick = onDismiss) { Icon(OrynIcons.Close, tr("Fermer")) }
+            }
             if (longPassage) androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
                 Text(tr(if (expanded) "Réduire le passage" else "Lire tout le passage"))
             }
@@ -197,7 +204,8 @@ private fun DefineBody(request: LookupRequest, language: String, target: String)
             Load.Done(LookupClient.define(text, selected, target))
         } catch (e: CancellationException) {
             throw e
-        } catch (e: LookupClient.QuotaExceeded) {
+        } catch (e: LookupClient.UnreadableResult) { Load.Unreadable }
+        catch (e: LookupClient.QuotaExceeded) {
             Load.Quota
         } catch (e: IOException) {
             Load.Offline
@@ -207,6 +215,7 @@ private fun DefineBody(request: LookupRequest, language: String, target: String)
     }
     when (val s = state) {
         is Load.Loading -> LoadingRow()
+        Load.Unreadable -> StatusLine(tr("Le service a renvoyé un texte illisible."), tr("Réessayer")) { attempt++ }
         Load.Quota -> StatusLine(tr("Limite du service atteinte. Réessaie plus tard."))
         is Load.Offline -> StatusLine(tr("Service inaccessible. Vérifie ta connexion ou réessaie."), tr("Réessayer")) { attempt++ }
         is Load.Done -> {
@@ -228,7 +237,10 @@ internal fun DefinitionContent(result: DictionaryResult, excerpt: String, choose
     var all by rememberSaveable(result.word, result.language) { mutableStateOf(false) }
     var languages by remember { mutableStateOf(false) }
     val language = Locale.forLanguageTag(result.language).getDisplayLanguage(Lang.locale)
-    val metadata = listOfNotNull(language, senses.firstOrNull()?.first?.takeIf(String::isNotBlank), result.phonetic)
+    fun partLabel(value: String) = if (Lang.isEnglish) value else when (value.lowercase(Locale.ROOT)) {
+        "noun" -> "Nom commun"; "verb" -> "Verbe"; "adjective" -> "Adjectif"; "adverb" -> "Adverbe"; "pronoun" -> "Pronom"; else -> value
+    }
+    val metadata = listOfNotNull(language, senses.firstOrNull()?.first?.takeIf(String::isNotBlank)?.let(::partLabel), result.phonetic)
         .joinToString(" · ")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (result.availableLanguages.size > 1) {
@@ -247,13 +259,13 @@ internal fun DefinitionContent(result: DictionaryResult, excerpt: String, choose
             }
         } else Text(metadata, style = MaterialTheme.typography.labelLarge, color = inkSecondary())
         (if (all) senses else senses.take(1)).forEachIndexed { index, (part, sense) ->
-            if (index > 0) Text("${index + 1} · $part", style = MaterialTheme.typography.labelMedium, color = inkSecondary())
+            if (index > 0) Text("${index + 1} · ${partLabel(part)}", style = MaterialTheme.typography.labelMedium, color = inkSecondary())
             SelectionContainer { Text(sense.definition, style = MaterialTheme.typography.bodyLarge) }
             sense.example?.takeIf(String::isNotBlank)?.let {
                 Text("« $it »", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = inkSecondary())
             }
         }
-        if (senses.firstOrNull()?.second?.example.isNullOrBlank() && excerpt.isNotBlank()) {
+        if (excerpt.isNotBlank() && senses.none { it.second.example == excerpt }) {
             Text(tr("Dans ton livre"), style = MaterialTheme.typography.labelMedium, color = inkSecondary())
             Text(excerpt, style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic)
         }
@@ -284,11 +296,13 @@ private fun TranslateBody(text: String, source: String, target: String) {
         value = try {
             Load.Done(LookupClient.translate(text, source, target))
         } catch (e: CancellationException) { throw e }
+        catch (e: LookupClient.UnreadableResult) { Load.Unreadable }
         catch (e: LookupClient.QuotaExceeded) { Load.Quota }
         catch (e: Exception) { Load.Offline }
     }
     when (val result = state) {
         Load.Loading -> LoadingRow()
+        Load.Unreadable -> StatusLine(tr("Le service a renvoyé un texte illisible."), tr("Réessayer")) { attempt++ }
         Load.Quota -> StatusLine(tr("Limite du service atteinte. Réessaie plus tard."))
         Load.Offline -> StatusLine(tr("Service inaccessible. Vérifie ta connexion ou réessaie."), tr("Réessayer")) { attempt++ }
         is Load.Done -> result.value?.let { translation ->

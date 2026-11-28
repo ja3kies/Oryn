@@ -42,6 +42,7 @@ data class TranslationResult(
 object LookupClient {
     /** MyMemory refuse les requêtes de plus de 500 octets : on reste en dessous. */
     private const val MAX_REQUEST_BYTES = 500
+    class UnreadableResult : IOException()
     class QuotaExceeded : IOException()
     private data class Key(val text: String, val source: String, val target: String)
     private val definitions by lazy { android.util.LruCache<Key, DictionaryResult>(32) }
@@ -122,8 +123,11 @@ object LookupClient {
         for (title in doc.select(".titredef[id]")) {
             val language = title.id().substringBeforeLast('-').substringBeforeLast('-', "")
             if (language.isBlank()) continue
-            val section = title.closest("section") ?: continue
-            val list = section.children().firstOrNull { it.tagName() == "ol" } ?: continue
+            val heading = title.closest("h2, h3, h4, h5, h6")
+            val block = heading?.parent()?.takeIf { it.hasClass("mw-heading") } ?: heading
+            val list = block?.nextElementSiblings()?.asSequence()
+                ?.takeWhile { !it.hasClass("mw-heading") && it.tagName() !in setOf("section", "h2", "h3", "h4", "h5", "h6") }
+                ?.firstOrNull { it.tagName() == "ol" } ?: continue
             val senses = list.children().asSequence().filter { it.tagName() == "li" }.take(2).mapNotNull { item ->
                 val example = item.selectFirst(".example q")?.text()
                 val copy = item.clone()
@@ -210,7 +214,9 @@ object LookupClient {
         if (json.optInt("responseStatus") != 200) throw IOException("Translation service rejected request")
         val value = json.optJSONObject("responseData")?.optString("translatedText").orEmpty()
         if (value.isBlank()) throw IOException("Empty translation")
-        return org.jsoup.parser.Parser.unescapeEntities(value, false).trim()
+        val decoded = org.jsoup.parser.Parser.unescapeEntities(value, false).trim()
+        if (decoded.any { it == '\uFFFD' } || (decoded.contains('?') && decoded.none(Char::isLetterOrDigit))) throw UnreadableResult()
+        return decoded
     }
 
     suspend fun translate(raw: String, source: String, target: String): TranslationResult = withContext(Dispatchers.IO) {

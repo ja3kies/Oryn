@@ -354,7 +354,7 @@ internal fun LibraryContent(
                                 Icon(
                                     imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                                     contentDescription = null,
-                                    tint = if (isSelected) colors.primary else colors.onSurface.copy(alpha = 0.5f),
+                                    tint = if (isSelected) colors.primary else colors.onSurfaceVariant,
                                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(28.dp)
                                 )
                             }

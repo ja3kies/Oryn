@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import android.widget.Toast
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.draw.drawWithContent
@@ -321,6 +322,7 @@ internal fun ReflowReader(
     onDeleteAnnotation: (AnnotationEntity) -> Unit = {},
     jumpRequest: Pair<Int, Int>? = null,
     onJumpHandled: () -> Unit = {},
+    lookupOpen: Boolean = false,
     onDefine: ((String, String) -> Unit)? = null,
     onTranslate: ((String, String) -> Unit)? = null,
     onVisiblePosition: ((Int) -> Unit)? = null,
@@ -463,7 +465,7 @@ internal fun ReflowReader(
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
-                color = foregroundColor.copy(alpha = 0.35f),
+                color = foregroundColor,
                 trackColor = Color.Transparent
             )
         } else {
@@ -584,7 +586,7 @@ internal fun ReflowReader(
                     val latestCenterTap by rememberUpdatedState(onCenterTap)
 
                     // Texte de la page (les surlignages sont dessinés par-dessus : affichage immédiat)
-                    val pageText = remember(styled, from, end, selection, latestAnnotations) {
+                    val pageText = remember(styled, from, end, selection, latestAnnotations, backgroundColor) {
                         buildAnnotatedString {
                             append(styled.subSequence(from, end))
                             fun shade(start: Int, stop: Int, color: Color) {
@@ -594,7 +596,7 @@ internal fun ReflowReader(
                             }
                             latestAnnotations.filter { it.kind == "HIGHLIGHT" }.forEach { annotation ->
                                 val (lo, hi) = trimAnnotationRange(text, annotation.startOffset, annotation.endOffset)
-                                shade(lo, hi, HighlightColors[annotation.color.coerceIn(0, 3)].copy(alpha = 0.45f))
+                                shade(lo, hi, HighlightColors[annotation.color.coerceIn(0, 3)].copy(alpha = if (backgroundColor.luminance() < 0.2f) 0.26f else 0.45f))
                             }
                             selection?.let { shade(it.first, it.second, Color(0xFFD99A32).copy(alpha = 0.35f)) }
                         }
@@ -688,7 +690,7 @@ internal fun ReflowReader(
                                 Text(
                                     text = "${page + 1} / ${starts.size}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = foregroundColor.copy(alpha = 0.5f)
+                                    color = foregroundColor
                                 )
                             }
                         }
@@ -765,7 +767,7 @@ internal fun ReflowReader(
             if (computing) {
                 LinearProgressIndicator(
                     modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
-                    color = foregroundColor.copy(alpha = 0.35f),
+                    color = foregroundColor,
                     trackColor = Color.Transparent
                 )
             }
@@ -779,7 +781,7 @@ internal fun ReflowReader(
         run {
             val sel = selection
             val active = latestAnnotations.firstOrNull { it.id == activeId }
-            if (!draggingSelection && (sel != null || active != null)) {
+            if (!lookupOpen && !draggingSelection && (sel != null || active != null)) {
                 val rangeText = sel?.let { text.substring(it.first, it.second) } ?: active?.quote.orEmpty()
                 fun create(kind: String, color: Int, note: String?) {
                     val range = sel ?: return
