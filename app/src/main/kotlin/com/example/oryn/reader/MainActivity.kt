@@ -55,6 +55,8 @@ private val importMimeTypes = arrayOf(
     "application/zip",
     "application/pdf",
     "text/plain",
+    "text/html",
+    "application/xhtml+xml",
     "application/octet-stream"
 )
 

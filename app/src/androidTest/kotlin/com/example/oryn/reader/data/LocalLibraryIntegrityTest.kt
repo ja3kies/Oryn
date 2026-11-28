@@ -32,11 +32,12 @@ class LocalLibraryIntegrityTest {
         }
         assertEquals(1, results.count { it })
         val book = dao.getAllBooks().first().single()
-        dao.updateProgress(book.id, 0.75f, 123L)
+        dao.updateProgress(book.id, 0.75f, 123L, 314)
         assertFalse(dao.insertIfAbsent(original.copy(title = "Replacement")))
         val restored = dao.getAllBooks().first().single()
         assertEquals("Book", restored.title)
         assertEquals(0.75f, restored.progress, 0f)
+        assertEquals(314, restored.readingOffset)
     }
 
     @Test fun favoriteToggleAndPathRepairPreserveOtherColumns() = runBlocking {
@@ -48,7 +49,8 @@ class LocalLibraryIntegrityTest {
         dao.toggleFavorite(initial.id)
         assertFalse(dao.getAllBooks().first().single().isFavorite)
         dao.toggleFavorite(initial.id)
-        dao.updateFilePath(initial.id, "content://repaired")
+        assertEquals(1, dao.updateFilePath(initial.id, initial.filePath, "content://repaired"))
+        assertEquals(0, dao.updateFilePath(initial.id, initial.filePath, "content://stale"))
         val repaired = dao.getAllBooks().first().single()
         assertTrue(repaired.isFavorite)
         assertEquals(initial.progress, repaired.progress, 0f)
@@ -62,6 +64,8 @@ class LocalLibraryIntegrityTest {
         for (path in listOf("content://a", "content://b")) {
             dao.insertIfAbsent(BookEntity(title = "Book", author = "Author", filePath = path, format = "EPUB", coverPath = "/cover.jpg"))
         }
+        val first = dao.getAllBooks().first().single { it.filePath == "content://a" }
+        assertEquals(0, dao.updateFilePath(first.id, first.filePath, "content://b"))
         assertEquals(2, dao.countByCoverPath("/cover.jpg"))
         dao.updateCover(dao.getAllBooks().first().first().id, "")
         assertEquals(1, dao.countByCoverPath("/cover.jpg"))

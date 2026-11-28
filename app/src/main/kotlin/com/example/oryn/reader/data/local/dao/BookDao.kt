@@ -19,8 +19,8 @@ interface BookDao {
     suspend fun deleteSamples()
 
     // Mises à jour ciblées : une copie périmée du livre n'écrase plus la couverture ou les favoris.
-    @Query("UPDATE books SET progress = :progress, lastReadTimestamp = :timestamp WHERE id = :id")
-    suspend fun updateProgress(id: Long, progress: Float, timestamp: Long)
+    @Query("UPDATE books SET progress = :progress, readingOffset = :readingOffset, lastReadTimestamp = :timestamp WHERE id = :id")
+    suspend fun updateProgress(id: Long, progress: Float, timestamp: Long, readingOffset: Int? = null)
 
     @Query("UPDATE books SET isFavorite = :favorite WHERE id = :id")
     suspend fun updateFavorite(id: Long, favorite: Boolean)
@@ -28,8 +28,9 @@ interface BookDao {
     @Query("UPDATE books SET isFavorite = NOT isFavorite WHERE id = :id")
     suspend fun toggleFavorite(id: Long)
 
-    @Query("UPDATE books SET filePath = :path WHERE id = :id")
-    suspend fun updateFilePath(id: Long, path: String)
+    @Query("""UPDATE books SET filePath = :path WHERE id = :id AND filePath = :previous
+        AND NOT EXISTS (SELECT 1 FROM books WHERE filePath = :path AND id != :id)""")
+    suspend fun updateFilePath(id: Long, previous: String, path: String): Int
 
     @Query("SELECT COUNT(*) FROM books WHERE coverPath = :path")
     suspend fun countByCoverPath(path: String): Int

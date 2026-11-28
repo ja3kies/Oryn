@@ -203,96 +203,97 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Copie les documents partagés dans le stockage privé avant import. */
     fun importSharedBooks(uris: List<Uri>) {
         if (uris.isEmpty()) return
+        launchLibraryMutation { copyAndImportBooks(uris, favorite = false) }
+    }
+
+    private suspend fun copyAndImportBooks(uris: List<Uri>, favorite: Boolean) {
         val app = getApplication<Application>()
+        val copied = mutableListOf<Uri>()
+        val created = mutableListOf<File>()
+        var failed = 0
+        val directory = File(app.filesDir, "books/shared").apply { mkdirs() }
 
-        launchLibraryMutation {
-            val copied = mutableListOf<Uri>()
-            val created = mutableListOf<File>()
-            var failed = 0
-            val directory = File(app.filesDir, "books/shared").apply { mkdirs() }
+        try {
+            for (uri in uris.distinct()) {
+                currentCoroutineContext().ensureActive()
+                var temp: File? = null
+                try {
+                    val name = runCatching {
+                        app.contentResolver.query(
+                            uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) cursor.getString(0) else null
+                        }
+                    }.getOrNull()?.takeIf { it.isNotBlank() }
+                        ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+                        ?: "livre"
 
-            try {
-                for (uri in uris.distinct()) {
-                    currentCoroutineContext().ensureActive()
-                    var temp: File? = null
-                    try {
-                        val name = runCatching {
-                            app.contentResolver.query(
-                                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-                            )?.use { cursor ->
-                                if (cursor.moveToFirst()) cursor.getString(0) else null
+                    val safeName = name.substringAfterLast('/').substringAfterLast('\\')
+                        .replace(Regex("[^\\p{L}\\p{N}._ -]"), "_")
+                        .trim().take(100).ifBlank { "livre" }
+
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    temp = File.createTempFile("incoming-", ".tmp", directory)
+
+                    app.contentResolver.openInputStream(uri)?.use { input ->
+                        temp.outputStream().use { output ->
+                            val buffer = ByteArray(8192)
+                            var total = 0L
+                            while (true) {
+                                currentCoroutineContext().ensureActive()
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                total += count
+                                if (total > MAX_SHARED_IMPORT_BYTES) {
+                                    throw java.io.IOException(tr("Fichier trop volumineux"))
+                                }
+                                digest.update(buffer, 0, count)
+                                output.write(buffer, 0, count)
                             }
-                        }.getOrNull()?.takeIf { it.isNotBlank() }
-                            ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                            ?: "livre"
+                        }
+                    } ?: throw java.io.IOException(tr("URI inaccessible"))
 
-                        val safeName = name.substringAfterLast('/').substringAfterLast('\\')
-                            .replace(Regex("[^\\p{L}\\p{N}._ -]"), "_")
-                            .trim().take(100).ifBlank { "livre" }
+                    val hash = digest.digest().joinToString("") { "%02x".format(it) }
+                    val destination = File(directory, "$hash-$safeName")
 
-                        val digest = MessageDigest.getInstance("SHA-256")
-                        temp = File.createTempFile("incoming-", ".tmp", directory)
-
-                        app.contentResolver.openInputStream(uri)?.use { input ->
-                            temp.outputStream().use { output ->
+                    if (destination.exists()) {
+                        temp.delete()
+                    } else if (temp.renameTo(destination)) {
+                        created += destination
+                    } else if (destination.createNewFile()) {
+                        // Only write a file atomically reserved by this import; never replace an existing file.
+                        created += destination
+                        temp.inputStream().use { input ->
+                            destination.outputStream().use { output ->
                                 val buffer = ByteArray(8192)
-                                var total = 0L
                                 while (true) {
                                     currentCoroutineContext().ensureActive()
                                     val count = input.read(buffer)
                                     if (count < 0) break
-                                    total += count
-                                    if (total > MAX_SHARED_IMPORT_BYTES) {
-                                        throw java.io.IOException(tr("Fichier trop volumineux"))
-                                    }
-                                    digest.update(buffer, 0, count)
                                     output.write(buffer, 0, count)
                                 }
                             }
-                        } ?: throw java.io.IOException(tr("URI inaccessible"))
-
-                        val hash = digest.digest().joinToString("") { "%02x".format(it) }
-                        val destination = File(directory, "$hash-$safeName")
-
-                        if (destination.exists()) {
-                            temp.delete()
-                        } else if (temp.renameTo(destination)) {
-                            created += destination
-                        } else if (destination.createNewFile()) {
-                            // Only write a file atomically reserved by this import; never replace an existing file.
-                            created += destination
-                            temp.inputStream().use { input ->
-                                destination.outputStream().use { output ->
-                                    val buffer = ByteArray(8192)
-                                    while (true) {
-                                        currentCoroutineContext().ensureActive()
-                                        val count = input.read(buffer)
-                                        if (count < 0) break
-                                        output.write(buffer, 0, count)
-                                    }
-                                }
-                            }
-                            temp.delete()
                         }
-
-                        copied += Uri.fromFile(destination)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        failed++
-                    } finally {
-                        temp?.takeIf { it.exists() }?.delete()
+                        temp.delete()
                     }
+
+                    copied += Uri.fromFile(destination)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    failed++
+                } finally {
+                    temp?.takeIf { it.exists() }?.delete()
                 }
+            }
 
-                if (copied.isNotEmpty()) importBooksInternal(copied, favorite = false)
-                if (failed > 0) toast(trf("Partage : %s fichier(s) inaccessible(s)", failed))
-            } finally {
-                // This block already owns the mutation mutex: do not acquire it again during cleanup.
-                withContext(NonCancellable) {
-                    discardUnreferencedOwnedFiles(created, File(app.filesDir, "books")) {
-                        repository.exists(Uri.fromFile(it).toString())
-                    }
+            if (copied.isNotEmpty()) importBooksInternal(copied, favorite)
+            if (failed > 0) toast(trf("Partage : %s fichier(s) inaccessible(s)", failed))
+        } finally {
+            // This block already owns the mutation mutex: do not acquire it again during cleanup.
+            withContext(NonCancellable) {
+                discardUnreferencedOwnedFiles(created, File(app.filesDir, "books")) {
+                    repository.exists(Uri.fromFile(it).toString())
                 }
             }
         }
@@ -307,6 +308,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun importBooksInternal(uris: List<Uri>, favorite: Boolean) {
         val app = getApplication<Application>()
         var added = 0
+        val temporaryGrants = mutableListOf<Uri>()
         var duplicates = 0
         var unsupported = 0
         var failed = 0
@@ -320,23 +322,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     continue
                 }
 
+                if (uri.scheme == "content") {
+                    try {
+                        app.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    } catch (_: SecurityException) {
+                        // Temporary grants expire when the task closes. Publish a private copy first.
+                        temporaryGrants += uri
+                        continue
+                    }
+                }
                 val meta = metadataReader.read(uri)
                 if (meta == null) {
                     unsupported++
                     continue
-                }
-
-                // Les URI file:// partagées sont déjà copiées dans le stockage privé.
-                if (uri.scheme == "content") {
-                    runCatching {
-                        app.contentResolver.takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                        )
-                    }.recoverCatching {
-                        app.contentResolver.takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    }
                 }
                 val hash = computeContentHash(uri)
                 val existingCover = hash?.let(coverStore::findByHash)
@@ -363,6 +361,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        if (temporaryGrants.isNotEmpty()) copyAndImportBooks(temporaryGrants, favorite)
+        if (added + duplicates + unsupported + failed == 0) return
         val summary = buildList {
             if (added > 0) add(trf("%s importé(s)", added))
             if (duplicates > 0) add(trf("%s déjà présent(s)", duplicates))
@@ -560,9 +560,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateBookProgress(book: BookEntity, progress: Float) {
+    fun updateBookProgress(book: BookEntity, progress: Float, readingOffset: Int?) {
         viewModelScope.launch {
-            repository.updateProgress(book, progress.coerceIn(0f, 1f), System.currentTimeMillis())
+            repository.updateProgress(book, progress.coerceIn(0f, 1f), System.currentTimeMillis(), readingOffset)
         }
     }
 

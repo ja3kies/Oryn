@@ -35,7 +35,8 @@ fun LibraryEmptyState(
     title: String,
     subtitle: String,
     onImportClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showFennec: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -54,7 +55,10 @@ fun LibraryEmptyState(
                 Modifier.size(72.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(OrynIcons.BookOpen, null, tint = colors.primary, modifier = Modifier.size(36.dp))
+                if (showFennec) androidx.compose.foundation.Image(
+                    androidx.compose.ui.res.painterResource(com.example.oryn.reader.R.drawable.oryn_pixel_fennec),
+                    contentDescription = null, modifier = Modifier.size(54.dp)
+                ) else Icon(OrynIcons.BookOpen, null, tint = colors.primary, modifier = Modifier.size(36.dp))
             }
             Spacer(Modifier.height(4.dp))
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = colors.onSurface)

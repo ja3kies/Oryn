@@ -6,11 +6,14 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +58,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.example.oryn.reader.ui.components.OrynIcons
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Spacer
@@ -81,6 +86,7 @@ internal val HighlightColors = listOf(
 @Composable
 internal fun SelectionBar(
     existing: AnnotationEntity?,
+    passage: String,
     onColor: (Int) -> Unit,
     onUnderline: () -> Unit,
     onNote: () -> Unit,
@@ -93,6 +99,7 @@ internal fun SelectionBar(
 ) {
     val colors = MaterialTheme.colorScheme
     val ink = colors.onSurface
+    val context = LocalContext.current
     Surface(
         modifier = modifier.width(272.dp),
         shape = RoundedCornerShape(26.dp),
@@ -100,40 +107,40 @@ internal fun SelectionBar(
         contentColor = ink,
         shadowElevation = 6.dp
     ) {
-        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // Separate color choices from actions: the old 4x44dp + note row overflowed
-            // the 272dp popover on narrow screens and violated 48dp touch targets.
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HighlightColors.forEachIndexed { i, c ->
-                    val selected = existing != null && existing.kind == "HIGHLIGHT" && existing.color == i
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .clickable(onClickLabel = tr("Surligner"), onClick = { onColor(i) }),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            Modifier.size(28.dp).clip(CircleShape).background(c)
-                                .then(if (selected) Modifier.border(2.dp, colors.onSurface, CircleShape) else Modifier)
-                        )
+        var palette by remember(passage) { mutableStateOf(false) }
+        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(8.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.weight(1f))
+                BarAction(OrynIcons.Highlighter, tr("Surligner"), palette, ink, { palette = !palette }, Modifier.weight(1f))
+                BarAction(OrynIcons.Pages, tr("Copier"), false, ink, onCopy, Modifier.weight(1f))
+            }
+            if (palette) {
+                val names = listOf("Vert citron", "Jaune", "Corail", "Pêche")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    HighlightColors.forEachIndexed { index, color ->
+                        val selected = existing?.kind == "HIGHLIGHT" && existing.color == index
+                        Box(Modifier.size(48.dp).clip(CircleShape)
+                            .selectable(selected, role = Role.RadioButton, onClick = { onColor(index) })
+                            .semantics { contentDescription = tr(names[index]) }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(28.dp).background(color, CircleShape).border(1.dp, colors.outline, CircleShape),
+                                contentAlignment = Alignment.Center) {
+                                if (selected) Icon(OrynIcons.Check, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
-            Row(Modifier.fillMaxWidth()) {
-                BarAction(OrynIcons.Edit, tr("Note"), false, ink, onNote, Modifier.weight(1f))
-                BarAction(OrynIcons.Pages, tr("Copier"), false, ink, onCopy, Modifier.weight(1f))
-                BarAction(OrynIcons.Underline, tr("Souligner"), existing != null && existing.kind == "UNDERLINE", ink, onUnderline, Modifier.weight(1f))
-            }
-            if (onExtend != null || onDefine != null || onTranslate != null) {
-                Row(Modifier.fillMaxWidth()) {
-                    onExtend?.let { BarAction(OrynIcons.Select, tr("Étendre"), false, ink, it, Modifier.weight(1f)) }
-                    onDefine?.let { BarAction(OrynIcons.BookOpen, tr("Définir"), false, ink, it, Modifier.weight(1f)) }
-                    onTranslate?.let { BarAction(OrynIcons.Globe, tr("Traduire"), false, ink, it, Modifier.weight(1f)) }
-                }
+            androidx.compose.material3.HorizontalDivider()
+            onDefine?.let { MenuAction(OrynIcons.BookOpen, tr("Définir"), it) }
+            onTranslate?.let { MenuAction(OrynIcons.Globe, tr("Traduire"), it) }
+            MenuAction(OrynIcons.Underline, tr("Souligner"), onUnderline)
+            onExtend?.let { MenuAction(OrynIcons.Select, tr("Étendre"), it) }
+            if (passage.isNotBlank()) {
+                androidx.compose.material3.TextButton(onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND)
+                        .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, passage)
+                    context.startActivity(android.content.Intent.createChooser(intent, null))
+                }) { Text(tr("Partager le passage")) }
             }
             onDelete?.let {
                 Box(Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(ink.copy(alpha = 0.10f)))
@@ -155,6 +162,16 @@ internal fun SelectionBar(
     }
 }
 
+@Composable
+private fun MenuAction(icon: ImageVector, label: String, action: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = action)
+        .heightIn(min = 48.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(icon, null, modifier = Modifier.size(20.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 /** Action à icône et légende (zone tactile ≥ 48 dp) ; active = accent. */
 @Composable
 private fun BarAction(icon: ImageVector, label: String, active: Boolean, ink: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -170,7 +187,7 @@ private fun BarAction(icon: ImageVector, label: String, active: Boolean, ink: Co
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Icon(icon, null, tint = if (active) colors.onPrimaryContainer else ink, modifier = Modifier.size(22.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) colors.onPrimaryContainer else ink.copy(alpha = 0.82f), maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) colors.onPrimaryContainer else ink)
     }
 }
 
@@ -198,33 +215,64 @@ internal fun NoteDialog(initial: String, onSave: (String) -> Unit, onDismiss: ()
  * [anchor] est en pixels, dans le repère du texte. Zone tactile de 48 dp ; le geste est capté dès l'appui
  * pour que le tournage de page ne le récupère pas.
  */
+/** The initial word stays anchored while the finger moves in either direction. */
+internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.selectPassage(
+    start: (Offset) -> Pair<Int, Int>?,
+    rangeAt: (Offset) -> Pair<Int, Int>?,
+    update: (Pair<Int, Int>) -> Unit,
+    dragging: (Boolean) -> Unit
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+        val initial = start(press.position) ?: return@awaitEachGesture
+        dragging(true)
+        try {
+            do {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) break
+                val finger = event.changes.firstOrNull { it.id == press.id } ?: break
+                finger.consume()
+                if ((finger.position - press.position).getDistance() > viewConfiguration.touchSlop) {
+                    rangeAt(finger.position)?.let { word ->
+                        update(minOf(initial.first, word.first) to maxOf(initial.second, word.second))
+                    }
+                }
+            } while (finger.pressed)
+        } finally { dragging(false) }
+    }
+}
+
 @Composable
-internal fun SelectionHandle(anchor: Offset, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit) {
+internal fun SelectionHandle(anchor: Offset, lineCenterY: Float, color: Color, onDrag: (Offset) -> Unit, onDone: () -> Unit, side: Int = 0) {
     val currentAnchor by rememberUpdatedState(anchor)
     val currentDrag by rememberUpdatedState(onDrag)
     val currentDone by rememberUpdatedState(onDone)
     val half = with(LocalDensity.current) { 24.dp.toPx() }
     val lift = with(LocalDensity.current) { 6.dp.toPx() }
-    val touchLift = with(LocalDensity.current) { 30.dp.toPx() }
+    val currentLineCenter by rememberUpdatedState(lineCenterY)
     Box(
         Modifier
-            .offset { IntOffset((anchor.x - half).roundToInt(), (anchor.y - lift).roundToInt()) }
+            .offset { IntOffset((anchor.x - half + side * half).roundToInt(), (anchor.y - lift).roundToInt()) }
             .size(48.dp)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
-                    var pos = currentAnchor
+                    var pos = Offset(currentAnchor.x, currentLineCenter)
                     drag(down.id) { change ->
-                        change.consume()
                         pos += change.positionChange()
-                        // on vise la ligne juste au-dessus du doigt
-                        currentDrag(Offset(pos.x, pos.y - touchLift))
+                        change.consume()
+                        currentDrag(pos)
                     }
                     currentDone()
                 }
             },
-        contentAlignment = Alignment.TopCenter
+        contentAlignment = when (side) {
+            -1 -> Alignment.TopEnd
+            1 -> Alignment.TopStart
+            else -> Alignment.TopCenter
+        }
     ) {
         Box(
             Modifier

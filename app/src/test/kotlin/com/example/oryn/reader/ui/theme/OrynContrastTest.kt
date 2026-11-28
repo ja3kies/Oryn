@@ -26,6 +26,10 @@ class OrynContrastTest {
                     "secondary" to (scheme.onSecondary to scheme.secondary),
                     "tertiary" to (scheme.onTertiary to scheme.tertiary)
                 )
+                listOf(scheme.surfaceContainerLow, scheme.surfaceContainerHigh, scheme.surfaceContainerHighest).forEach { surface ->
+                    assertTrue(ratio(scheme.onSurface, surface) >= 4.5f)
+                    assertTrue(ratio(scheme.onSurfaceVariant, surface) >= 4.5f)
+                }
                 pairs.forEach { (name, colors) ->
                     assertTrue("$name contrast too low (dark=$dark accent=$accent): ${ratio(colors.first, colors.second)}",
                         ratio(colors.first, colors.second) >= 4.5f)

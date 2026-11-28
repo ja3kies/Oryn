@@ -7,6 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import android.widget.Toast
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
@@ -37,6 +39,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import com.example.oryn.reader.ui.components.systemAnimationsEnabled
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +63,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -133,6 +137,7 @@ internal fun BookPager(
     pageCount: Int,
     initialPage: Int,
     curlMode: Boolean,
+    horizontal: Boolean,
     backgroundColor: Color,
     onPageChanged: (Int) -> Unit,
     onCenterTap: () -> Unit,
@@ -190,7 +195,16 @@ internal fun BookPager(
             state = curlState,
             modifier = Modifier.fillMaxSize(),
             config = curlConfig
-        ) { index -> page(index) }
+        ) { index ->
+            // Adjacent pages are drawn behind the curl. TalkBack should read the visible one.
+            Box(if (index == curlState.current) Modifier else Modifier.clearAndSetSemantics {}) {
+                page(index)
+            }
+        }
+    } else if (horizontal) {
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), userScrollEnabled = !lockPaging) {
+            page(it)
+        }
     } else {
         // Mode SCROLL : défilement vertical (cohérent avec le label UI)
         VerticalPager(
@@ -294,12 +308,13 @@ internal fun ReflowReader(
     book: RichBook,
     linkColor: Color,
     initialProgress: Float,
+    initialOffset: Int? = null,
     settings: ReaderSettings,
     fontFamily: FontFamily,
     foregroundColor: Color,
     backgroundColor: Color,
     horizontalPadding: Dp,
-    onProgress: (Float) -> Unit,
+    onProgress: (Float, Int) -> Unit,
     onCenterTap: () -> Unit,
     annotations: List<AnnotationEntity> = emptyList(),
     onAddAnnotation: (AnnotationEntity) -> Unit = {},
@@ -307,8 +322,9 @@ internal fun ReflowReader(
     onDeleteAnnotation: (AnnotationEntity) -> Unit = {},
     jumpRequest: Pair<Int, Int>? = null,
     onJumpHandled: () -> Unit = {},
-    onDefine: ((String) -> Unit)? = null,
-    onTranslate: ((String) -> Unit)? = null,
+    lookupOpen: Boolean = false,
+    onDefine: ((String, String) -> Unit)? = null,
+    onTranslate: ((String, String) -> Unit)? = null,
     onVisiblePosition: ((Int) -> Unit)? = null,
     onChapterPagesAfter: ((Int?) -> Unit)? = null
 ) {
@@ -317,7 +333,8 @@ internal fun ReflowReader(
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
     val bars = WindowInsets.systemBarsIgnoringVisibility
-    val curlMode = settings.scrollMode == ReaderScrollMode.PAGES
+    val horizontal = settings.scrollMode == ReaderScrollMode.PAGES
+    val curlMode = horizontal && systemAnimationsEnabled(context)
     val bodyLarge = MaterialTheme.typography.bodyLarge
     val text = book.text
 
@@ -337,6 +354,8 @@ internal fun ReflowReader(
     var jumpNonce by remember { mutableIntStateOf(0) }
     val backStack = remember(bookId) { mutableStateListOf<Int>() }
     val pageHit = remember { HashMap<Int, (Offset) -> Boolean>() }
+    var draggingSelection by remember { mutableStateOf(false) }
+    val pageWord = remember { HashMap<Int, (Offset) -> Pair<Int, Int>?>() }
     val pageSelect = remember { HashMap<Int, (Offset) -> Unit>() }
     val currentPageRef = remember { arrayOf<() -> Int>({ 0 }) }
     val latestAnnotations by rememberUpdatedState(annotations)
@@ -394,7 +413,7 @@ internal fun ReflowReader(
         var computing by remember { mutableStateOf(true) }
         // Position de lecture (début de la page courante), conservée quand la mise en page change
         val anchor = remember(bookId, book) {
-            intArrayOf(((initialProgress * text.length).toInt() - 1).coerceIn(0, max(0, text.length - 1)))
+            intArrayOf((initialOffset ?: ((initialProgress * text.length).toInt() - 1)).coerceIn(0, max(0, text.length - 1)))
         }
 
         val richReady = rich != null
@@ -414,7 +433,7 @@ internal fun ReflowReader(
             if (push) backStack.add(anchor[0])
             anchor[0] = offset.coerceIn(0, max(0, text.length - 1))
             jumpNonce++
-            onProgress(offset.toFloat() / max(1, text.length))
+            onProgress(anchor[0].toFloat() / max(1, text.length), anchor[0])
         }
         LaunchedEffect(jumpRequest, layout != null) {
             val target = jumpRequest
@@ -446,7 +465,7 @@ internal fun ReflowReader(
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
-                color = foregroundColor.copy(alpha = 0.35f),
+                color = foregroundColor,
                 trackColor = Color.Transparent
             )
         } else {
@@ -465,6 +484,7 @@ internal fun ReflowReader(
                     pageCount = starts.size,
                     initialPage = index.coerceIn(0, max(0, starts.size - 1)),
                     curlMode = curlMode,
+                    horizontal = horizontal,
                     backgroundColor = backgroundColor,
                     onPageChanged = { page ->
                         selection = null
@@ -472,7 +492,7 @@ internal fun ReflowReader(
                         anchor[0] = starts[page]
                         reportVisible(page)
                         val endOffset = if (page + 1 < starts.size) starts[page + 1] else text.length
-                        onProgress(endOffset.toFloat() / text.length)
+                        onProgress(endOffset.toFloat() / text.length, starts[page])
                     },
                     onCenterTap = onCenterTap,
                     onTap = { page, offset -> pageHit[page]?.invoke(offset) == true },
@@ -505,6 +525,7 @@ internal fun ReflowReader(
 
                     // Un toucher : efface la sélection, ouvre un lien, active une annotation… sinon affiche/masque l'interface
                     val tapAt: (Offset) -> Boolean = at@{ o ->
+                        if (draggingSelection) return@at true
                         if (selection != null) {
                             selection = null
                             return@at true
@@ -533,12 +554,13 @@ internal fun ReflowReader(
                     }
 
                     // Appui long : sélectionne le mot touché ; sur une sélection existante : la phrase, puis le paragraphe
+                    val wordAt: (Offset) -> Pair<Int, Int>? = lookup@{ o ->
+                        val lr = textLayout ?: return@lookup null
+                        val local = hitChar(lr, toText(o), end - from) ?: return@lookup null
+                        wordRangeAt(lr.layoutInput.text.text, local)?.let { from + it.first to from + it.second }
+                    }
                     val startSelection: (Offset) -> Unit = start@{ o ->
-                        val lr = textLayout ?: return@start
-                        if (end <= from) return@start
-                        val local = hitChar(lr, toText(o), end - from) ?: return@start
-                        val absolute = from + local
-                        val rng = wordRangeAt(text, absolute) ?: return@start
+                        val rng = wordAt(o) ?: return@start
                         val a = rng.first
                         val b = rng.second
                         if (b <= a) return@start
@@ -555,17 +577,30 @@ internal fun ReflowReader(
                     SideEffect {
                         pageHit[page] = tapAt
                         pageSelect[page] = startSelection
+                        pageWord[page] = wordAt
                     }
-                    // En mode « page qui se tourne », les pages voisines sont superposées à la page affichée :
-                    // l'appui long est toujours confié à la page réellement visible.
-                    val longPressAt: (Offset) -> Unit = { o ->
-                        val visible = currentPageRef[0]()
-                        val target = pageSelect[visible]
-                        if (target != null) target(o) else startSelection(o)
+                    DisposableEffect(page) {
+                        onDispose { pageSelect.remove(page); pageHit.remove(page); pageWord.remove(page) }
                     }
+                    val latestTap by rememberUpdatedState(tapAt)
+                    val latestCenterTap by rememberUpdatedState(onCenterTap)
 
                     // Texte de la page (les surlignages sont dessinés par-dessus : affichage immédiat)
-                    val pageText = remember(current.key, linkColor, from, end) { styled.subSequence(from, end) }
+                    val pageText = remember(styled, from, end, selection, latestAnnotations, backgroundColor) {
+                        buildAnnotatedString {
+                            append(styled.subSequence(from, end))
+                            fun shade(start: Int, stop: Int, color: Color) {
+                                val lo = max(start, from)
+                                val hi = min(stop, end)
+                                if (lo < hi) addStyle(SpanStyle(background = color), lo - from, hi - from)
+                            }
+                            latestAnnotations.filter { it.kind == "HIGHLIGHT" }.forEach { annotation ->
+                                val (lo, hi) = trimAnnotationRange(text, annotation.startOffset, annotation.endOffset)
+                                shade(lo, hi, HighlightColors[annotation.color.coerceIn(0, 3)].copy(alpha = if (backgroundColor.luminance() < 0.2f) 0.26f else 0.45f))
+                            }
+                            selection?.let { shade(it.first, it.second, Color(0xFFD99A32).copy(alpha = 0.35f)) }
+                        }
+                    }
 
                     // Position de la barre d'actions : juste au-dessus du passage sélectionné
                     LaunchedEffect(selection, activeId, textLayout, textCoords, containerCoords, annotations) {
@@ -594,32 +629,24 @@ internal fun ReflowReader(
                             .fillMaxSize()
                             .background(backgroundColor)
                             .onGloballyPositioned { gestureCoords = it }
-                            .then(
-                                if (curlMode) {
-                                    // Le tournage de page gère les touchers ; ici on ne réagit qu'à l'appui long
-                                    Modifier.pointerInput(page) {
-                                        awaitEachGesture {
-                                            val down = awaitFirstDown(requireUnconsumed = false)
-                                            val press = awaitLongPressOrCancellation(down.id)
-                                            if (press != null) {
-                                                longPressAt(press.position)
-                                                // on avale la fin du geste pour ne pas tourner la page
-                                                do {
-                                                    val event = awaitPointerEvent()
-                                                    event.changes.forEach { it.consume() }
-                                                } while (event.changes.any { it.pressed })
-                                            }
+                            .then(if (curlMode) Modifier else Modifier.pointerInput(page) {
+                                detectTapGestures(onTap = { if (!latestTap(it)) latestCenterTap() })
+                            })
+                            .pointerInput(page, curlMode) {
+                                fun visible() = if (curlMode) currentPageRef[0]() else page
+                                selectPassage(
+                                    start = { point ->
+                                        val target = visible()
+                                        pageWord[target]?.invoke(point)?.let {
+                                            pageSelect[target]?.invoke(point)
+                                            selection
                                         }
-                                    }
-                                } else {
-                                    Modifier.pointerInput(page) {
-                                        detectTapGestures(
-                                            onLongPress = { o -> longPressAt(o) },
-                                            onTap = { o -> if (!tapAt(o)) onCenterTap() }
-                                        )
-                                    }
-                                }
-                            )
+                                    },
+                                    rangeAt = { pageWord[visible()]?.invoke(it) },
+                                    update = { selection = it },
+                                    dragging = { draggingSelection = it }
+                                )
+                            }
                             .padding(start = horizontalPadding, end = horizontalPadding, top = topPad, bottom = bottomPad)
                     ) {
                         Column {
@@ -641,21 +668,11 @@ internal fun ReflowReader(
                                                 val s0 = local(ts)
                                                 val e0 = local(te)
                                                 if (e0 <= s0) continue
-                                                if (a.kind == "HIGHLIGHT") {
-                                                    drawPath(
-                                                        lr.getPathForRange(s0, e0),
-                                                        HighlightColors[a.color.coerceIn(0, 3)].copy(alpha = 0.45f)
-                                                    )
-                                                }
                                                 if (a.id == activeId) {
                                                     drawPath(lr.getPathForRange(s0, e0), activeColor, style = Stroke(2.dp.toPx()))
                                                 }
                                             }
-                                            selection?.let { sel ->
-                                                val s0 = local(sel.first)
-                                                val e0 = local(sel.second)
-                                                if (e0 > s0) drawPath(lr.getPathForRange(s0, e0), Color(0xFFD99A32).copy(alpha = 0.35f))
-                                            }
+
                                         }
                                         drawContent()
                                         if (lr != null && len > 0) {
@@ -673,7 +690,7 @@ internal fun ReflowReader(
                                 Text(
                                     text = "${page + 1} / ${starts.size}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = foregroundColor.copy(alpha = 0.5f)
+                                    color = foregroundColor
                                 )
                             }
                         }
@@ -711,34 +728,37 @@ internal fun ReflowReader(
                             val last = end - from - 1
                             val startBox = lr.getBoundingBox((sel.first - from).coerceIn(0, last))
                             val endBox = lr.getBoundingBox((sel.second - 1 - from).coerceIn(0, last))
+                            val startRtl = lr.getBidiRunDirection(sel.first - from) == androidx.compose.ui.text.style.ResolvedTextDirection.Rtl
+                            val endRtl = lr.getBidiRunDirection((sel.second - 1 - from).coerceIn(0, last)) == androidx.compose.ui.text.style.ResolvedTextDirection.Rtl
                             SelectionHandle(
-                                anchor = Offset(startBox.left, startBox.bottom),
+                                side = if (startRtl) 1 else -1,
+                                anchor = Offset(if (startRtl) startBox.right else startBox.left, startBox.bottom),
+                                lineCenterY = startBox.center.y,
                                 color = handleColor,
                                 onDrag = { p ->
                                     val cur = selection
                                     if (cur != null) {
-                                        // la poignée saute de mot en mot
-                                        val wb = lr.getWordBoundary(lr.getOffsetForPosition(p).coerceIn(0, last))
-                                        var o = from + wb.start
-                                        while (o < cur.second - 1 && !text[o].isLetterOrDigit()) o++
-                                        selection = o.coerceIn(from, cur.second - 1) to cur.second
+                                        val offset = from + lr.getOffsetForPosition(p)
+                                        if (offset in from until cur.second) selection = offset to cur.second
+                                        draggingSelection = true
                                     }
                                 },
-                                onDone = {}
+                                onDone = { draggingSelection = false }
                             )
                             SelectionHandle(
-                                anchor = Offset(endBox.right, endBox.bottom),
+                                side = if (endRtl) -1 else 1,
+                                anchor = Offset(if (endRtl) endBox.left else endBox.right, endBox.bottom),
+                                lineCenterY = endBox.center.y,
                                 color = handleColor,
                                 onDrag = { p ->
                                     val cur = selection
                                     if (cur != null) {
-                                        val wb = lr.getWordBoundary(lr.getOffsetForPosition(p).coerceIn(0, last))
-                                        var o = (from + wb.end).coerceAtMost(end)
-                                        while (o > cur.first + 1 && !text[o - 1].isLetterOrDigit()) o--
-                                        selection = cur.first to o.coerceIn(cur.first + 1, end)
+                                        val offset = from + lr.getOffsetForPosition(p)
+                                        if (offset in (cur.first + 1)..end) selection = cur.first to offset
+                                        draggingSelection = true
                                     }
                                 },
-                                onDone = {}
+                                onDone = { draggingSelection = false }
                             )
                         }
                     }
@@ -747,7 +767,7 @@ internal fun ReflowReader(
             if (computing) {
                 LinearProgressIndicator(
                     modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
-                    color = foregroundColor.copy(alpha = 0.35f),
+                    color = foregroundColor,
                     trackColor = Color.Transparent
                 )
             }
@@ -761,7 +781,7 @@ internal fun ReflowReader(
         run {
             val sel = selection
             val active = latestAnnotations.firstOrNull { it.id == activeId }
-            if (sel != null || active != null) {
+            if (!lookupOpen && !draggingSelection && (sel != null || active != null)) {
                 val rangeText = sel?.let { text.substring(it.first, it.second) } ?: active?.quote.orEmpty()
                 fun create(kind: String, color: Int, note: String?) {
                     val range = sel ?: return
@@ -778,8 +798,13 @@ internal fun ReflowReader(
                     )
                     selection = null
                 }
+                fun excerpt(): String {
+                        val at = (sel?.first ?: active?.startOffset ?: 0).coerceIn(0, text.lastIndex)
+                        val (lo, hi) = sentenceBounds(text, at, max(0, at - 220), min(text.length, at + 220))
+                        return text.substring(lo, hi)
+                }
                 SelectionBar(
-                    existing = active,
+                    existing = active, passage = rangeText,
                     onColor = { c ->
                         if (sel != null) create("HIGHLIGHT", c, null)
                         else if (active != null) onUpdateAnnotation(active.copy(kind = "HIGHLIGHT", color = c))
@@ -792,7 +817,7 @@ internal fun ReflowReader(
                         if (sel != null) noteSelection = sel else noteAnnotation = active
                     },
                     onCopy = {
-                        clipboard.setText(AnnotatedString(rangeText.trim()))
+                        clipboard.setText(AnnotatedString(rangeText))
                         Toast.makeText(context, tr("Copié"), Toast.LENGTH_SHORT).show()
                         selection = null
                         activeId = null
@@ -810,8 +835,8 @@ internal fun ReflowReader(
                             }
                         }
                     },
-                    onDefine = onDefine?.let { f -> { f(rangeText.trim()) } },
-                    onTranslate = onTranslate?.let { f -> { f(rangeText.trim()) } },
+                    onDefine = onDefine?.let { define -> { define(rangeText.trim(), excerpt()) } },
+                    onTranslate = onTranslate?.let { translate -> { translate(rangeText.trim(), excerpt()) } },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .onSizeChanged { barSize = it }
@@ -958,13 +983,19 @@ internal fun hitChar(lr: TextLayoutResult, p: Offset, count: Int, slop: Float = 
     val right = lr.getLineRight(line)
     if (p.x < left - slop || p.x > right + slop) return null
     val start = lr.getLineStart(line)
-    val lastInLine = max(start, lr.getLineEnd(line, visibleEnd = true) - 1)
+    val limit = min(count, lr.getLineEnd(line, visibleEnd = true))
+    if (limit <= start) return null
     val x = p.x.coerceIn(left, max(left, right - 0.5f))
     val midY = (lr.getLineTop(line) + lr.getLineBottom(line)) / 2f
-    var off = lr.getOffsetForPosition(Offset(x, midY)).coerceIn(start, lastInLine)
-    // la position retournée est la frontière la plus proche : si le doigt est à gauche du caractère, c'est le précédent
-    if (off > start && x < lr.getBoundingBox(off).left) off--
-    return off.coerceIn(0, count - 1)
+    val caret = lr.getOffsetForPosition(Offset(x, midY))
+    // A caret is an insertion boundary. Check the glyph on either side in visual space.
+    for (candidate in listOf(caret, caret - 1)) {
+        if (candidate in start until limit) {
+            val box = lr.getBoundingBox(candidate)
+            if (x >= box.left && x < box.right) return candidate
+        }
+    }
+    return caret.coerceIn(start, limit - 1)
 }
 
 private fun isSentenceEnd(c: Char) = c == '.' || c == '!' || c == '?' || c == '…' || c == '\n'

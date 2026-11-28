@@ -93,7 +93,7 @@ fun ReaderScreen(
     currentAccent: AppAccentTheme,
     onAccentChange: (AppAccentTheme) -> Unit,
     onBack: () -> Unit,
-    onUpdateProgress: (BookEntity, Float) -> Unit,
+    onUpdateProgress: (BookEntity, Float, Int?) -> Unit,
     onToggleBookmark: (BookEntity) -> Unit
 ) {
     val context = LocalContext.current
@@ -148,33 +148,54 @@ fun ReaderScreen(
 
     // Autorisation expirée (« Permission Denial ») : l'utilisateur re-sélectionne le fichier, on la rétablit
     var reloadKey by remember { mutableStateOf(0) }
-    var pathOverride by remember(book.id) { mutableStateOf<String?>(null) }
+    var pendingPath by rememberSaveable(book.id) { mutableStateOf<String?>(null) }
+    var repairError by remember(book.id) { mutableStateOf(false) }
+    fun restoreAccess(path: String) {
+        scope.launch {
+            val restored = withContext(Dispatchers.IO) {
+                try {
+                    val uri = android.net.Uri.parse(path)
+                    val metadata = com.example.oryn.reader.data.importer.BookMetadataReader(context).read(uri)
+                    if (metadata?.format != book.format) return@withContext false
+                    context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    path == book.filePath || OrynDatabase.getDatabase(context).bookDao()
+                        .updateFilePath(book.id, book.filePath, path) == 1
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            repairError = !restored
+            if (restored && path == book.filePath) reloadKey++
+        }
+    }
     val regrant = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { picked ->
-        if (picked != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    picked, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }.recoverCatching {
-                context.contentResolver.takePersistableUriPermission(picked, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val newPath = picked.toString()
-            if (newPath != book.filePath) {
-                pathOverride = newPath
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    runCatching { OrynDatabase.getDatabase(context).bookDao().updateFilePath(book.id, newPath) }
-                }
-            }
-            loadResult = null
-            reloadKey++
+        picked?.toString()?.let { path ->
+            if (path == book.filePath) restoreAccess(path) else pendingPath = path
         }
+    }
+    pendingPath?.let { path ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingPath = null },
+            title = { Text(tr("Associer ce fichier au livre ?")) },
+            text = { Text(trf("Vérifie que tu as choisi la même édition de « %s ». Tes notes et ta progression seront associées à ce fichier.", book.title)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingPath = null; restoreAccess(path) }) {
+                    Text(tr("Associer le fichier"))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingPath = null }) { Text(tr("Annuler")) }
+            }
+        )
     }
 
     LaunchedEffect(book.id, book.filePath, reloadKey) {
         loadResult = null
-        val loaded = BookTextLoader(context).loadBook(pathOverride ?: book.filePath, book.format)
+        val loaded = BookTextLoader(context).loadBook(book.filePath, book.format)
         loadResult = loaded
         try {
             // This effect owns exactly the document it acquired, including on reload.
@@ -187,7 +208,7 @@ fun ReaderScreen(
     }
 
     // Marque le livre comme « lu récemment » sans toucher à la progression
-    LaunchedEffect(book.id) { onUpdateProgress(book, book.progress) }
+    LaunchedEffect(book.id) { onUpdateProgress(book, book.progress, book.readingOffset) }
 
     // Reader brightness follows Android system settings. Keep legacy DataStore values
     // readable for backwards compatibility, but never apply a stale window override.
@@ -238,7 +259,7 @@ fun ReaderScreen(
         if (wantReflow) {
             value = try {
                 PdfReflowBuilder.build(
-                    context, android.net.Uri.parse(pathOverride ?: book.filePath), readerPdf.text, readerPdf.pageCount
+                    context, android.net.Uri.parse(book.filePath), readerPdf.text, readerPdf.pageCount
                 ) { reflowProgress = it }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -289,6 +310,11 @@ fun ReaderScreen(
     val chromeIsPdf = readerPdf != null && !useReflow
     val chromePosition = visiblePosition ?: if (effectiveRich != null) (liveProgress * effectiveRich.text.length).toInt() else pdfCurrentPage * PDF_STRIDE
     val documentLength = effectiveRich?.text?.length ?: if (chromeIsPdf) (pdfPageCount.toLong() * PDF_STRIDE).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() else 0
+    var returnOffset by rememberSaveable(book.filePath, annotBookId) { mutableStateOf<Int?>(null) }
+    fun navigateTo(offset: Int, length: Int = 0) {
+        if (returnOffset == null) returnOffset = visiblePosition
+        jumpRequest = offset to length
+    }
     val chapter = remember(chromeToc, chromePosition, documentLength, chromeIsPdf, visiblePosition) {
         if (visiblePosition == null) null else readerChapterProgress(chromeToc.map { it.offset to it.title }, chromePosition, documentLength, if (chromeIsPdf) PDF_STRIDE else null)
     }
@@ -315,27 +341,25 @@ fun ReaderScreen(
                 }
 
                 is BookLoadResult.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    val denied = result.message.contains("Permission", ignoreCase = true) ||
-                        result.message.contains("ACTION_OPEN_DOCUMENT")
                     androidx.compose.foundation.layout.Column(
                         Modifier.padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = if (denied) tr("Android n'autorise plus l'accès à ce fichier (autorisation expirée ou jamais conservée).")
-                            else result.message,
+                            text = result.message,
                             color = foregroundColor,
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center
                         )
-                        if (denied) {
+                        if (result.canRelink) {
                             Text(
                                 tr("Re-sélectionne le même fichier pour rétablir l'accès : ta progression et tes annotations sont conservées."),
                                 color = foregroundColor.copy(alpha = 0.75f),
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center
                             )
+                            if (repairError) Text(tr("Impossible de rétablir l’accès. Vérifie le format et choisis un fichier disponible qui ne figure pas déjà dans ta bibliothèque."))
                             androidx.compose.material3.Button(onClick = { regrant.launch(arrayOf("*/*")) }) {
                                 Text(tr("Réautoriser le fichier"))
                             }
@@ -349,7 +373,7 @@ fun ReaderScreen(
                     val toggleUi = { controlsEvent(ReaderControlsEvent.SURFACE_TAP) }
                     val saveProgress: (Float) -> Unit = { fraction ->
                         liveProgress = fraction.coerceIn(0f, 1f)
-                        onUpdateProgress(book, liveProgress)
+                        onUpdateProgress(book, liveProgress, null)
                     }
 
                     // Fixed, font-scale-aware gutters keep text clear without repaginating on a tap.
@@ -397,8 +421,9 @@ fun ReaderScreen(
                             onDeleteAnnotation = { a -> scope.launch { annotationDao.delete(a) } },
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
-                            onDefine = { showLookup(LookupRequest(LookupMode.DEFINE, it)) },
-                            onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
+                            lookupOpen = lookup != null,
+                            onDefine = { word, excerpt -> showLookup(LookupRequest(LookupMode.DEFINE, word, excerpt)) },
+                            onTranslate = { passage, excerpt -> showLookup(LookupRequest(LookupMode.TRANSLATE, passage, excerpt)) }
                         )
                     } else {
                         // Le texte est remis en page à la taille réelle de l'écran : plus de bas de page coupé
@@ -411,6 +436,7 @@ fun ReaderScreen(
                         ReflowReader(
                             bookId = annotBookId,
                             book = rich,
+                            initialOffset = if (useReflow) null else book.readingOffset,
                             linkColor = linkColor,
                             initialProgress = if (useReflow) {
                                 if (switchPage >= 0) reflowBook?.fractionOfPage(switchPage) ?: liveProgress else liveProgress
@@ -420,7 +446,10 @@ fun ReaderScreen(
                             foregroundColor = foregroundColor,
                             backgroundColor = backgroundColor,
                             horizontalPadding = horizontalPadding,
-                            onProgress = saveProgress,
+                            onProgress = { fraction, offset ->
+                                liveProgress = fraction.coerceIn(0f, 1f)
+                                onUpdateProgress(book, liveProgress, if (useReflow) null else offset)
+                            },
                             onCenterTap = toggleUi,
                             onVisiblePosition = { visiblePosition = it },
                             onChapterPagesAfter = { chapterPagesAfter = it },
@@ -430,8 +459,9 @@ fun ReaderScreen(
                             onDeleteAnnotation = { a -> scope.launch { annotationDao.delete(a) } },
                             jumpRequest = jumpRequest,
                             onJumpHandled = { jumpRequest = null },
-                            onDefine = { showLookup(LookupRequest(LookupMode.DEFINE, it)) },
-                            onTranslate = { showLookup(LookupRequest(LookupMode.TRANSLATE, it)) }
+                            lookupOpen = lookup != null,
+                            onDefine = { word, excerpt -> showLookup(LookupRequest(LookupMode.DEFINE, word, excerpt)) },
+                            onTranslate = { passage, excerpt -> showLookup(LookupRequest(LookupMode.TRANSLATE, passage, excerpt)) }
                         )
                     }
                     }
@@ -452,6 +482,7 @@ fun ReaderScreen(
                     else com.example.oryn.reader.data.local.preferences.ReaderScrollMode.PAGES) }
             },
             onBack = onBack,
+            onReturnToPassage = returnOffset?.let { offset -> { jumpRequest = offset to 0; returnOffset = null; controlsEvent(ReaderControlsEvent.HIDE) } },
             onTimer = { openTool(ReaderTool.TIMER) }, onBookmark = { onToggleBookmark(book) },
             onContents = chromeToc.takeIf { it.isNotEmpty() }?.let { { openTool(ReaderTool.CONTENTS) } },
             onAnnotations = if (effectiveRich != null || chromeIsPdf) ({ openTool(ReaderTool.ANNOTATIONS) }) else null,
@@ -467,7 +498,7 @@ fun ReaderScreen(
                 onJump = { offset ->
                     closeTool(false)
                     controlsEvent(ReaderControlsEvent.HIDE)
-                    jumpRequest = offset to 0
+                    navigateTo(offset)
                 },
                 onDismiss = { closeTool() }
             )
@@ -478,7 +509,7 @@ fun ReaderScreen(
                 currentOffset = (liveProgress * effectiveRich.text.length).toInt(),
                 onJump = { offset, length ->
                     // Keep the search dialog open for successive previous/next jumps.
-                    jumpRequest = offset to length
+                    navigateTo(offset, length)
                 },
                 onDismiss = { closeTool() }
             )
@@ -491,7 +522,7 @@ fun ReaderScreen(
                 onJump = { offset ->
                     closeTool(false)
                     controlsEvent(ReaderControlsEvent.HIDE)
-                    jumpRequest = offset to 0
+                    navigateTo(offset)
                 },
                 onDelete = { a -> scope.launch { annotationDao.delete(a) } },
                 onDismiss = { closeTool() }
@@ -517,7 +548,7 @@ fun ReaderScreen(
                     liveProgress = ((o / PDF_STRIDE + 1f) / pdfPageCount).coerceIn(0f, 1f)
                 } else return
                 controlsEvent(ReaderControlsEvent.HIDE)
-                jumpRequest = o to 0
+                navigateTo(o)
             }
             ReaderControlsSheet(
                 settings = settings,

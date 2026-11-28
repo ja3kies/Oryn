@@ -49,7 +49,7 @@ internal fun PdfReflowBuilding(progress: Float, color: Color, onCancel: () -> Un
         Text(
             tr("Une seule fois par livre : le résultat est ensuite gardé."),
             style = MaterialTheme.typography.bodySmall,
-            color = color.copy(alpha = 0.6f),
+            color = color,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(16.dp))

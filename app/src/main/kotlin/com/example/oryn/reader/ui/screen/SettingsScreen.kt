@@ -64,7 +64,7 @@ import com.example.oryn.reader.ui.theme.onAccent
 import com.example.oryn.reader.ui.theme.AppThemeMode
 import kotlinx.coroutines.launch
 
-private enum class SettingsSection { ROOT, APPEARANCE, LANGUAGE, READING, ABOUT }
+private enum class SettingsSection { ROOT, APPEARANCE, LANGUAGE, READING, UPDATES, ABOUT }
 
 @Composable
 fun SettingsScreen(
@@ -98,6 +98,7 @@ fun SettingsScreen(
                 SettingsSection.APPEARANCE -> "Apparence"
                 SettingsSection.LANGUAGE -> "Langue"
                 SettingsSection.READING -> "Lecture"
+                SettingsSection.UPDATES -> "Mises à jour"
                 SettingsSection.ABOUT -> "Découvrir Oryn"
             }),
             style = MaterialTheme.typography.headlineLarge,
@@ -122,6 +123,9 @@ fun SettingsScreen(
             SettingsNavigationRow("Apparence", OrynIcons.Palette) { section = SettingsSection.APPEARANCE }
             SettingsNavigationRow("Langue", OrynIcons.Globe) { section = SettingsSection.LANGUAGE }
             SettingsNavigationRow("Lecture", OrynIcons.BookOpen) { section = SettingsSection.READING }
+            if (com.example.oryn.reader.BuildConfig.DEBUG) {
+                SettingsNavigationRow("Mises à jour", OrynIcons.Download) { section = SettingsSection.UPDATES }
+            }
             SettingsNavigationRow("Découvrir Oryn", OrynIcons.Sparkle) { section = SettingsSection.ABOUT }
         }
         if (section == SettingsSection.APPEARANCE) {
@@ -220,6 +224,7 @@ fun SettingsScreen(
         }
 
         }
+        if (section == SettingsSection.UPDATES) AppUpdates()
         if (section == SettingsSection.ABOUT) {
         SettingsCard(title = tr("Découvrir Oryn"), icon = OrynIcons.Sparkle) {
             TextButton(onClick = onReplayOnboarding, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {

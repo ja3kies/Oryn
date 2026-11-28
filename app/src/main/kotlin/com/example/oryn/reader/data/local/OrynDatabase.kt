@@ -11,7 +11,7 @@ import com.example.oryn.reader.data.local.dao.BookDao
 import com.example.oryn.reader.data.local.entity.AnnotationEntity
 import com.example.oryn.reader.data.local.entity.BookEntity
 
-@Database(entities = [BookEntity::class, AnnotationEntity::class], version = 4, exportSchema = false)
+@Database(entities = [BookEntity::class, AnnotationEntity::class], version = 5, exportSchema = false)
 abstract class OrynDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun annotationDao(): AnnotationDao
@@ -47,6 +47,12 @@ abstract class OrynDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN readingOffset INTEGER")
+            }
+        }
+
         fun getDatabase(context: Context): OrynDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -54,7 +60,7 @@ abstract class OrynDatabase : RoomDatabase() {
                     OrynDatabase::class.java,
                     "oryn_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

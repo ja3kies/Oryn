@@ -1,9 +1,8 @@
 package com.example.oryn.reader.data.remote
 
-import androidx.core.text.HtmlCompat
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -20,18 +19,18 @@ data class DictionaryResult(
     val word: String,
     val phonetic: String?,
     val entries: List<DictEntry>,
-    val source: String
+    val source: String,
+    val language: String,
+    val translated: Boolean = false,
+    val availableLanguages: List<String> = emptyList()
 )
 
 data class TranslationResult(
     val text: String,
-    /** Code de la langue détectée ou devinée ; null si inconnue. */
-    val from: String?,
+    val from: String,
     val to: String,
-    /** Vrai si le texte d'origine était plus long que la limite du service et a été coupé. */
-    val truncated: Boolean,
-    /** Vrai si la langue d'origine est déjà la langue cible (aucune traduction utile). */
     val sameLanguage: Boolean
+
 )
 
 /**
@@ -42,7 +41,12 @@ data class TranslationResult(
  */
 object LookupClient {
     /** MyMemory refuse les requêtes de plus de 500 octets : on reste en dessous. */
-    private const val MAX_TRANSLATE_CHARS = 420
+    private const val MAX_REQUEST_BYTES = 500
+    class UnreadableResult : IOException()
+    class QuotaExceeded : IOException()
+    private data class Key(val text: String, val source: String, val target: String)
+    private val definitions by lazy { android.util.LruCache<Key, DictionaryResult>(32) }
+    private val translations by lazy { android.util.LruCache<Key, TranslationResult>(16) }
     private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
     val targetLanguages: List<Pair<String, String>> = listOf(
@@ -55,104 +59,184 @@ object LookupClient {
     /** Retire la ponctuation autour du mot sélectionné (« Monte-Cristo, » → « Monte-Cristo »). */
     fun cleanWord(raw: String): String = raw.trim().trim { !it.isLetterOrDigit() }
 
-    suspend fun define(raw: String, languages: List<String>): DictionaryResult? = withContext(Dispatchers.IO) {
+    suspend fun define(raw: String, language: String, target: String): DictionaryResult? = withContext(Dispatchers.IO) {
         val word = cleanWord(raw)
         if (word.isEmpty()) return@withContext null
-        val candidates = listOf(word, word.lowercase()).distinct()
-        var lastError: IOException? = null
-        for (lang in languages.distinct()) {
-            for (candidate in candidates) {
-                try {
-                    fromFreeDictionary(candidate, lang)?.let { return@withContext it }
-                    fromWiktionary(candidate, lang)?.let { return@withContext it }
-                } catch (e: IOException) {
-                    lastError = e
-                }
+        val key = Key(word, language, target)
+        definitions.get(key)?.let { return@withContext it }
+        val normalized = java.text.Normalizer.normalize(word, java.text.Normalizer.Form.NFC)
+        val titles = listOf(normalized, normalized.lowercase(java.util.Locale.ROOT)).distinct()
+        var failure: IOException? = null
+        fun fetch(url: String): String? = try { httpGet(url) } catch (e: IOException) { failure = e; null }
+        fun french(): List<DictionaryResult> {
+            for (title in titles) {
+                val html = fetch("https://fr.wiktionary.org/wiki/${enc(title)}") ?: continue
+                val entries = frenchEntries(title, html)
+                if (entries.isNotEmpty()) return entries
+            }
+            return emptyList()
+        }
+        fun english(): List<DictionaryResult> {
+            for (title in titles) {
+                val body = fetch("https://en.wiktionary.org/api/rest_v1/page/definition/${enc(title)}") ?: continue
+                val entries = englishEntries(title, JSONObject(body))
+                if (entries.isNotEmpty()) return entries
+            }
+            return emptyList()
+        }
+        var glossLanguage = if (target == "fr") "fr" else "en"
+        var candidates = if (glossLanguage == "fr") french() else english()
+        if (candidates.isEmpty() || (language.isNotEmpty() && candidates.none { it.language == language })) {
+            val other = if (glossLanguage == "fr") english() else french()
+            if (other.isNotEmpty() && (candidates.isEmpty() || other.any { it.language == language })) {
+                candidates = other
+                glossLanguage = if (glossLanguage == "fr") "en" else "fr"
             }
         }
-        // Si rien n'a été trouvé et que le réseau a échoué à un moment, on le signale plutôt que « mot inconnu ».
-        lastError?.let { throw it }
-        null
+        if (language.isNotEmpty() && candidates.none { it.language == language }) {
+            val body = fetch("https://freedictionaryapi.com/api/v1/entries/${enc(language)}/${enc(titles.last())}")
+            val fallback = body?.let { dictionaryEntry(JSONObject(it), language) }
+            if (fallback != null) {
+                candidates = listOf(fallback)
+                glossLanguage = "en"
+            }
+        }
+        val entry = candidates.firstOrNull { it.language == language } ?: candidates.firstOrNull()
+        if (entry == null) { failure?.let { throw it }; return@withContext null }
+        val result = entry.copy(availableLanguages = candidates.map { it.language })
+        val localized = if (target == glossLanguage) result else result.copy(translated = true, entries = result.entries.map { group ->
+            group.copy(senses = group.senses.map { sense ->
+                sense.copy(definition = translate(sense.definition, glossLanguage, target).text)
+            })
+        })
+        definitions.put(key, localized)
+        localized
     }
 
-    private fun fromFreeDictionary(word: String, lang: String): DictionaryResult? {
-        val body = httpGet("https://api.dictionaryapi.dev/api/v2/entries/$lang/${enc(word)}") ?: return null
-        val arr = runCatching { JSONArray(body) }.getOrNull() ?: return null
-        val entries = LinkedHashMap<String, MutableList<DictSense>>()
+    internal fun frenchEntry(word: String, language: String, html: String): DictionaryResult? {
+        return frenchEntries(word, html).firstOrNull { it.language == language }
+    }
+
+    internal fun frenchEntries(word: String, html: String): List<DictionaryResult> {
+        val groups = linkedMapOf<String, MutableList<DictEntry>>()
+        val doc = org.jsoup.Jsoup.parse(html)
+        for (title in doc.select(".titredef[id]")) {
+            val language = title.id().substringBeforeLast('-').substringBeforeLast('-', "")
+            if (language.isBlank()) continue
+            val heading = title.closest("h2, h3, h4, h5, h6")
+            val block = heading?.parent()?.takeIf { it.hasClass("mw-heading") } ?: heading
+            val list = block?.nextElementSiblings()?.asSequence()
+                ?.takeWhile { !it.hasClass("mw-heading") && it.tagName() !in setOf("section", "h2", "h3", "h4", "h5", "h6") }
+                ?.firstOrNull { it.tagName() == "ol" } ?: continue
+            val senses = list.children().asSequence().filter { it.tagName() == "li" }.take(2).mapNotNull { item ->
+                val example = item.selectFirst(".example q")?.text()
+                val copy = item.clone()
+                copy.select("ul, ol, dl, sup.reference").remove()
+                copy.text().takeIf(String::isNotBlank)?.let { DictSense(it, example) }
+            }
+            val available = senses.toList()
+            if (available.isNotEmpty()) {
+                val entries = groups.getOrPut(language) { mutableListOf() }
+                if (entries.size < 2) entries += DictEntry(title.text(), available)
+            }
+        }
+        return groups.map { (code, entries) -> DictionaryResult(word, null, entries, "Wiktionnaire · CC BY-SA 4.0", code) }
+    }
+
+    internal fun englishEntries(word: String, json: JSONObject): List<DictionaryResult> {
+        return json.keys().asSequence().filter { it != "other" }.mapNotNull { code ->
+            val sections = json.optJSONArray(code) ?: return@mapNotNull null
+            val entries = mutableListOf<DictEntry>()
+            for (i in 0 until sections.length()) {
+                val section = sections.optJSONObject(i) ?: continue
+                val definitions = section.optJSONArray("definitions") ?: continue
+                val senses = (0 until definitions.length()).asSequence().mapNotNull { index ->
+                    val sense = definitions.optJSONObject(index) ?: return@mapNotNull null
+                    val gloss = org.jsoup.Jsoup.parseBodyFragment(sense.optString("definition")).text()
+                    val example = sense.optJSONArray("examples")?.optString(0)?.let { org.jsoup.Jsoup.parseBodyFragment(it).text() }
+                    gloss.takeIf(String::isNotBlank)?.let { DictSense(it, example) }
+                }.take(2).toList()
+                if (senses.isNotEmpty()) entries += DictEntry(section.optString("partOfSpeech"), senses)
+                if (entries.size == 2) break
+            }
+            entries.takeIf { it.isNotEmpty() }?.let { DictionaryResult(word, null, it, "Wiktionary · CC BY-SA 4.0", code) }
+        }.toList()
+    }
+
+    internal fun dictionaryEntry(root: JSONObject, language: String): DictionaryResult? {
+        val entries = root.optJSONArray("entries") ?: return null
+        val groups = mutableListOf<DictEntry>()
         var phonetic: String? = null
-        for (i in 0 until arr.length()) {
-            val item = arr.optJSONObject(i) ?: continue
-            if (phonetic == null) phonetic = item.optString("phonetic").takeIf { it.isNotBlank() }
-            val meanings = item.optJSONArray("meanings") ?: continue
-            for (m in 0 until meanings.length()) {
-                val meaning = meanings.optJSONObject(m) ?: continue
-                val pos = meaning.optString("partOfSpeech").ifBlank { "—" }
-                val defs = meaning.optJSONArray("definitions") ?: continue
-                val list = entries.getOrPut(pos) { mutableListOf() }
-                for (d in 0 until defs.length()) {
-                    val def = defs.optJSONObject(d) ?: continue
-                    val text = def.optString("definition").trim()
-                    if (text.isEmpty()) continue
-                    list += DictSense(text, def.optString("example").trim().takeIf { it.isNotEmpty() })
-                }
+        for (i in 0 until entries.length()) {
+            val entry = entries.optJSONObject(i) ?: continue
+            if (entry.optJSONObject("language")?.optString("code") != language) continue
+            phonetic = phonetic ?: entry.optJSONArray("pronunciations")?.optJSONObject(0)?.optString("text")
+            val senses = entry.optJSONArray("senses") ?: continue
+            val definitions = mutableListOf<DictSense>()
+            for (j in 0 until senses.length()) {
+                val sense = senses.optJSONObject(j) ?: continue
+                val definition = sense.optString("definition").trim()
+                if (definition.isEmpty()) continue
+                val example = sense.optJSONArray("examples")?.optString(0)?.takeIf(String::isNotBlank)
+                    ?: sense.optJSONArray("quotes")?.optJSONObject(0)?.optString("text")?.takeIf(String::isNotBlank)
+                definitions += DictSense(definition, example)
+                if (definitions.size == 2) break
+            }
+            if (definitions.isNotEmpty()) groups += DictEntry(entry.optString("partOfSpeech"), definitions)
+            if (groups.size == 2) break
+        }
+        return if (groups.isEmpty()) null else DictionaryResult(root.getString("word"), phonetic, groups, "Wiktionary · CC BY-SA 4.0", language)
+    }
+
+    /** Split at whitespace when possible and never bisect a Unicode code point. */
+    internal fun chunks(text: String): Sequence<String> = sequence {
+        var start = 0
+        while (start < text.length) {
+            var end = start
+            var bytes = 0
+            var boundary = start
+            while (end < text.length) {
+                val cp = text.codePointAt(end)
+                val width = when { cp < 128 -> 1; cp < 2048 -> 2; cp < 65536 -> 3; else -> 4 }
+                if (bytes + width > MAX_REQUEST_BYTES) break
+                bytes += width
+                end += Character.charCount(cp)
+                if (Character.isWhitespace(cp)) boundary = end
+            }
+            if (end < text.length && boundary > start) end = boundary
+            yield(text.substring(start, end))
+            start = end
+        }
+    }
+
+    internal fun translationText(json: JSONObject): String {
+        if (json.optBoolean("quotaFinished") || json.optInt("responseStatus") == 429) throw QuotaExceeded()
+        if (json.optInt("responseStatus") != 200) throw IOException("Translation service rejected request")
+        val value = json.optJSONObject("responseData")?.optString("translatedText").orEmpty()
+        if (value.isBlank()) throw IOException("Empty translation")
+        val decoded = org.jsoup.parser.Parser.unescapeEntities(value, false).trim()
+        if (decoded.any { it == '\uFFFD' } || (decoded.contains('?') && decoded.none(Char::isLetterOrDigit))) throw UnreadableResult()
+        return decoded
+    }
+
+    suspend fun translate(raw: String, source: String, target: String): TranslationResult = withContext(Dispatchers.IO) {
+        val text = raw.trim()
+        require(text.isNotEmpty() && targetLanguages.any { it.first == source } && target.matches(Regex("[a-z]{2,3}")))
+        if (source == target) return@withContext TranslationResult(text, source, target, true)
+        val key = Key(text, source, target)
+        translations.get(key)?.let { return@withContext it }
+        val translated = buildString {
+            for (chunk in chunks(text)) {
+                ensureActive()
+                if (chunk.isBlank()) { append(chunk); continue }
+                val body = httpGet("https://api.mymemory.translated.net/get?q=${enc(chunk.trim())}&langpair=${enc("$source|$target")}")
+                    ?: throw IOException("Translation unavailable")
+                append(chunk.takeWhile(Char::isWhitespace))
+                append(translationText(JSONObject(body)))
+                append(chunk.takeLastWhile(Char::isWhitespace))
             }
         }
-        return build(word, phonetic, entries, "Free Dictionary")
-    }
-
-    private fun fromWiktionary(word: String, lang: String): DictionaryResult? {
-        val body = httpGet("https://$lang.wiktionary.org/api/rest_v1/page/definition/${enc(word)}") ?: return null
-        val root = runCatching { JSONObject(body) }.getOrNull() ?: return null
-        val entries = LinkedHashMap<String, MutableList<DictSense>>()
-        // Les sections sont rangées par code de langue du mot ; on met d'abord la langue demandée.
-        val keys = root.keys().asSequence().toList().sortedBy { if (it == lang) 0 else 1 }
-        for (key in keys) {
-            val sections = root.optJSONArray(key) ?: continue
-            for (s in 0 until sections.length()) {
-                val section = sections.optJSONObject(s) ?: continue
-                val pos = section.optString("partOfSpeech").ifBlank { "—" }
-                val defs = section.optJSONArray("definitions") ?: continue
-                val list = entries.getOrPut(pos) { mutableListOf() }
-                for (d in 0 until defs.length()) {
-                    val def = defs.optJSONObject(d) ?: continue
-                    val text = htmlToText(def.optString("definition"))
-                    if (text.isEmpty()) continue
-                    val example = def.optJSONArray("examples")?.optString(0)?.let { htmlToText(it) }?.takeIf { it.isNotEmpty() }
-                    list += DictSense(text, example)
-                }
-            }
-            if (entries.isNotEmpty()) break
-        }
-        return build(word, null, entries, "Wiktionnaire")
-    }
-
-    private fun build(word: String, phonetic: String?, raw: Map<String, List<DictSense>>, source: String): DictionaryResult? {
-        val entries = raw.filterValues { it.isNotEmpty() }
-            .map { (pos, senses) -> DictEntry(pos, senses.take(4)) }
-            .take(4)
-        return if (entries.isEmpty()) null else DictionaryResult(word, phonetic, entries, source)
-    }
-
-    suspend fun translate(raw: String, target: String): TranslationResult = withContext(Dispatchers.IO) {
-        val clean = raw.trim().replace(Regex("\\s+"), " ")
-        val truncated = clean.length > MAX_TRANSLATE_CHARS
-        val text = if (truncated) clean.take(MAX_TRANSLATE_CHARS).substringBeforeLast(' ', clean.take(MAX_TRANSLATE_CHARS)) else clean
-        val guessed = guessLanguage(text)
-        if (guessed == target) return@withContext TranslationResult(text, guessed, target, truncated, sameLanguage = true)
-        val pair = (guessed ?: "autodetect") + "|" + target
-        val body = httpGet("https://api.mymemory.translated.net/get?q=${enc(text)}&langpair=${enc(pair)}")
-            ?: throw IOException("Réponse vide")
-        val json = JSONObject(body)
-        val data = json.optJSONObject("responseData")
-        val translated = htmlToText(data?.optString("translatedText").orEmpty())
-        if (translated.isEmpty() || translated.uppercase().startsWith("PLEASE SELECT TWO DISTINCT")) {
-            return@withContext TranslationResult(text, guessed, target, truncated, sameLanguage = true)
-        }
-        if (json.optBoolean("quotaFinished", false) || json.optInt("responseStatus", 200) == 429) {
-            throw IOException("Quota de traduction atteint")
-        }
-        val detected = data?.optString("detectedLanguage")?.takeIf { it.isNotBlank() && it != "null" }?.take(2)
-        TranslationResult(translated, guessed ?: detected, target, truncated, sameLanguage = false)
+        TranslationResult(translated, source, target, false).also { translations.put(key, it) }
     }
 
     /** Devine la langue d'un passage avec quelques mots très fréquents ; null si l'indice est trop faible. */
@@ -173,9 +257,6 @@ object LookupClient {
         return if (best.value >= 2 && best.value > second) best.key else null
     }
 
-    private fun htmlToText(html: String): String =
-        HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().replace(Regex("\\s+"), " ").trim()
-
     private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
     /** Corps de la réponse, ou null si le serveur répond « introuvable » (404) ; IOException sinon. */
@@ -184,10 +265,11 @@ object LookupClient {
         c.connectTimeout = 10_000
         c.readTimeout = 12_000
         c.setRequestProperty("User-Agent", "OrynReader/1.0 (Android; lecture personnelle)")
-        c.setRequestProperty("Accept", "application/json")
+        c.setRequestProperty("Accept", if (url.startsWith("https://fr.wiktionary.org/wiki/")) "text/html" else "application/json")
         return try {
             val code = c.responseCode
             when {
+                code == 429 -> throw QuotaExceeded()
                 code == 404 -> null
                 code in 200..299 -> c.inputStream.use { input ->
                     val out = java.io.ByteArrayOutputStream()

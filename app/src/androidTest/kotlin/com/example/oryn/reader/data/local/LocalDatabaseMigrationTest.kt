@@ -40,11 +40,11 @@ class LocalDatabaseMigrationTest {
                 .filter { Migration::class.java.isAssignableFrom(it.type) }
                 .map { field -> field.isAccessible = true; field.get(null) as Migration }
                 .toTypedArray()
-            assertEquals("All historical migrations must be exercised", 3, migrations.size)
+            assertEquals("All historical migrations must be exercised", 4, migrations.size)
             room = Room.databaseBuilder(context, OrynDatabase::class.java, name)
                 .addMigrations(*migrations).build()
             val db = room.openHelper.writableDatabase // Room validates the complete resulting schema.
-            db.query("SELECT id,title,author,filePath,format,progress,isFavorite,lastReadTimestamp,coverPath,contentHash FROM books").use { row ->
+            db.query("SELECT id,title,author,filePath,format,progress,isFavorite,lastReadTimestamp,coverPath,contentHash,readingOffset FROM books").use { row ->
                 assertTrue(row.moveToFirst())
                 assertEquals(41L, row.getLong(0))
                 assertEquals("Livre é📚", row.getString(1))
@@ -56,6 +56,7 @@ class LocalDatabaseMigrationTest {
                 assertEquals(123456L, row.getLong(7))
                 if (version >= 2) assertEquals("private-cover.png", row.getString(8)) else assertTrue(row.isNull(8))
                 assertTrue(row.isNull(9))
+                assertTrue(row.isNull(10))
                 assertFalse(row.moveToNext())
             }
             db.query("SELECT bookId,note,quote FROM annotations").use { row ->

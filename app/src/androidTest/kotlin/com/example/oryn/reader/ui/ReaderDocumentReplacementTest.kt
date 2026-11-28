@@ -37,12 +37,12 @@ class ReaderDocumentReplacementTest {
                     val settings = ReaderSettings()
                     Box(Modifier.fillMaxWidth().height(420.dp)) {
                         ReflowReader(
-                            bookId = 42, book = document.value, initialProgress = 0.6f,
+                            bookId = 42, book = document.value, initialProgress = 0.6f, initialOffset = 4200,
                             settings = settings, fontFamily = FontFamily.Default,
                             linkColor = settings.themePreset.linkColor,
                             foregroundColor = settings.themePreset.textColor,
                             backgroundColor = settings.themePreset.pageColor,
-                            horizontalPadding = 16.dp, onProgress = {}, onCenterTap = {},
+                            horizontalPadding = 16.dp, onProgress = { _, _ -> }, onCenterTap = {},
                             onVisiblePosition = { position.set(it) }, annotations = emptyList(),
                             onAddAnnotation = {}, onUpdateAnnotation = {}, onDeleteAnnotation = {}
                         )
@@ -51,6 +51,7 @@ class ReaderDocumentReplacementTest {
             }
         }
         rule.waitUntil(20_000) { position.get() > 1000 }
+        assertTrue("Restore the page containing the character anchor before the legacy percentage", position.get() <= 4200)
         val replacement = RichBook("NEW_DOCUMENT unique replacement sentence. ".repeat(30), emptyList(), emptyList())
         rule.runOnIdle {
             position.set(-1)

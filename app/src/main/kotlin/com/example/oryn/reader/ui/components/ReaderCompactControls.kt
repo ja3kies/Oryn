@@ -103,6 +103,7 @@ fun ReaderCompactControls(
     onContents: (() -> Unit)?,
     onAnnotations: (() -> Unit)?,
     onExpand: (ReaderSheetFocus) -> Unit,
+    onReturnToPassage: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val motion = systemAnimationsEnabled(LocalContext.current)
@@ -128,7 +129,7 @@ fun ReaderCompactControls(
                     shape = RoundedCornerShape(OrynShape.card), color = colors.surface
                 ) {
                     Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ChromeAction(OrynIcons.ArrowLeft, tr("Retour"), onBack)
+                        ChromeAction(OrynIcons.Close, tr("Retour"), onBack)
                         Column(
                             Modifier.weight(1f).padding(horizontal = 4.dp)
                                 .clip(RoundedCornerShape(12.dp))
@@ -140,6 +141,7 @@ fun ReaderCompactControls(
                             Text(chapterTitle, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             chapterRemaining?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
+                        onReturnToPassage?.let { ChromeAction(OrynIcons.ArrowLeft, tr("Revenir au passage précédent"), it) }
                         ChromeAction(OrynIcons.Clock, tr("Chronomètre de lecture"), onTimer)
                         IconToggleButton(checked = bookmarked, onCheckedChange = { onBookmark() }, modifier = Modifier.size(48.dp)) {
                             Icon(if (bookmarked) OrynIcons.BookmarkFilled else OrynIcons.Bookmark,

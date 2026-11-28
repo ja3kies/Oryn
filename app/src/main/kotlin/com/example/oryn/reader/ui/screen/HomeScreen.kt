@@ -148,7 +148,8 @@ private fun Dashboard(
 ) {
     val colors = MaterialTheme.colorScheme
     val reading = remember(books) { recentReading(books) }
-    val recent = remember(books) { books.sortedByDescending { it.id }.take(12) }
+    val opened = remember(books) { books.filter { it.lastReadTimestamp > 0 && it.progress > 0f }.sortedByDescending { it.lastReadTimestamp }.take(12) }
+    val recent = remember(books, opened) { opened.ifEmpty { books.sortedByDescending { it.id }.take(12) } }
     val done = remember(books) { books.count { it.progress >= 0.98f } }
     val unread = remember(books) { books.count { it.progress < 0.01f } }
 
@@ -224,11 +225,12 @@ private fun Dashboard(
                 Text(
                     greeting() + ",",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = inkSecondary().copy(alpha = 0.75f)
+                    color = inkSecondary()
                 )
                 Text(
                     if (books.isEmpty()) tr("Ta bibliothèque t'attend") else tr("Qu'est-ce qu'on lit ?"),
                     style = MaterialTheme.typography.headlineMedium,
+                    fontFamily = FontFamily.Serif,
                     color = colors.onBackground
                 )
             }
@@ -254,6 +256,7 @@ private fun Dashboard(
         if (books.isEmpty() && !isLoading) {
             item(key = "empty") {
                 LibraryEmptyState(
+                    showFennec = true,
                     title = tr("Aucun livre"),
                     subtitle = tr("Ajoute un EPUB ou un PDF, ou explore les catalogues libres."),
                     onImportClick = onImportClick
@@ -281,7 +284,7 @@ private fun Dashboard(
         // ── Ajoutés récemment
         if (recent.isNotEmpty()) {
             item(key = "recent") {
-                Shelf(title = tr("Ajoutés récemment"), count = null, onHeader = { OrynNav.openLibrary() }) {
+                Shelf(title = tr(if (opened.isEmpty()) "Ajoutés récemment" else "Lus récemment"), count = null, onHeader = { OrynNav.openLibrary() }) {
                     ShelfRow(recent, onBookClick)
                 }
             }
@@ -418,7 +421,7 @@ private fun ContinueCard(
     val haptics = LocalHapticFeedback.current
     var actions by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(28.dp)
-    val ink = colors.onAccent
+    val ink = colors.onSurface
     val pct = (book.progress.coerceIn(0f, 1f) * 100).toInt()
 
     Box(modifier.fillMaxWidth().padding(top = 30.dp)) {
@@ -427,7 +430,7 @@ private fun ContinueCard(
             Modifier
                 .matchParentSize()
                 .clip(shape)
-                .background(colors.accent)
+                .background(colors.surfaceContainerLow)
                 .combinedClickable(
                     onClickLabel = tr("Reprendre la lecture"),
                     onClick = onOpen,
@@ -456,7 +459,7 @@ private fun ContinueCard(
                         Text(
                             tr("CONTINUER · ") + "$pct %",
                             style = MaterialTheme.typography.labelSmall,
-                            color = ink.copy(alpha = 0.72f),
+                            color = colors.onSurfaceVariant,
                             maxLines = 1,
                             modifier = Modifier.weight(1f)
                         )
@@ -474,7 +477,7 @@ private fun ContinueCard(
                                 Icon(
                                     if (book.isFavorite) OrynIcons.BookmarkFilled else OrynIcons.Bookmark,
                                     contentDescription = null,
-                                    tint = if (book.isFavorite) colors.accent else ink,
+                                    tint = if (book.isFavorite) colors.surfaceContainerLow else ink,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -482,7 +485,7 @@ private fun ContinueCard(
                     }
                     Text(
                         book.title,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif),
                         color = ink,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -490,7 +493,7 @@ private fun ContinueCard(
                     Text(
                         book.author + " · " + relativeTime(book.lastReadTimestamp),
                         style = MaterialTheme.typography.bodySmall,
-                        color = ink.copy(alpha = 0.72f),
+                        color = colors.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp)
@@ -520,9 +523,9 @@ private fun ContinueCard(
                             .padding(horizontal = 22.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(OrynIcons.Play, null, tint = colors.accent, modifier = Modifier.size(18.dp))
+                        Icon(OrynIcons.Play, null, tint = colors.surfaceContainerLow, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(tr("Reprendre"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.accent, maxLines = 1)
+                        Text(tr("Reprendre"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.surfaceContainerLow, maxLines = 1)
                     }
                 }
             }

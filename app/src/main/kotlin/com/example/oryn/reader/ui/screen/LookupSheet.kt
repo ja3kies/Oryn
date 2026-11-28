@@ -1,9 +1,17 @@
 package com.example.oryn.reader.ui.screen
 
-import android.widget.Toast
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.key
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.platform.LocalConfiguration
+import java.util.Locale
+import com.example.oryn.reader.i18n.AppLanguage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -60,10 +68,12 @@ import java.io.IOException
 enum class LookupMode { DEFINE, TRANSLATE }
 
 /** Demande de recherche depuis le lecteur : le mode demandé et le texte sélectionné. */
-data class LookupRequest(val mode: LookupMode, val text: String)
+data class LookupRequest(val mode: LookupMode, val text: String, val excerpt: String = "")
 
 private sealed interface Load<out T> {
     object Loading : Load<Nothing>
+    object Quota : Load<Nothing>
+    object Unreadable : Load<Nothing>
     object Offline : Load<Nothing>
     class Done<T>(val value: T?) : Load<T>
 }
@@ -77,14 +87,22 @@ private sealed interface Load<out T> {
 fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < 0.5f
-    var mode by remember(request) { mutableStateOf(request.mode) }
-    var target by remember { mutableStateOf(if (Lang.isEnglish) "en" else "fr") }
+    var mode by rememberSaveable(request.text, request.mode) { mutableStateOf(request.mode) }
+    val suggested = remember(request) { LookupClient.guessLanguage(request.excerpt) ?: LookupClient.guessLanguage(request.text) }
+    var source by rememberSaveable(request.text, request.excerpt) { mutableStateOf(suggested.orEmpty()) }
+    val target = when (Lang.mode) {
+        AppLanguage.FRENCH -> "fr"
+        AppLanguage.ENGLISH -> "en"
+        AppLanguage.SYSTEM -> LocalConfiguration.current.locales[0].language
+    }
+    val targetName = Locale.forLanguageTag(target).getDisplayLanguage(Lang.locale)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        contentColor = colors.onSurface,
         containerColor = if (dark) colors.surfaceContainerHigh else colors.surfaceContainerLowest
     ) {
         Column(
@@ -97,44 +115,31 @@ fun LookupSheet(request: LookupRequest, onDismiss: () -> Unit) {
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Le passage sélectionné, en citation courte
-            Text(
-                "« " + request.text.trim() + " »",
-                style = MaterialTheme.typography.bodyMedium,
-                color = inkSecondary(),
-                maxLines = 3,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LookupTab(tr("Définition"), mode == LookupMode.DEFINE) { mode = LookupMode.DEFINE }
-                LookupTab(tr("Traduction"), mode == LookupMode.TRANSLATE) { mode = LookupMode.TRANSLATE }
+            var expanded by rememberSaveable(request.text) { mutableStateOf(false) }
+            val longPassage = request.text.length > 160 || request.text.count { it == '\n' } >= 3
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(request.text.trim(), modifier = Modifier.weight(1f).semantics { heading() }, style = if (request.text.length < 45) MaterialTheme.typography.headlineMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif) else MaterialTheme.typography.bodyLarge,
+                maxLines = if (longPassage && !expanded) 3 else Int.MAX_VALUE,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            androidx.compose.material3.IconButton(onClick = onDismiss) { Icon(OrynIcons.Close, tr("Fermer")) }
             }
-            when (mode) {
-                LookupMode.DEFINE -> DefineBody(request.text, onTranslateInstead = { mode = LookupMode.TRANSLATE })
-                LookupMode.TRANSLATE -> TranslateBody(request.text, target) { target = it }
+            if (longPassage) androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
+                Text(tr(if (expanded) "Réduire le passage" else "Lire tout le passage"))
             }
+            if (mode == LookupMode.TRANSLATE) LanguageChoice(tr("Langue du texte"), source) { source = it }
+            if (mode == LookupMode.TRANSLATE) Text(tr("Traduire vers") + " · " + targetName, style = MaterialTheme.typography.labelLarge)
+            key(mode, source, target, request.text) {
+                if (source.isEmpty() && mode == LookupMode.TRANSLATE) {
+                    StatusLine(tr("Choisis la langue du passage pour continuer."))
+                } else when (mode) {
+                    LookupMode.DEFINE -> DefineBody(request, source, target)
+                    LookupMode.TRANSLATE -> TranslateBody(request.text, source, target)
+                }
+            }
+            androidx.compose.material3.TextButton(onClick = {
+                mode = if (mode == LookupMode.DEFINE) LookupMode.TRANSLATE else LookupMode.DEFINE
+            }) { Text(tr(if (mode == LookupMode.DEFINE) "Traduire" else "Définir")) }
         }
-    }
-}
-
-@Composable
-private fun LookupTab(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .clip(CircleShape)
-            .background(if (selected) colors.accent else colors.onSurface.copy(alpha = 0.08f))
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) colors.onAccent else colors.onSurface
-        )
     }
 }
 
@@ -168,172 +173,146 @@ private fun LoadingRow() {
 }
 
 @Composable
-private fun DefineBody(text: String, onTranslateInstead: () -> Unit) {
+private fun LanguageChoice(label: String, code: String, change: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        androidx.compose.material3.OutlinedButton(onClick = { expanded = true }) {
+            Text("$label · ${LookupClient.targetLanguages.firstOrNull { it.first == code }?.second ?: tr("Choisir")}")
+        }
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LookupClient.targetLanguages.forEach { (value, name) ->
+                androidx.compose.material3.DropdownMenuItem(text = { Text(name) }, onClick = { change(value); expanded = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun DefineBody(request: LookupRequest, language: String, target: String) {
+    val text = request.text
     if (LookupClient.wordCount(text) > 3) {
         StatusLine(
-            tr("Sélectionne un seul mot pour voir sa définition."),
-            tr("Traduire ce passage"),
-            onTranslateInstead
+            tr("Sélectionne un seul mot pour voir sa définition.")
         )
         return
     }
+    var selected by remember(request) { mutableStateOf(language) }
     var attempt by remember { mutableIntStateOf(0) }
-    val state by produceState<Load<DictionaryResult>>(Load.Loading, text, attempt) {
+    val state by produceState<Load<DictionaryResult>>(Load.Loading, text, selected, target, attempt) {
         value = Load.Loading
-        val languages = if (Lang.isEnglish) listOf("en", "fr") else listOf("fr", "en")
         value = try {
-            Load.Done(LookupClient.define(text, languages))
+            Load.Done(LookupClient.define(text, selected, target))
         } catch (e: CancellationException) {
             throw e
+        } catch (e: LookupClient.UnreadableResult) { Load.Unreadable }
+        catch (e: LookupClient.QuotaExceeded) {
+            Load.Quota
         } catch (e: IOException) {
             Load.Offline
         } catch (e: Exception) {
-            Load.Done(null)
+            Load.Offline
         }
     }
     when (val s = state) {
         is Load.Loading -> LoadingRow()
-        is Load.Offline -> StatusLine(tr("Pas de connexion : impossible de joindre le service."), tr("Réessayer")) { attempt++ }
+        Load.Unreadable -> StatusLine(tr("Le service a renvoyé un texte illisible."), tr("Réessayer")) { attempt++ }
+        Load.Quota -> StatusLine(tr("Limite du service atteinte. Réessaie plus tard."))
+        is Load.Offline -> StatusLine(tr("Service inaccessible. Vérifie ta connexion ou réessaie."), tr("Réessayer")) { attempt++ }
         is Load.Done -> {
             val result = s.value
             if (result == null) {
                 StatusLine(
-                    trf("Aucune définition trouvée pour « %s ».", LookupClient.cleanWord(text)),
-                    tr("Traduire ce passage"),
-                    onTranslateInstead
+                    trf("Aucune définition trouvée pour « %s ».", LookupClient.cleanWord(text))
                 )
             } else {
-                DefinitionContent(result)
+                DefinitionContent(result, request.excerpt) { selected = it }
             }
         }
     }
 }
 
 @Composable
-private fun DefinitionContent(result: DictionaryResult) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(result.word, style = MaterialTheme.typography.headlineSmall)
-            result.phonetic?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = inkSecondary()) }
-        }
-        result.entries.forEach { entry ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(entry.partOfSpeech.uppercase(), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
-                entry.senses.forEachIndexed { index, sense ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            "${index + 1}.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = inkSecondary(),
-                            modifier = Modifier.width(22.dp)
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(sense.definition, style = MaterialTheme.typography.bodyMedium)
-                            sense.example?.let {
-                                Text("« $it »", style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic, color = inkSecondary())
-                            }
-                        }
+internal fun DefinitionContent(result: DictionaryResult, excerpt: String, choose: (String) -> Unit) {
+    val senses = result.entries.flatMap { entry -> entry.senses.map { entry.partOfSpeech to it } }
+    var all by rememberSaveable(result.word, result.language) { mutableStateOf(false) }
+    var languages by remember { mutableStateOf(false) }
+    val language = Locale.forLanguageTag(result.language).getDisplayLanguage(Lang.locale)
+    fun partLabel(value: String) = if (Lang.isEnglish) value else when (value.lowercase(Locale.ROOT)) {
+        "noun" -> "Nom commun"; "verb" -> "Verbe"; "adjective" -> "Adjectif"; "adverb" -> "Adverbe"; "pronoun" -> "Pronom"; else -> value
+    }
+    val metadata = listOfNotNull(language, senses.firstOrNull()?.first?.takeIf(String::isNotBlank)?.let(::partLabel), result.phonetic)
+        .joinToString(" · ")
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (result.availableLanguages.size > 1) {
+            Box {
+                androidx.compose.material3.TextButton(onClick = { languages = true }) {
+                    Text(metadata)
+                    Icon(androidx.compose.material.icons.Icons.Default.ArrowDropDown, contentDescription = tr("Langue du mot"))
+                }
+                androidx.compose.material3.DropdownMenu(languages, { languages = false }) {
+                    result.availableLanguages.forEach { code ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(Locale.forLanguageTag(code).getDisplayLanguage(Lang.locale)) },
+                            onClick = { languages = false; choose(code) })
                     }
                 }
             }
+        } else Text(metadata, style = MaterialTheme.typography.labelLarge, color = inkSecondary())
+        (if (all) senses else senses.take(1)).forEachIndexed { index, (part, sense) ->
+            if (index > 0) Text("${index + 1} · ${partLabel(part)}", style = MaterialTheme.typography.labelMedium, color = inkSecondary())
+            SelectionContainer { Text(sense.definition, style = MaterialTheme.typography.bodyLarge) }
+            sense.example?.takeIf(String::isNotBlank)?.let {
+                Text("« $it »", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = inkSecondary())
+            }
         }
-        Text(trf("Source : %s. Le mot sélectionné est envoyé à ce service.", result.source), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
+        if (excerpt.isNotBlank() && senses.none { it.second.example == excerpt }) {
+            Text(tr("Dans ton livre"), style = MaterialTheme.typography.labelMedium, color = inkSecondary())
+            Text(excerpt, style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic)
+        }
+        if (senses.size > 1) androidx.compose.material3.TextButton(onClick = { all = !all }) {
+            Text(tr(if (all) "Masquer les autres sens" else "Voir les autres sens"))
+        }
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        val nativeFrench = result.source.startsWith("Wiktionnaire")
+        val host = if (nativeFrench) "fr.wiktionary.org" else "en.wiktionary.org"
+        Text(result.source + (if (result.translated) " · MyMemory" else ""),
+            modifier = Modifier.clickable(role = Role.Button) { uriHandler.openUri("https://$host/wiki/${android.net.Uri.encode(result.word)}") }.heightIn(min = 48.dp).padding(vertical = 12.dp), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
     }
 }
 
 @Composable
-private fun TranslateBody(text: String, target: String, onTarget: (String) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(tr("Traduire vers").uppercase(), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LookupClient.targetLanguages.filter { it.first in setOf("fr", "en", "es") }.forEach { (code, name) ->
-                val selected = code == target
-                Box(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(if (selected) colors.accent else colors.onSurface.copy(alpha = 0.08f))
-                        .clickable { onTarget(code) }
-                        .heightIn(min = 48.dp)
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        name,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) colors.onAccent else colors.onSurface
-                    )
-                }
-            }
-        }
-
-        var attempt by remember { mutableIntStateOf(0) }
-        val state by produceState<Load<TranslationResult>>(Load.Loading, text, target, attempt) {
-            value = Load.Loading
-            value = try {
-                Load.Done(LookupClient.translate(text, target))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: IOException) {
-                Load.Offline
-            } catch (e: Exception) {
-                Load.Done(null)
-            }
-        }
-        when (val s = state) {
-            is Load.Loading -> LoadingRow()
-            is Load.Offline -> StatusLine(tr("Pas de connexion : impossible de joindre le service."), tr("Réessayer")) { attempt++ }
-            is Load.Done -> {
-                val result = s.value
-                if (result == null) {
-                    StatusLine(tr("Traduction indisponible pour ce passage."), tr("Réessayer")) { attempt++ }
-                } else {
-                    TranslationContent(result, target)
-                }
-            }
-        }
+private fun TranslateBody(text: String, source: String, target: String) {
+    if (source == target) {
+        StatusLine(trf("Ce passage est déjà en %s.", LookupClient.targetLanguages.first { it.first == source }.second))
+        return
     }
-}
-
-@Composable
-private fun TranslationContent(result: TranslationResult, target: String) {
-    val colors = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    val targetName = LookupClient.targetLanguages.firstOrNull { it.first == target }?.second ?: target
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (result.sameLanguage) {
-            Text(trf("Ce passage est déjà en %s.", targetName), style = MaterialTheme.typography.bodyMedium, color = inkSecondary())
-        } else {
-            Text(result.text, style = MaterialTheme.typography.bodyLarge)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(colors.onSurface.copy(alpha = 0.08f))
-                        .clickable {
-                            clipboard.setText(AnnotatedString(result.text))
-                            Toast.makeText(context, tr("Copié"), Toast.LENGTH_SHORT).show()
-                        }
-                        .heightIn(min = 48.dp)
-                        .padding(horizontal = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(OrynIcons.Pages, null, tint = colors.onSurface, modifier = Modifier.size(18.dp))
-                    Text(tr("Copier"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                }
-                Text(tr("Source : MyMemory. Le texte sélectionné est envoyé à ce service."), style = MaterialTheme.typography.labelSmall, color = inkSecondary())
+    var attempt by rememberSaveable { mutableIntStateOf(0) }
+    if (attempt == 0) {
+        StatusLine(tr("MyMemory recevra uniquement le texte sélectionné."), tr("Traduire le passage")) { attempt++ }
+        return
+    }
+    val state by produceState<Load<TranslationResult>>(Load.Loading, attempt) {
+        value = Load.Loading
+        value = try {
+            Load.Done(LookupClient.translate(text, source, target))
+        } catch (e: CancellationException) { throw e }
+        catch (e: LookupClient.UnreadableResult) { Load.Unreadable }
+        catch (e: LookupClient.QuotaExceeded) { Load.Quota }
+        catch (e: Exception) { Load.Offline }
+    }
+    when (val result = state) {
+        Load.Loading -> LoadingRow()
+        Load.Unreadable -> StatusLine(tr("Le service a renvoyé un texte illisible."), tr("Réessayer")) { attempt++ }
+        Load.Quota -> StatusLine(tr("Limite du service atteinte. Réessaie plus tard."))
+        Load.Offline -> StatusLine(tr("Service inaccessible. Vérifie ta connexion ou réessaie."), tr("Réessayer")) { attempt++ }
+        is Load.Done -> result.value?.let { translation ->
+            val clipboard = LocalClipboardManager.current
+            var copied by remember { mutableStateOf(false) }
+            SelectionContainer { Text(translation.text, style = MaterialTheme.typography.titleMedium) }
+            StatusLine("MyMemory", if (copied) tr("Copié") else tr("Copier la traduction")) {
+                clipboard.setText(AnnotatedString(translation.text))
+                copied = true
             }
-        }
-        if (result.truncated) {
-            Text(
-                tr("Passage coupé : seuls les premiers caractères sont traduits."),
-                style = MaterialTheme.typography.labelSmall,
-                color = inkSecondary()
-            )
         }
     }
 }
